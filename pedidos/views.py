@@ -141,7 +141,7 @@ def _normalize_whatsapp_number(value):
 def _configured_whatsapp_number(config=None):
     config = config or ConfiguracaoEntrega.objects.order_by("pk").first()
     numero = _normalize_whatsapp_number(getattr(config, "whatsapp_numero", ""))
-    return numero
+    return numero or _normalize_whatsapp_number(getattr(settings, "RESTAURANT_WHATSAPP", ""))
 
 
 def _build_whatsapp_order_url(pedido, config=None):
@@ -1632,6 +1632,7 @@ def _build_hour_chart_context(labels, values):
     }
 
 
+@staff_member_required(login_url="/admin/login/")
 def cozinha(request):
     periodo = _dashboard_periodo(request.GET.get("period", "7d"))
     inicio = periodo["inicio"]
@@ -1793,6 +1794,7 @@ def cozinha(request):
     )
 
 
+@staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_order_heatmap(request):
     period = request.GET.get("period", "7d")
@@ -2304,6 +2306,7 @@ def atualizar_status_pedido(request, pedido_id):
     return redirect("pedidos:cozinha_pedidos")
 
 
+@staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_pedidos_cozinha(request):
     pedidos = Pedido.objects.prefetch_related("itens").all()[:20]

@@ -142,9 +142,9 @@ class OrderHeatmapApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         points = response.json()
         self.assertEqual(len(points), 1)
-        self.assertEqual(points[0][2], 1)
-        self.assertAlmostEqual(points[0][0], -17.7923, places=4)
-        self.assertAlmostEqual(points[0][1], -50.9192, places=4)
+        self.assertEqual(points[0]["weight"], 1)
+        self.assertAlmostEqual(points[0]["lat"], -17.7923, places=4)
+        self.assertAlmostEqual(points[0]["lng"], -50.9192, places=4)
 
     def test_period_all_includes_older_points(self):
         self.client.force_login(self.staff_user)
@@ -156,6 +156,35 @@ class OrderHeatmapApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         points = response.json()
         self.assertEqual(len(points), 2)
+
+
+class CozinhaAccessTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="cozinha_staff",
+            password="12345678",
+            is_staff=True,
+        )
+
+    def test_dashboard_requires_staff_authentication(self):
+        response = self.client.get("/cozinha/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_live_orders_api_requires_staff_authentication(self):
+        response = self.client.get("/cozinha/api/pedidos/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_staff_can_access_dashboard(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/cozinha/")
+
+        self.assertEqual(response.status_code, 200)
 
 
 class PedidoDetalheAdminTests(TestCase):
@@ -798,7 +827,28 @@ class CriarPedidoFreteTests(TestCase):
         self.assertFalse(pedido.enviar_talheres)
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
 
+    @override_settings(RESTAURANT_WHATSAPP="556488887777")
+    def test_pickup_order_creation_uses_whatsapp_env_fallback(self):
+        ConfiguracaoEntrega.objects.update(whatsapp_numero="")
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "Retiro no balcao",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        success_response = self.client.get(response.url)
+        self.assertContains(success_response, f"https://wa.me/556488887777?text=")
+        self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_APROVACAO)
+
     @patch("pedidos.views._fetch_route_summary")
+    @override_settings(RESTAURANT_WHATSAPP="")
     def test_order_creation_requires_configured_whatsapp(self, mock_route):
         ConfiguracaoEntrega.objects.update(whatsapp_numero="")
 
@@ -828,6 +878,39 @@ class CriarPedidoFreteTests(TestCase):
         self.assertContains(response, "Configure o numero do WhatsApp", status_code=400)
         mock_route.assert_not_called()
         self.assertFalse(Pedido.objects.exists())
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    @override_settings(RESTAURANT_WHATSAPP="556488887777")
+    def test_order_creation_uses_whatsapp_env_fallback(self, _mock_route):
+        ConfiguracaoEntrega.objects.update(whatsapp_numero="")
+
+        response = self.client.post(
+            "/pedido/criar/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+                "nome_cliente": "Cliente Teste",
+                "telefone": "64999999999",
+                "rua": "Rua Teste",
+                "numero": "10",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "latitude": "-17.7707268",
+                "longitude": "-50.9003217",
+                "endereco_formatado": "Rua Teste, 10, Centro, Rio Verde - GO",
+                "geocode_tipo": "house",
+                "geocode_precision": "exact",
+                "valor_frete": "5.00",
+                "distancia_km": "1.00",
+                "forma_pagamento": Pedido.FormaPagamento.DINHEIRO,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        success_response = self.client.get(response.url)
+        self.assertContains(success_response, f"https://wa.me/556488887777?text=")
+        self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_APROVACAO)
 
     @patch("pedidos.views._fetch_route_summary")
     def test_order_creation_requires_saved_origin(self, mock_route):
