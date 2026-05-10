@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Base para editar manualmente a silhueta do bloco "PRATO DO DIA".
+    Caminho atual usado no projeto:
+
+    M0 0
+    H1116
+    Q1172 0 1188 18
+    Q1200 32 1200 58
+    L1178 368
+    Q1170 420 1118 420
+    H0
+    Z
+
+    Pontos-chave:
+    - A = (1116, 0)   inicio da curva superior direita
+    - B = (1188, 18)  controle da saida superior
+    - C = (1200, 58)  fim da curva superior / inicio da lateral
+    - D = (1178, 368) ponto da diagonal lateral
+    - E = (1118, 420) fechamento arredondado inferior
+
+    Se quiser uma diagonal mais forte:
+    - aumente X de C
+    - diminua X de D
+
+    Se quiser uma curva superior mais suave:
+    - aproxime B de A
+    - diminua Y de C
+
+    Se quiser uma base menos agressiva:
+    - aproxime D de E
+    - aumente X de E
+  -->
+
+  <defs>
+    <linearGradient id="fillMain" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5A3A32"/>
+      <stop offset="0.58" stop-color="#4E342E"/>
+      <stop offset="1" stop-color="#422A25"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    id="menu-feature-shape"
+    d="M0 0H1116Q1172 0 1188 18Q1200 32 1200 58L1178 368Q1170 420 1118 420H0Z"
+    fill="url(#fillMain)"
+  />
+
+  <!-- Guias -->
+  <path d="M1116 0 L1188 18 L1200 58 L1178 368 L1118 420" stroke="#FFB703" stroke-width="4" stroke-dasharray="10 8"/>
+
+  <circle cx="1116" cy="0" r="8" fill="#ffffff" stroke="#D00000" stroke-width="3"/>
+  <circle cx="1188" cy="18" r="8" fill="#ffffff" stroke="#D00000" stroke-width="3"/>
+  <circle cx="1200" cy="58" r="8" fill="#ffffff" stroke="#D00000" stroke-width="3"/>
+  <circle cx="1178" cy="368" r="8" fill="#ffffff" stroke="#D00000" stroke-width="3"/>
+  <circle cx="1118" cy="420" r="8" fill="#ffffff" stroke="#D00000" stroke-width="3"/>
+
+  <g font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111111">
+    <text x="1090" y="36">A</text>
+    <text x="1160" y="56">B</text>
+    <text x="1166" y="95">C</text>
+    <text x="1142" y="350">D</text>
+    <text x="1086" y="405">E</text>
+  </g>
+</svg>

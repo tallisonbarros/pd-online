@@ -1,0 +1,116 @@
+{% load static i18n %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login da equipe | PRATO-DELIVERY</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=11">
+    <style>
+        .auth-shell {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        .auth-card {
+            width: min(460px, 100%);
+            background: rgba(255, 253, 250, 0.96);
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            box-shadow: var(--shadow);
+            padding: 28px 24px;
+        }
+
+        .auth-brand {
+            display: grid;
+            justify-items: center;
+            gap: 18px;
+            margin-bottom: 22px;
+            text-align: center;
+        }
+
+        .auth-brand img {
+            width: min(250px, 72vw);
+            height: auto;
+        }
+
+        .auth-brand h1 {
+            margin: 0;
+            font-family: "Fraunces", Georgia, serif;
+            font-size: clamp(2rem, 5vw, 2.6rem);
+            line-height: 1;
+            letter-spacing: -0.03em;
+        }
+
+        .auth-brand p {
+            margin: 0;
+            color: var(--text-soft);
+            line-height: 1.6;
+        }
+
+        .auth-error {
+            margin: 0 0 14px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #f6e8e2;
+            border: 1px solid #d8c1b7;
+            color: #7b3023;
+            font-size: 0.95rem;
+        }
+
+        .auth-links {
+            margin-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <main class="auth-shell">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <img src="{% static 'img/prato-delivery-logo-extended-print.svg' %}" alt="PRATO-DELIVERY">
+                <div>
+                    <p class="eyebrow">Acesso da equipe</p>
+                    <h1>Entrar no painel</h1>
+                </div>
+                <p>Use seu login de staff para acessar a gestao personalizada de pratos e o painel operacional.</p>
+            </div>
+
+            {% if form.errors %}
+                <div class="auth-error">Usuario ou senha invalidos. Tente novamente.</div>
+            {% endif %}
+
+            {% if user.is_authenticated and not user.is_staff %}
+                <div class="auth-error">Sua conta existe, mas nao tem permissao para acessar esta area.</div>
+            {% endif %}
+
+            <form action="{{ app_path }}" method="post" id="login-form" class="checkout-form">
+                {% csrf_token %}
+                <label class="field">
+                    <span>Usuario</span>
+                    <input type="text" name="username" autofocus autocapitalize="none" autocomplete="username" maxlength="150" required id="id_username">
+                </label>
+                <label class="field">
+                    <span>Senha</span>
+                    <input type="password" name="password" autocomplete="current-password" required id="id_password">
+                </label>
+                {% if next %}
+                    <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
+                <button type="submit" class="primary-button wide">Entrar</button>
+            </form>
+
+            <div class="auth-links">
+                <a class="secondary-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+                <a class="secondary-link" href="{% url 'pedidos:gestao_pratos' %}">Ir para gestao de pratos</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

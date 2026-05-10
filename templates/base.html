@@ -1,0 +1,33 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PRATO-DELIVERY{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={% now 'U' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="page-shell">
+        {% block content %}{% endblock %}
+    </div>
+    <script>
+        window.PRATO_CONFIG = {
+            cartKey: "prato_delivery_cart",
+            checkoutUrl: "{% url 'pedidos:carrinho' %}",
+            addressAutocompleteUrl: "{% url 'pedidos:api_address_autocomplete' %}",
+            reverseGeocodeUrl: "{% url 'pedidos:api_address_reverse_geocode' %}",
+            deliveryEtaUrl: "{% url 'pedidos:api_address_delivery_time' %}",
+            csrfToken: "{{ csrf_token }}",
+            staticUrl: "{% get_static_prefix %}",
+            googleMapsApiKey: "{{ PRATO_FRONTEND_CONFIG.google_maps_api_key|escapejs }}",
+            googleMapsLanguage: "{{ PRATO_FRONTEND_CONFIG.google_maps_language|escapejs }}",
+            googleMapsRegion: "{{ PRATO_FRONTEND_CONFIG.google_maps_region|escapejs }}",
+            checkoutMapProvider: "{{ PRATO_FRONTEND_CONFIG.checkout_map_provider|escapejs }}"
+        };
+    </script>
+    <script src="{% static 'js/cart.js' %}?v={% now 'U' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

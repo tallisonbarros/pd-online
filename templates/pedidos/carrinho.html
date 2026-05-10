@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Carrinho | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout" data-page="carrinho">
+    <header class="context-header" aria-label="Cabecalho da pagina">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">CARRINHO</span>
+        </div>
+    </header>
+
+    <section class="checkout-stage-shell">
+        <section id="checkout-stage-items" class="checkout-stage-panel">
+            <div class="panel checkout-summary-panel">
+                <div class="panel-head">
+                    <h2>Itens escolhidos</h2>
+                    <span class="muted"><strong data-cart-count>0</strong></span>
+                </div>
+                <div id="checkout-items" class="checkout-items"></div>
+                <div class="checkout-total">
+                    <span>Subtotal</span>
+                    <strong id="checkout-items-subtotal">R$ 0,00</strong>
+                </div>
+            </div>
+            <label class="field checkout-name-field">
+                <input type="text" id="checkout-nome" placeholder="Seu nome">
+            </label>
+            <fieldset class="field talheres-field checkout-talheres-field">
+                <div class="talheres-toggle-wrap">
+                    <label class="talheres-toggle" for="checkout-talheres-toggle">
+                        <input type="checkbox" id="checkout-talheres-toggle" checked>
+                        <span class="talheres-slider" aria-hidden="true">
+                            <span class="talheres-knob">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M7 4v6M9.2 4v6M11.4 4v6M9.2 10v10M15 4v5.8c0 1.2 1 2.2 2.2 2.2V20"></path>
+                                </svg>
+                            </span>
+                        </span>
+                        <span class="talheres-status" aria-hidden="true">
+                            <span class="state-on">Sim, incluir talheres</span>
+                            <span class="state-off">Nao enviar talheres</span>
+                        </span>
+                    </label>
+                </div>
+            </fieldset>
+            <label class="field checkout-order-note-field">
+                <textarea id="checkout-order-note" rows="4" placeholder="Observacao geral do pedido. Ex.: sem cebola, entregar na portaria..."></textarea>
+            </label>
+            <div class="checkout-stage-actions checkout-stage-actions--capsule">
+                <a href="{% url 'pedidos:checkout' %}" id="checkout-go-delivery" class="primary-button wide checkout-mode-button">
+                    <span>Solicitar entrega</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 7h11v9H3z"></path>
+                        <path d="M14 10h4l3 3v3h-7z"></path>
+                        <path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                        <path d="M18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                    </svg>
+                </a>
+                <button type="button" id="checkout-go-pickup" class="secondary-pill wide checkout-mode-button">
+                    <span>Fazer retirada</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 8h12l-1 12H7z"></path>
+                        <path d="M9 8a3 3 0 0 1 6 0"></path>
+                        <path d="M9 13h6"></path>
+                    </svg>
+                </button>
+            </div>
+        </section>
+    </section>
+    <form method="post" action="{% url 'pedidos:criar_retirada' %}" id="pickup-form" class="hidden">
+        {% csrf_token %}
+        <input type="hidden" name="carrinho_payload" id="pickup-carrinho-payload">
+        <input type="hidden" name="nome_cliente" id="pickup-nome-payload">
+        <input type="hidden" name="observacao_geral" id="pickup-order-note-payload">
+        <input type="hidden" name="enviar_talheres" id="pickup-talheres-payload" value="sim">
+    </form>
+    <div class="checkout-page-footer" aria-label="Acoes auxiliares do carrinho">
+        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+    </div>
+</main>
+
+<div id="checkout-notice-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card notice-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="checkout-notice-title" aria-describedby="checkout-notice-message">
+        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">×</button>
+        <div class="modal-content notice-modal-body">
+            <div class="notice-modal-copy">
+                <strong id="checkout-notice-title">Atenção</strong>
+                <p id="checkout-notice-message">Revise os dados e tente novamente.</p>
+            </div>
+            <div class="notice-modal-actions">
+                <button type="button" class="secondary-pill hidden" data-notice-cancel>Cancelar</button>
+                <button type="button" class="primary-button hidden" data-notice-confirm>Continuar</button>
+                <button type="button" class="primary-button" data-notice-close>Entendi</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{ pratos_lookup_json|json_script:"checkout-pratos-lookup" }}
+{% endblock %}

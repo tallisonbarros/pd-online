@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Gestao de Bebidas | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active="bebidas" bebidas_badge=bebidas|length %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Catalogo</p>
+                <h1>Gestao de bebidas</h1>
+            </div>
+            <div class="ops-session-actions">
+                <a class="ops-logout" href="{% url 'pedidos:cozinha_pedidos' %}">Ver pedidos</a>
+            </div>
+        </header>
+
+        <section class="ops-headline">
+            <p class="ops-kicker">Bebidas</p>
+            <h2>Cadastre bebidas como itens separados</h2>
+            <p>As bebidas entram no cardapio abaixo do prato do dia e sao adicionadas ao pedido de forma independente.</p>
+        </section>
+
+        <section class="management-grid">
+            <div class="panel management-form-panel">
+                <div class="panel-head">
+                    <h2>{% if bebida_edicao %}Editar bebida{% else %}Nova bebida{% endif %}</h2>
+                    {% if bebida_edicao %}
+                        <a class="secondary-link" href="{% url 'pedidos:gestao_bebidas' %}">Limpar</a>
+                    {% endif %}
+                </div>
+                <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_bebida' %}" class="checkout-form">
+                    {% csrf_token %}
+                    {% if bebida_edicao %}
+                        <input type="hidden" name="bebida_id" value="{{ bebida_edicao.id }}">
+                    {% endif %}
+
+                    <label class="field">
+                        <span>Nome</span>
+                        {{ form.nome }}
+                    </label>
+
+                    <label class="field">
+                        <span>Descricao</span>
+                        {{ form.descricao }}
+                    </label>
+
+                    <label class="field">
+                        <span>Imagem</span>
+                        {{ form.imagem }}
+                    </label>
+
+                    <label class="field">
+                        <span>Preco</span>
+                        {{ form.preco }}
+                    </label>
+
+                    <label class="field">
+                        <span>Ordem</span>
+                        {{ form.ordem }}
+                    </label>
+
+                    <label class="choice-card switch-card">
+                        {{ form.ativo }}
+                        <span>Bebida ativa no cardapio</span>
+                    </label>
+
+                    <button type="submit" class="primary-button wide">
+                        {% if bebida_edicao %}Salvar alteracoes{% else %}Criar bebida{% endif %}
+                    </button>
+                </form>
+            </div>
+
+            <div class="management-list">
+                {% for bebida in bebidas %}
+                    <article class="dish-card management-card">
+                        <div class="dish-media">
+                            {% if bebida.imagem %}
+                                <img src="{{ bebida.imagem.url }}" alt="{{ bebida.nome }}">
+                            {% else %}
+                                <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ bebida.nome }}">
+                            {% endif %}
+                        </div>
+                        <div class="dish-body">
+                            <div class="management-card-head">
+                                <div>
+                                    <h2>{{ bebida.nome }}</h2>
+                                    {% if bebida.descricao %}
+                                        <p>{{ bebida.descricao }}</p>
+                                    {% endif %}
+                                </div>
+                                <span class="status-badge {% if bebida.ativo %}is-live{% endif %}">
+                                    {% if bebida.ativo %}Ativa{% else %}Inativa{% endif %}
+                                </span>
+                            </div>
+                            <div class="management-meta">
+                                <p><strong>Preco:</strong> {% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% else %}Nao informado{% endif %}</p>
+                                <p><strong>Ordem:</strong> {{ bebida.ordem }}</p>
+                            </div>
+                            <div class="management-actions">
+                                <a class="secondary-pill compact" href="{% url 'pedidos:gestao_bebidas' %}?edit={{ bebida.id }}">Editar</a>
+                                <form method="post" action="{% url 'pedidos:alternar_bebida' bebida.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="status-button">
+                                        {% if bebida.ativo %}Desativar{% else %}Ativar{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state">
+                        <h2>Nenhuma bebida cadastrada.</h2>
+                        <p>Use o formulario ao lado para publicar a primeira bebida.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

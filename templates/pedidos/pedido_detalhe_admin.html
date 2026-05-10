@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedido #{{ pedido.numero }} | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main pedido-detail-page">
+        <section class="ped-detail-hero">
+            <div>
+                <p class="ops-kicker">Auditoria do pedido</p>
+                <h1>Pedido #{{ pedido.numero }}</h1>
+                <p>Detalhes completos do pedido, com conferencia de itens, frete salvo e distancia usada no calculo.</p>
+            </div>
+            <div class="ped-detail-hero-actions">
+                <span class="ped-detail-status">{{ pedido.get_status_display }}</span>
+                <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:cozinha_pedidos' %}">&larr; Voltar para pedidos</a>
+            </div>
+        </section>
+
+        <section class="ped-detail-grid">
+            <article class="ped-detail-card">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Resumo</p>
+                        <h2>{{ pedido.nome_cliente }}</h2>
+                    </div>
+                    <a class="secondary-pill compact" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">
+                        Abrir rota
+                    </a>
+                </header>
+
+                <div class="ped-detail-kpis">
+                    <div class="ped-detail-kpi">
+                        <span>Total do pedido</span>
+                        <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                    </div>
+                    <div class="ped-detail-kpi">
+                        <span>Subtotal dos itens</span>
+                        <strong>R$ {{ itens_subtotal|floatformat:2 }}</strong>
+                    </div>
+                    <div class="ped-detail-kpi">
+                        <span>Frete salvo</span>
+                        <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong>
+                    </div>
+                    <div class="ped-detail-kpi">
+                        <span>Distancia calculada</span>
+                        <strong>{{ pedido.distancia_km|floatformat:2 }} km</strong>
+                    </div>
+                </div>
+            </article>
+
+            <article class="ped-detail-card">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Cliente e entrega</p>
+                        <h2>Dados do pedido</h2>
+                    </div>
+                </header>
+
+                <dl class="ped-detail-info">
+                    <div>
+                        <dt>Criado em</dt>
+                        <dd>{{ pedido.criado_em|date:"d/m/Y H:i" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Telefone</dt>
+                        <dd>{{ pedido.telefone }}</dd>
+                    </div>
+                    <div>
+                        <dt>Pagamento</dt>
+                        <dd>{{ pedido.get_forma_pagamento_display }}</dd>
+                    </div>
+                    <div>
+                        <dt>Talheres</dt>
+                        <dd>{% if pedido.enviar_talheres %}Enviar{% else %}Nao enviar{% endif %}</dd>
+                    </div>
+                    <div class="is-wide">
+                        <dt>Endereco</dt>
+                        <dd>{{ pedido.endereco }}</dd>
+                    </div>
+                    <div>
+                        <dt>Lote / Quadra</dt>
+                        <dd>{{ pedido.lote_quadra|default:"Nao informado" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Complemento</dt>
+                        <dd>{{ pedido.complemento|default:"Nao informado" }}</dd>
+                    </div>
+                    <div class="is-wide">
+                        <dt>Ponto de referencia</dt>
+                        <dd>{{ pedido.ponto_referencia|default:"Nao informado" }}</dd>
+                    </div>
+                    <div class="is-wide">
+                        <dt>Endereco formatado</dt>
+                        <dd>{{ pedido.endereco_formatado|default:"Nao informado" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Latitude</dt>
+                        <dd>{% if pedido.latitude %}{{ pedido.latitude }}{% else %}Nao registrada{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>Longitude</dt>
+                        <dd>{% if pedido.longitude %}{{ pedido.longitude }}{% else %}Nao registrada{% endif %}</dd>
+                    </div>
+                </dl>
+            </article>
+        </section>
+
+        <section class="ped-detail-grid">
+            <article class="ped-detail-card">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Itens</p>
+                        <h2>Composicao do pedido</h2>
+                    </div>
+                </header>
+
+                <ul class="ped-detail-items">
+                    {% for item in pedido.itens.all %}
+                        <li>
+                            <div>
+                                <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                                {% if item.observacao %}
+                                    <small>Obs.: {{ item.observacao }}</small>
+                                {% endif %}
+                            </div>
+                            <span>R$ {{ item.subtotal|floatformat:2 }}</span>
+                        </li>
+                    {% empty %}
+                        <li class="is-empty">Nenhum item encontrado neste pedido.</li>
+                    {% endfor %}
+                </ul>
+
+                {% if pedido.observacao_geral %}
+                    <div class="ped-detail-note">
+                        <p class="ops-kicker">Observacao geral</p>
+                        <p>{{ pedido.observacao_geral }}</p>
+                    </div>
+                {% endif %}
+            </article>
+
+            <article class="ped-detail-card ped-detail-card--audit">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Auditoria</p>
+                        <h2>Frete e calculo</h2>
+                    </div>
+                    <span class="ped-audit-badge {% if frete_confere and total_confere %}is-ok{% else %}is-warn{% endif %}">
+                        {% if frete_confere and total_confere %}Conferido{% else %}Revisar{% endif %}
+                    </span>
+                </header>
+
+                <dl class="ped-detail-audit-list">
+                    <div>
+                        <dt>Distancia salva no pedido</dt>
+                        <dd>{{ pedido.distancia_km|floatformat:2 }} km</dd>
+                    </div>
+                    <div>
+                        <dt>Faixa de frete atual para essa distancia</dt>
+                        <dd>{% if faixa_frete_atual %}{{ faixa_frete_atual }}{% else %}Nenhuma faixa encontrada{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt>Frete salvo no pedido</dt>
+                        <dd>R$ {{ pedido.valor_frete|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Frete esperado pela regra atual</dt>
+                        <dd>R$ {{ frete_esperado|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Diferenca de frete</dt>
+                        <dd class="{% if frete_confere %}is-ok{% else %}is-warn{% endif %}">R$ {{ diferenca_frete|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Total recalculado com subtotal + frete salvo</dt>
+                        <dd>R$ {{ total_recalculado|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Total salvo no pedido</dt>
+                        <dd class="{% if total_confere %}is-ok{% else %}is-warn{% endif %}">R$ {{ pedido.total|floatformat:2 }}</dd>
+                    </div>
+                </dl>
+
+                <div class="ped-detail-audit-note">
+                    <p>Use esta tela para comparar o valor salvo no pedido com a regra de frete atual. Isso ajuda a detectar calculo incorreto, alteracao posterior de faixa ou dados inconsistentes de distancia.</p>
+                </div>
+            </article>
+        </section>
+    </main>
+</div>
+{% endblock %}

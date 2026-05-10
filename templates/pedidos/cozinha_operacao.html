@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Cozinha | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active="cozinha" %}
+
+    <main class="ops-main cozinha-live" data-page="cozinha-operacao" data-api-url="{% url 'pedidos:api_cozinha_operacao' %}">
+        <section class="coz-live-top">
+            <article class="coz-live-metric">
+                <p>Entregues</p>
+                <strong id="coz-entregues">{{ entregues_hoje }}</strong>
+            </article>
+
+            <article class="coz-live-clock">
+                <p id="coz-dia">{{ weekday_label }}, {{ date_label }}</p>
+                <strong id="coz-hora">--:--:--</strong>
+            </article>
+
+            <article class="coz-live-metric">
+                <p>Para produção</p>
+                <strong id="coz-producao">{{ total_para_producao }}</strong>
+            </article>
+        </section>
+
+        <section class="coz-live-board">
+            <div id="coz-lista">
+                {% if pedidos_cards %}
+                    <div class="coz-live-orders-grid">
+                        {% for pedido in pedidos_cards %}
+                            <article class="coz-prod-card">
+                                <div class="coz-prod-top">
+                                    <div class="coz-prod-title-wrap">
+                                        <div class="coz-prod-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                                        </div>
+                                        <h3>{{ pedido.cliente }}</h3>
+                                    </div>
+                                    <div class="coz-prod-pratos">
+                                        <span>Pratos</span>
+                                        <strong>{{ pedido.pratos_total }}</strong>
+                                    </div>
+                                </div>
+                                <div class="coz-prod-priority-head">
+                                    <span>Prioridade</span>
+                                    <strong>{{ pedido.elapsed_min }} min</strong>
+                                </div>
+                                <div class="coz-prod-priority-track">
+                                    <i class="is-active"></i><i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                                <div class="coz-prod-priority-scale">
+                                    <span>10m</span><span>20m</span><span>30m</span><span>40m</span><span>50m</span><span>60m</span>
+                                </div>
+                                <p class="coz-prod-stage">Estágio atual: {{ pedido.elapsed_min }}m</p>
+                                <p class="coz-prod-number">#{{ pedido.pedido_numero }}</p>
+                            </article>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="coz-live-empty">
+                        <div class="coz-live-empty-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M4 8a6 6 0 0 1 12 0h2a1 1 0 1 1 0 2h-1a5 5 0 0 1-10 0H6a1 1 0 1 1 0-2h2zm3 0a3 3 0 1 0 6 0H7zm9 6H8a4 4 0 0 0 8 0z"/></svg>
+                        </div>
+                        <h3>Nenhum item em produção</h3>
+                        <p>Quando novos pedidos ativos entrarem, eles serão agrupados aqui para a cozinha.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/cozinha_operacao.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

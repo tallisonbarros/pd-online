@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: prato-delivery
+    env: python
+    plan: free
+    healthCheckPath: /
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: DEBUG
+        value: False
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prato-delivery-db
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: prato-delivery.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://prato-delivery.onrender.com
+      - key: RESTAURANT_WHATSAPP
+        sync: false
+databases:
+  - name: prato-delivery-db
+    plan: free

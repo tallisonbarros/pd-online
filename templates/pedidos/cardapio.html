@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Cardapio | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout" data-page="cardapio">
+    <header class="context-header" aria-label="Cabecalho da pagina">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">CARDAPIO</span>
+        </div>
+    </header>
+
+    <section class="menu-feature-band" aria-labelledby="menu-feature-title">
+        <img class="menu-feature-shape" src="{% static 'img/menu-feature-shape-base-cardapio.svg' %}" alt="" aria-hidden="true">
+        <div class="menu-feature-title">
+            <h1 id="menu-feature-title">
+                <span>PRATO</span>
+                <span>DO DIA</span>
+            </h1>
+        </div>
+        <div class="menu-feature-carousel-wrap">
+            <section class="menu-grid menu-carousel">
+                {% for prato in pratos %}
+                    <article
+                        class="dish-card"
+                        data-prato-card
+                        data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    >
+                        <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ prato.nome }}"></button>
+                        <div class="dish-media">
+                            <div class="dish-top-badges">
+                                <div class="dish-qty-badge" aria-label="Controle de quantidade do prato">
+                                    <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                                    <strong data-card-qty-value>1</strong>
+                                    <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                                </div>
+                                <div class="dish-price-badge">
+                                    {% if prato.preco %}
+                                        <strong>R$ {{ prato.preco|floatformat:2 }}</strong>
+                                    {% else %}
+                                        <span>Consulte</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if prato.imagem %}
+                                <img src="{{ prato.imagem.url }}" alt="{{ prato.nome }}">
+                            {% else %}
+                                <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ prato.nome }}">
+                            {% endif %}
+                        </div>
+                        <div class="dish-body">
+                            <div>
+                                <h2>{{ prato.nome }}</h2>
+                                {% if prato.descricao %}
+                                    <p>{{ prato.descricao }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
+                            <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
+                            <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
+                        </button>
+                    </article>
+                {% empty %}
+                    <div class="empty-state">
+                        <h2>Nenhum prato disponivel hoje.</h2>
+                        <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardapio.</p>
+                    </div>
+                {% endfor %}
+            </section>
+        </div>
+    </section>
+
+    <section class="menu-divider" aria-hidden="true"></section>
+
+    <section class="extras-section" aria-labelledby="extras-title">
+        <div class="extras-section-head">
+            <h2 id="extras-title">Bebidas</h2>
+            <p>Adicione bebidas como itens separados do prato do dia.</p>
+        </div>
+        <section class="menu-grid bebidas-grid">
+            {% for bebida in bebidas %}
+                <article
+                    class="dish-card"
+                    data-prato-card
+                    data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco":"{{ bebida.preco|default_if_none:'' }}","preco_formatado":"{% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% endif %}","imagem":"{% if bebida.imagem %}{{ bebida.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                >
+                    <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ bebida.nome }}"></button>
+                    <div class="dish-media">
+                        <div class="dish-top-badges">
+                            <div class="dish-qty-badge" aria-label="Controle de quantidade da bebida">
+                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                                <strong data-card-qty-value>1</strong>
+                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                            </div>
+                            <div class="dish-price-badge">
+                                {% if bebida.preco %}
+                                    <strong>R$ {{ bebida.preco|floatformat:2 }}</strong>
+                                {% else %}
+                                    <span>Consulte</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if bebida.imagem %}
+                            <img src="{{ bebida.imagem.url }}" alt="{{ bebida.nome }}">
+                        {% else %}
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ bebida.nome }}">
+                        {% endif %}
+                    </div>
+                    <div class="dish-body">
+                        <div>
+                            <h2>{{ bebida.nome }}</h2>
+                            {% if bebida.descricao %}
+                                <p>{{ bebida.descricao }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
+                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
+                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
+                    </button>
+                </article>
+            {% empty %}
+                <div class="extras-empty-card">
+                    <strong>Nenhuma bebida disponivel</strong>
+                    <p>Cadastre bebidas no menu da cozinha para publicar aqui.</p>
+                </div>
+            {% endfor %}
+        </section>
+    </section>
+</main>
+
+<a class="cart-dock" data-cart-dock data-cart-anchor href="{% url 'pedidos:carrinho' %}" aria-label="Abrir carrinho">
+    <span class="cart-dock-icon" aria-hidden="true">
+        <svg class="cart-icon" viewBox="0 0 24 24">
+            <path d="M3 4h2.2a1 1 0 0 1 .97.758L6.6 6.5H20a1 1 0 0 1 .97 1.242l-1.5 6A1 1 0 0 1 18.5 14H8.1a1 1 0 0 1-.97-.757L5.1 5.5H3a1 1 0 1 1 0-2Z"></path>
+            <path d="M9 19.5a1.5 1.5 0 1 0 0 .01ZM17 19.5a1.5 1.5 0 1 0 0 .01Z"></path>
+        </svg>
+    </span>
+    <span class="cart-dock-copy">
+        <strong data-cart-dock-summary>0 itens no carrinho</strong>
+        <small>Toque para finalizar</small>
+    </span>
+    <span class="cart-dock-badge" data-cart-dock-count>0</span>
+</a>
+
+<div class="modal-backdrop hidden" id="pedido-modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prato-nome">
+        <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal">×</button>
+        <img id="modal-prato-imagem" class="modal-image" src="" alt="">
+        <div class="modal-content">
+            <p class="eyebrow">Montar pedido</p>
+            <h2 id="modal-prato-nome"></h2>
+            <p id="modal-prato-descricao" class="modal-description"></p>
+            <p id="modal-prato-preco" class="modal-price"></p>
+            <label class="field">
+                <span>Observacao</span>
+                <textarea id="modal-observacao" rows="3" placeholder="Obs..."></textarea>
+            </label>
+            <div class="qty-row">
+                <span>Quantidade</span>
+                <div class="qty-control">
+                    <button type="button" data-qty-minus>-</button>
+                    <strong id="modal-quantidade">1</strong>
+                    <button type="button" data-qty-plus>+</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <a class="secondary-link" href="{% url 'pedidos:carrinho' %}">Finalizar Pedido</a>
+                <button type="button" class="primary-button wide" id="modal-add-cart">Adicionar ao Carrinho</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{ pratos_json|json_script:"pratos-data" }}
+{{ bebidas_json|json_script:"bebidas-data" }}
+{% endblock %}

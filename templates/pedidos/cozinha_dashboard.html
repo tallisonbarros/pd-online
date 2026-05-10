@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard da Cozinha | PRATO-DELIVERY{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active="dashboard" dashboard_badge=vendas_hoje pedidos_badge=pedidos_novos pratos_badge=pratos_ativos %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Sessao</p>
+                <h1>Equipe de Cozinha</h1>
+            </div>
+            <div class="ops-session-actions">
+                <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
+                <form method="post" action="/admin/logout/">
+                    {% csrf_token %}
+                    <button type="submit" class="ops-logout">Sair</button>
+                </form>
+            </div>
+        </header>
+
+        <section class="ops-headline">
+            <p class="ops-kicker">Operacao</p>
+            <h2>Dashboard da cozinha</h2>
+            <p>Acompanhe vendas, comportamento por horario, ranking de pratos e indicadores principais da operacao.</p>
+        </section>
+
+        <div class="ops-period-switch">
+            <a class="ops-period-btn {% if periodo_key == '7d' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=7d">Ultimos 7 dias</a>
+            <a class="ops-period-btn {% if periodo_key == 'month' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=month">Este mes</a>
+        </div>
+
+        <section class="ops-card ops-heatmap-card" data-heatmap-url="{% url 'pedidos:api_order_heatmap' %}">
+            <div class="ops-heatmap-head">
+                <div>
+                    <p class="ops-kicker">Mapa de calor</p>
+                    <h3>Mapa de calor dos pedidos</h3>
+                </div>
+                <div class="ops-heatmap-filters" role="group" aria-label="Filtrar periodo do mapa de calor">
+                    <button type="button" class="ops-heatmap-filter-btn" data-period="today">Hoje</button>
+                    <button type="button" class="ops-heatmap-filter-btn" data-period="7d">7 dias</button>
+                    <button type="button" class="ops-heatmap-filter-btn" data-period="30d">30 dias</button>
+                    <button type="button" class="ops-heatmap-filter-btn is-active" data-period="all">Tudo</button>
+                </div>
+            </div>
+            <div class="ops-heatmap-layout">
+                <div>
+                    <p id="orders-heatmap-empty" class="ops-heatmap-empty hidden">Ainda nao ha pedidos com localizacao confirmada para gerar o mapa de calor.</p>
+                    <div class="ops-heatmap-map-shell">
+                        <div id="orders-heatmap" class="ops-heatmap-map" aria-label="Mapa de calor das entregas em Rio Verde"></div>
+                    </div>
+                </div>
+                <aside class="ops-heatmap-side">
+                    <section class="ops-heatmap-list-card">
+                        <p class="ops-kicker">Bairros com mais pedidos</p>
+                        <ol class="ops-heatmap-list">
+                            {% for row in bairros_top %}
+                                <li>
+                                    <span>{{ row.bairro }}</span>
+                                    <strong>R$ {{ row.total|floatformat:2 }}</strong>
+                                </li>
+                            {% empty %}
+                                <li class="is-empty">Sem compras no periodo.</li>
+                            {% endfor %}
+                        </ol>
+                    </section>
+                    <section class="ops-heatmap-list-card">
+                        <p class="ops-kicker">Bairros sem compra</p>
+                        <ul class="ops-heatmap-list is-plain">
+                            {% for bairro in bairros_sem_compra %}
+                                <li><span>{{ bairro }}</span></li>
+                            {% empty %}
+                                <li class="is-empty">Todos os bairros do historico compraram neste periodo.</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                </aside>
+            </div>
+        </section>
+
+        <section class="ops-kpis">
+            <article class="ops-kpi-card">
+                <p>Hoje</p>
+                <strong>{{ vendas_hoje }}</strong>
+                <span>Quantidade de pratos vendidos hoje</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Media diaria</p>
+                <strong>{{ media_diaria|floatformat:1 }}</strong>
+                <span>Media do periodo selecionado</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Vs. ontem</p>
+                <strong class="{% if variacao_percentual < 0 %}is-down{% elif variacao_percentual > 0 %}is-up{% endif %}">{{ variacao_percentual }}%</strong>
+                <span>Comparacao entre hoje e ontem</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Faturamento do dia</p>
+                <strong>{{ faturamento_hoje_fmt }}</strong>
+                <span>Receita gerada por pratos hoje</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Ticket medio</p>
+                <strong>{{ ticket_medio_fmt }}</strong>
+                <span>Valor medio por pedido no periodo</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Meta diaria</p>
+                <strong>{{ vendas_hoje }}/{{ meta_diaria }}</strong>
+                <div class="ops-goal-bar"><span style="width: {{ percentual_meta }}%;"></span></div>
+                <span>{{ percentual_meta }}% da meta atingida hoje</span>
+            </article>
+        </section>
+
+        <section class="ops-card ops-chart-wrap">
+            <div class="ops-chart-head">
+                <div>
+                    <p class="ops-kicker">Vendas de pratos</p>
+                    <h3>Quantidade vendida ao longo do tempo</h3>
+                    <p>Historico dos {{ periodo_label|lower }}.</p>
+                </div>
+                <aside class="ops-period-pill">
+                    <p>Periodo analisado</p>
+                    <strong>{{ total_vendido_periodo }}</strong>
+                    <span>pratos vendidos</span>
+                </aside>
+            </div>
+            <div class="ops-chart-legend">
+                <span><i class="dot"></i> Pratos vendidos</span>
+                <span><i class="line"></i> Media diaria</span>
+            </div>
+            <div class="ops-chart-stage">
+                <svg id="dash-sales-chart" viewBox="0 0 960 320" preserveAspectRatio="xMidYMid meet" aria-label="Grafico de vendas"></svg>
+            </div>
+        </section>
+
+        <section class="ops-insight">
+            <div>
+                <p class="ops-kicker">Insight automatico</p>
+                <h3>{{ insight_texto }}</h3>
+            </div>
+            <aside class="ops-period-pill">
+                <p>Pico do periodo</p>
+                <strong>{{ pico_periodo }}</strong>
+                <span>pratos em um unico dia</span>
+            </aside>
+        </section>
+
+        <section class="ops-bottom-grid">
+            <article class="ops-card ops-chart-wrap">
+                <div class="ops-chart-head">
+                    <div>
+                        <p class="ops-kicker">Vendas por horario</p>
+                        <h3>Distribuicao ao longo do dia</h3>
+                        <p>Maior pico em {{ pico_hora_indice|stringformat:"02d" }}h com {{ pico_hora_valor }} pratos</p>
+                    </div>
+                </div>
+                <div class="ops-chart-stage is-compact">
+                    <svg id="dash-hour-chart" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet" aria-label="Grafico por horario"></svg>
+                </div>
+            </article>
+
+            <article class="ops-card">
+                <p class="ops-kicker">Ranking de pratos</p>
+                <h3>Top 5 mais vendidos</h3>
+                <ol class="ops-ranking-list">
+                    {% for item in ranking_pratos %}
+                        <li>
+                            <span>#{{ forloop.counter }}</span>
+                            <strong>{{ item.nome_prato_snapshot }}</strong>
+                            <b>{{ item.total }}</b>
+                        </li>
+                    {% empty %}
+                        <li class="is-empty">Sem vendas no periodo selecionado.</li>
+                    {% endfor %}
+                </ol>
+            </article>
+        </section>
+
+        <section class="ops-kpis">
+            <article class="ops-kpi-card">
+                <p>Pratos ativos</p>
+                <strong>{{ pratos_ativos }}</strong>
+                <span>Disponiveis para montagem no cardapio</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Itens de cozinha</p>
+                <strong>{{ itens_cozinha }}</strong>
+                <span>Base usada na composicao dos pratos</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Adicionais</p>
+                <strong>{{ adicionais_count }}</strong>
+                <span>Complementos extras cadastrados</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Outros</p>
+                <strong>{{ outros_count }}</strong>
+                <span>Produtos avulsos cadastrados</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Mais vendido</p>
+                <strong>{% if mais_vendidos_footer %}{{ mais_vendidos_footer.0.total }}x{% else %}0x{% endif %}</strong>
+                <span>{% if mais_vendidos_footer %}{{ mais_vendidos_footer.0.nome_prato_snapshot }}{% else %}Sem dados{% endif %}</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Pedidos novos</p>
+                <strong>{{ pedidos_novos }}</strong>
+                <span>Pedidos aguardando acao da cozinha</span>
+            </article>
+        </section>
+    </main>
+</div>
+
+{{ dashboard_payload|json_script:"dashboard-payload" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="{% static 'js/dashboard.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

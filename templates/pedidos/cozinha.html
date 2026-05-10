@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedidos da Cozinha | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active="cozinha" %}
+
+    <main
+        class="ops-main"
+        data-page="cozinha"
+        data-api-url="{% url 'pedidos:api_pedidos_cozinha' %}"
+        data-status-url-template="{% url 'pedidos:atualizar_status_pedido' 0 %}"
+    >
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Operação ao vivo</p>
+                <h1>Pedidos em andamento</h1>
+            </div>
+            <div class="ops-session-actions">
+                <span class="ops-user-chip">Atualização automática a cada 5s</span>
+                <a class="ops-logout" href="{% url 'pedidos:cozinha' %}">Ver dashboard</a>
+            </div>
+        </header>
+
+        <section class="ops-headline">
+            <p class="ops-kicker">Cozinha</p>
+            <h2>Fila operacional de pedidos</h2>
+            <p>Monitore os pedidos ativos, confira endereço, observações e avance cada etapa sem sair do painel.</p>
+        </section>
+
+        <section id="cozinha-lista" class="ops-orders-grid">
+            {% for pedido in pedidos %}
+                <article class="ops-order-card" data-order-id="{{ pedido.id }}">
+                    <div class="ops-order-topline">
+                        <p class="ops-order-code">Pedido #{{ pedido.numero }}</p>
+                        <span class="status-badge">{{ pedido.get_status_display }}</span>
+                    </div>
+
+                    <div class="ops-order-header">
+                        <div>
+                            <h3>{{ pedido.nome_cliente }}</h3>
+                            <p>{{ pedido.criado_em|date:"d/m/Y" }} as {{ pedido.criado_em|date:"H:i" }}</p>
+                        </div>
+                        <div class="ops-order-total">
+                            <span>Total</span>
+                            <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="ops-order-meta-grid">
+                        <div class="ops-order-meta-card">
+                            <span>Telefone</span>
+                            <strong>{{ pedido.telefone }}</strong>
+                        </div>
+                        <div class="ops-order-meta-card">
+                            <span>Talheres</span>
+                            <strong>{% if pedido.enviar_talheres %}Enviar{% else %}Não enviar{% endif %}</strong>
+                        </div>
+                        <div class="ops-order-meta-card ops-order-meta-card--wide">
+                            <span>Endereço</span>
+                            <strong>{{ pedido.endereco }}{% if pedido.complemento %}, {{ pedido.complemento }}{% endif %}</strong>
+                        </div>
+                    </div>
+
+                    <div class="ops-order-block">
+                        <div class="ops-order-block-head">
+                            <p class="ops-kicker">Itens</p>
+                        </div>
+                        <ul class="ops-order-items">
+                            {% for item in pedido.itens.all %}
+                                <li class="ops-order-item">
+                                    <div>
+                                        <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                                        {% if item.observacao %}
+                                            <small>Obs.: {{ item.observacao }}</small>
+                                        {% endif %}
+                                    </div>
+                                    <span>R$ {{ item.subtotal|floatformat:2 }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    {% if pedido.observacao_geral %}
+                        <div class="ops-order-note">
+                            <p class="ops-kicker">Observação geral</p>
+                            <p>{{ pedido.observacao_geral }}</p>
+                        </div>
+                    {% endif %}
+
+                    <div class="ops-order-footer">
+                        <div class="status-actions">
+                            {% for value, label in status_choices %}
+                                <button
+                                    type="button"
+                                    class="status-button {% if pedido.status == value %}is-active{% endif %}"
+                                    data-status-update
+                                    data-pedido-id="{{ pedido.id }}"
+                                    data-status="{{ value }}"
+                                >
+                                    {{ label }}
+                                </button>
+                            {% endfor %}
+                        </div>
+
+                        <div class="ops-order-links">
+                            <a class="secondary-pill compact" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">
+                                Abrir rota
+                            </a>
+                            {% if not pedido.has_coordinates %}
+                                <span class="ops-order-hint">Rota aproximada pelo endereço digitado.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </article>
+            {% empty %}
+                <div class="empty-state ops-order-empty">
+                    <h2>Nenhum pedido ainda.</h2>
+                    <p>Assim que os clientes enviarem pedidos, eles aparecem aqui automaticamente.</p>
+                </div>
+            {% endfor %}
+        </section>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/cozinha.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

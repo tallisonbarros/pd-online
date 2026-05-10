@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedidos | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active="pedidos" pedidos_badge=pedidos_ativos|length|add:aprovacao_count %}
+
+    <main class="ops-main pedidos-admin-page">
+        <section class="ped-headline">
+            <div>
+                <p class="ops-kicker">Operacao</p>
+                <h1>Gestao de pedidos</h1>
+                <p>Acompanhe os pedidos em tempo real, veja a etapa atual e mova o fluxo com atualizacao imediata.</p>
+            </div>
+            <a class="ped-add-btn" href="{% url 'pedidos:cardapio' %}" target="_blank" rel="noopener noreferrer">+ Adicionar pedido</a>
+        </section>
+
+        <details class="ped-collapse" open>
+            <summary>
+                <div>
+                    <h3>Pedidos para aprovacao</h3>
+                    <p>{% if aprovacao_count %}{{ aprovacao_count }} pedido(s) aguardando confirmacao pelo WhatsApp.{% else %}Nenhum pedido aguardando aprovacao.{% endif %}</p>
+                </div>
+                <span class="ped-badge">{{ aprovacao_count }}</span>
+            </summary>
+        </details>
+
+        {% for pedido in pedidos_aprovacao %}
+            <article class="ped-card">
+                <div class="ped-card-top">
+                    <div class="ped-client">
+                        <div class="ped-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                        </div>
+                        <div>
+                            <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
+                            <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
+                            <p class="ped-item-line">
+                                {% for item in pedido.itens.all|slice:":1" %}
+                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}
+                                {% empty %}
+                                    Sem itens
+                                {% endfor %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="ped-card-tools">
+                        <a class="ped-card-more" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}" aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}" title="Mais detalhes">
+                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
+                            <span class="ped-card-more-label">Detalhes</span>
+                        </a>
+                        <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Status</span>
+                                <strong>Aguardando aprovacao</strong>
+                            </div>
+                            <div class="ped-chip-box">
+                                <span>Valor total</span>
+                                <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ped-motoboy">Aguardando confirmacao no WhatsApp</div>
+                <div class="ped-actions">
+                    <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="cancelado">
+                        <button class="ped-btn ped-btn-danger" type="submit">Cancelar pedido</button>
+                    </form>
+                    <div class="ped-actions-right">
+                        <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="novo">
+                            <button class="ped-btn ped-btn-primary" type="submit">Aprovar pedido</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+
+        {% for pedido in pedidos_ativos %}
+            <article class="ped-card">
+                <div class="ped-card-top">
+                    <div class="ped-client">
+                        <div class="ped-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                        </div>
+                        <div>
+                            <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
+                            <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
+                            <p class="ped-item-line">
+                                {% for item in pedido.itens.all|slice:":1" %}
+                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}
+                                {% empty %}
+                                    Sem itens
+                                {% endfor %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="ped-card-tools">
+                        <a
+                            class="ped-card-more"
+                            href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+                            aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}"
+                            title="Mais detalhes"
+                        >
+                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
+                            <span class="ped-card-more-label">Detalhes</span>
+                        </a>
+
+                        <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Tempo em producao</span>
+                                <strong>
+                                    {% if pedido.status == "em_preparo" %}
+                                        {{ pedido.criado_em|timesince }}
+                                    {% else %}
+                                        --
+                                    {% endif %}
+                                </strong>
+                            </div>
+                            <div class="ped-chip-box">
+                                <span>Valor total</span>
+                                <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ped-motoboy">Motoboy solicitado</div>
+
+                <div class="ped-flow">
+                    <p>Fluxo do pedido</p>
+                    <div class="ped-stages">
+                        <div class="ped-stage {% if pedido.status == 'novo' %}is-active{% endif %}"><i>1</i><span>Pedido recebido</span></div>
+                        <div class="ped-stage {% if pedido.status == 'em_preparo' %}is-active{% endif %}"><i>2</i><span>Em producao</span></div>
+                        <div class="ped-stage"><i>3</i><span>Aguardando entregador</span></div>
+                        <div class="ped-stage {% if pedido.status == 'saiu_entrega' %}is-active{% endif %}"><i>4</i><span>Saiu para entrega</span></div>
+                        <div class="ped-stage {% if pedido.status == 'finalizado' %}is-active{% endif %}"><i>5</i><span>Entregue</span></div>
+                    </div>
+                </div>
+
+                <div class="ped-actions">
+                    <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="cancelado">
+                        <button class="ped-btn ped-btn-danger" type="submit">Cancelar pedido</button>
+                    </form>
+                    <div class="ped-actions-right">
+                        <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{% if pedido.status == 'saiu_entrega' %}em_preparo{% elif pedido.status == 'em_preparo' %}novo{% else %}novo{% endif %}">
+                            <button class="ped-btn ped-btn-soft" type="submit"><span aria-hidden="true">&larr;</span> Voltar etapa</button>
+                        </form>
+                        <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{% if pedido.status == 'novo' %}em_preparo{% elif pedido.status == 'em_preparo' %}saiu_entrega{% elif pedido.status == 'saiu_entrega' %}finalizado{% else %}finalizado{% endif %}">
+                            <button class="ped-btn ped-btn-primary" type="submit">Avancar etapa <span aria-hidden="true">&rarr;</span></button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                <h2>Nenhum pedido ativo</h2>
+                <p>Os pedidos em andamento aparecerao aqui.</p>
+            </div>
+        {% endfor %}
+
+        <details class="ped-collapse" open>
+            <summary>
+                <div>
+                    <h3>Concluidos</h3>
+                    <p>{{ concluidos_count }} pedido(s) entregue(s)</p>
+                </div>
+                <span class="ped-badge done">{{ concluidos_count }}</span>
+            </summary>
+        </details>
+
+        <details class="ped-collapse">
+            <summary>
+                <div>
+                    <h3>Cancelados</h3>
+                    <p>{% if cancelados_count %}{{ cancelados_count }} pedido(s) cancelado(s).{% else %}Nenhum pedido cancelado no momento.{% endif %}</p>
+                </div>
+                <span class="ped-badge cancel">{{ cancelados_count }}</span>
+            </summary>
+        </details>
+    </main>
+</div>
+{% endblock %}

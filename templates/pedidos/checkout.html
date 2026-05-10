@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Checkout | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout" data-page="checkout">
+    <header class="context-header" aria-label="Cabecalho da pagina">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">CAIXA</span>
+        </div>
+    </header>
+
+    <section class="checkout-stage-shell">
+        <section id="checkout-stage-delivery" class="checkout-stage-panel">
+            <form method="post" action="{% url 'pedidos:criar_pedido' %}" class="panel checkout-form" id="checkout-form">
+                {% csrf_token %}
+                <input type="hidden" name="carrinho_payload" id="carrinho-payload">
+                <div class="panel-head checkout-delivery-head">
+                    <h2>Entrega</h2>
+                    <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill compact">Voltar ao carrinho</a>
+                </div>
+
+                <input type="hidden" name="nome_cliente" id="checkout-nome-payload">
+
+                <section class="checkout-address-selector">
+                    <section id="checkout-address-summary" class="address-resolution-card hidden" aria-live="polite" role="button" tabindex="0">
+                        <div class="address-resolution-head">
+                            <p class="address-resolution-kicker">Endereco selecionado</p>
+                        </div>
+                        <strong id="checkout-address-summary-label">Cadastre ou selecione um endereco para revisar o ponto usado no calculo.</strong>
+                        <small id="checkout-address-summary-meta">Distancia --</small>
+                    </section>
+                    <div class="checkout-address-cta">
+                        <button type="button" id="saved-profile-open" class="saved-profile-create">Cadastrar novo endereco</button>
+                    </div>
+                </section>
+
+                <input type="hidden" name="rua">
+                <input type="hidden" name="numero">
+                <input type="hidden" name="bairro">
+                <input type="hidden" name="lote_quadra">
+                <input type="hidden" name="complemento">
+                <input type="hidden" name="ponto_referencia">
+                <input type="hidden" name="cidade" value="Rio Verde">
+                <input type="hidden" name="estado" value="GO">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+                <input type="hidden" name="endereco_formatado">
+                <input type="hidden" name="geocode_tipo">
+                <input type="hidden" name="geocode_precision">
+                <input type="hidden" name="valor_frete" id="checkout-shipping-value" value="0.00">
+                <input type="hidden" name="distancia_km" id="checkout-distance-km" value="0.00">
+                <input type="hidden" name="forma_pagamento" id="checkout-payment-method">
+                <input type="hidden" name="observacao_geral" id="checkout-order-note-payload">
+                <input type="hidden" name="enviar_talheres" id="checkout-talheres-payload" value="sim">
+
+                <section id="checkout-delivery-fields">
+                </section>
+
+                <section id="checkout-stage-payment" class="checkout-payment-stage" data-pix-configured="{% if pix_chave %}true{% else %}false{% endif %}">
+                    <div class="panel-head checkout-delivery-head">
+                        <h2>Pagamento</h2>
+                    </div>
+
+                    <section class="checkout-delivery-summary" aria-label="Resumo do pagamento">
+                        <span><strong data-cart-count>0</strong> itens</span>
+                        <span>Frete <strong id="checkout-shipping-review-payment">--</strong></span>
+                        <span>Total <strong id="checkout-total-review-payment">R$ 0,00</strong></span>
+                    </section>
+
+                    <div class="payment-choice-grid">
+                        <button type="button" class="payment-choice-card" data-payment-type="entrega">
+                            <span>PAGAR</span>
+                            <strong>Na entrega</strong>
+                        </button>
+                        <button type="button" class="payment-choice-card" data-payment-type="pix">
+                            <span>PAGAR</span>
+                            <strong>Online Pix</strong>
+                        </button>
+                    </div>
+
+                    <div id="payment-delivery-options" class="payment-suboptions hidden">
+                        <button type="button" class="secondary-pill wide" data-payment-method="dinheiro">Dinheiro</button>
+                        <button type="button" class="secondary-pill wide" data-payment-method="cartao_entrega">Cartao</button>
+                    </div>
+
+                    <div id="payment-pix-panel" class="address-resolution-card payment-pix-panel hidden">
+                        <p class="address-resolution-kicker">Chave Pix</p>
+                        {% if pix_chave %}
+                            <div class="pix-copy-row">
+                                <strong id="pix-chave-text">{{ pix_chave }}</strong>
+                                <button type="button" class="icon-button pix-copy-button" data-copy-pix="{{ pix_chave }}" aria-label="Copiar chave Pix" title="Copiar chave Pix">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4h8A1.5 1.5 0 0 1 19 5.5v8A1.5 1.5 0 0 1 17.5 15H15"></path>
+                                        <path d="M5 9h8a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 13 20H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 9Z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <small id="pix-copy-feedback" class="pix-copy-feedback hidden">Chave copiada</small>
+                            <small>Envie o comprovante pelo WhatsApp apos finalizar.</small>
+                        {% else %}
+                            <strong>Pix nao configurado</strong>
+                            <small>Cadastre a chave Pix em Ajustes > Pagamento.</small>
+                        {% endif %}
+                    </div>
+
+                    <button type="submit" class="primary-button wide">Finalizar no WhatsApp</button>
+                </section>
+            </form>
+        </section>
+    </section>
+    <div class="checkout-page-footer" aria-label="Acoes auxiliares do checkout">
+        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+    </div>
+</main>
+
+<div id="profile-editor-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card profile-modal-card profile-selector-modal">
+        <button type="button" class="modal-close" data-profile-editor-close aria-label="Fechar">×</button>
+        <div class="modal-content profile-selector-modal-body">
+            <section id="profile-selector-panel" class="profile-selector-panel hidden">
+                <div class="profile-selector-head">
+                    <strong>Meus enderecos</strong>
+                </div>
+                <div id="saved-checkout-profiles-list" class="saved-profile-list"></div>
+                <div class="saved-profile-selector-actions">
+                    <button type="button" id="saved-profile-create" class="saved-profile-create">Cadastrar novo endereco</button>
+                </div>
+            </section>
+
+            <section id="profile-editor-panel" class="profile-editor-panel">
+                <div class="profile-editor-head">
+                </div>
+
+                <form id="profile-form" class="profile-form" novalidate>
+                    <div class="address-flow-steps" aria-label="Etapas do endereco">
+                        <span class="address-flow-step is-active" aria-label="Etapa 1"></span>
+                        <span id="address-step-marker-details" class="address-flow-step" aria-label="Etapa 2"></span>
+                    </div>
+
+                    <section id="address-step-map" class="address-step-card address-step-card--map">
+                        <div class="address-map-head">
+                            <div>
+                                <p class="address-map-kicker">Etapa 1</p>
+                                <strong>Selecione o ponto da entrega no mapa</strong>
+                            </div>
+                            <button type="button" id="use-current-location" class="secondary-pill compact">Usar minha localizacao</button>
+                        </div>
+                        <div class="address-map-shell">
+                            <div id="address-map" class="address-map-canvas" aria-label="Mapa para confirmar local da entrega"></div>
+                            <div class="address-map-pin" aria-hidden="true"></div>
+                        </div>
+                        <div class="address-map-actions">
+                            <button type="button" id="confirm-map-center" class="primary-button">Confirmar</button>
+                        </div>
+                        <small id="address-map-feedback" class="field-help">Arraste o mapa para posicionar o centro no local exato da entrega.</small>
+                        <small id="address-feedback" class="field-help hidden"></small>
+                        <div class="resolved-address-inline">
+                            <p class="resolved-address-inline-text">
+                                <strong id="resolved-street-display">Confirme um ponto no mapa</strong>
+                                <span id="resolved-district-display">Aguardando confirmacao</span>
+                            </p>
+                        </div>
+                    </section>
+
+                    <section id="address-step-details" class="address-step-card address-step-card--details hidden">
+                        <div class="address-map-head">
+                            <div>
+                                <p class="address-map-kicker">Etapa 2</p>
+                                <strong>Confira o local e complete os dados</strong>
+                            </div>
+                            <button type="button" id="address-step-back-to-map" class="secondary-pill compact">Alterar ponto</button>
+                        </div>
+
+                        <div class="address-preview-shell">
+                            <div id="address-preview-map" class="address-preview-map" aria-label="Previa do ponto selecionado"></div>
+                            <div class="address-preview-pin" aria-hidden="true"></div>
+                        </div>
+
+                        <div class="address-preview-copy">
+                            <strong id="address-preview-title">Rua aguardando confirmacao</strong>
+                            <small id="address-preview-subtitle">Setor, cidade e estado aparecerao aqui.</small>
+                        </div>
+
+                        <label class="field">
+                            <input type="text" id="profile-numero" name="numero" inputmode="numeric" required placeholder="Numero (ex.: 120)">
+                        </label>
+
+                        <label class="field">
+                            <input type="text" id="profile-lote-quadra" name="lote_quadra" placeholder="Lote / quadra (ex.: Qd. 12 Lt. 04)">
+                        </label>
+
+                        <label class="field">
+                            <input type="text" id="profile-complemento" name="complemento" placeholder="Complemento (apto, bloco, casa dos fundos)">
+                        </label>
+
+                        <p id="coords-warning" class="coords-warning hidden">
+                            Endereco sem coordenadas confirmadas. O frete pode ficar aproximado enquanto isso.
+                        </p>
+
+                        <div class="profile-editor-actions">
+                            <button type="button" class="secondary-pill" data-profile-editor-close>Cancelar</button>
+                            <button type="submit" class="primary-button">Salvar endereco</button>
+                        </div>
+                    </section>
+
+                    <input type="hidden" name="rua">
+                    <input type="hidden" name="bairro">
+                    <input type="hidden" name="cidade" value="Rio Verde">
+                    <input type="hidden" name="estado" value="GO">
+                    <input type="hidden" id="latitude-input" name="latitude">
+                    <input type="hidden" id="longitude-input" name="longitude">
+                    <input type="hidden" id="endereco-formatado-input" name="endereco_formatado">
+                    <input type="hidden" id="geocode-tipo-input" name="geocode_tipo">
+                    <input type="hidden" id="geocode-precision-input" name="geocode_precision">
+                </form>
+            </section>
+        </div>
+    </div>
+</div>
+
+<div id="checkout-notice-modal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card notice-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="checkout-notice-title" aria-describedby="checkout-notice-message">
+        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">×</button>
+        <div class="modal-content notice-modal-body">
+            <div class="notice-modal-copy">
+                <strong id="checkout-notice-title">Atenção</strong>
+                <p id="checkout-notice-message">Revise os dados e tente novamente.</p>
+            </div>
+            <div class="notice-modal-actions">
+                <button type="button" class="secondary-pill hidden" data-notice-cancel>Cancelar</button>
+                <button type="button" class="primary-button hidden" data-notice-confirm>Continuar</button>
+                <button type="button" class="primary-button" data-notice-close>Entendi</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{ pratos_lookup_json|json_script:"checkout-pratos-lookup" }}
+{% endblock %}

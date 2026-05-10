@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedido encerrado | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout order-closed-page" data-page="checkout">
+    <header class="context-header" aria-label="Cabecalho da pagina">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">CAIXA</span>
+        </div>
+    </header>
+
+    <section class="checkout-stage-shell">
+        <article class="panel checkout-form order-closed-panel">
+            <header class="panel-head checkout-delivery-head">
+                <div>
+                    <p class="address-resolution-kicker">Pedido encerrado</p>
+                    <h2>#{{ pedido.numero }}</h2>
+                </div>
+                <span class="status-badge">{{ pedido.get_status_display }}</span>
+            </header>
+
+            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Finalize o envio no WhatsApp.</p>
+
+            <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
+                <span><strong>{{ pedido.itens.count }}</strong> itens</span>
+                <span>Frete <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong></span>
+                <span>Pagamento <strong>{{ pedido.get_forma_pagamento_display }}</strong></span>
+                <span>Total <strong>R$ {{ pedido.total|floatformat:2 }}</strong></span>
+            </section>
+
+            <section class="address-resolution-card is-exact order-closed-address">
+                <div class="address-resolution-head">
+                    <p class="address-resolution-kicker">Endereco selecionado</p>
+                </div>
+                <strong>{{ pedido.endereco }}</strong>
+                <small>
+                    {% if pedido.lote_quadra %}{{ pedido.lote_quadra }}{% endif %}
+                    {% if pedido.complemento %}{% if pedido.lote_quadra %} • {% endif %}{{ pedido.complemento }}{% endif %}
+                    {% if pedido.ponto_referencia %}{% if pedido.lote_quadra or pedido.complemento %} • {% endif %}{{ pedido.ponto_referencia }}{% endif %}
+                </small>
+            </section>
+
+            <section class="order-closed-items" aria-label="Itens do pedido">
+                {% for item in pedido.itens.all %}
+                    <div class="order-closed-item">
+                        <div>
+                            <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                            {% if item.observacao %}
+                                <small>Obs: {{ item.observacao }}</small>
+                            {% endif %}
+                        </div>
+                        <span>R$ {{ item.subtotal|floatformat:2 }}</span>
+                    </div>
+                {% endfor %}
+            </section>
+
+            <div class="success-actions order-closed-actions">
+                {% if whatsapp_url %}
+                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Abrir WhatsApp</a>
+                {% endif %}
+                <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+            </div>
+        </article>
+    </section>
+</main>
+{% if whatsapp_url %}
+<script>
+    window.addEventListener("load", function () {
+        var cartKey = (window.PRATO_CONFIG && window.PRATO_CONFIG.cartKey) || "prato_delivery_cart";
+        var pendingKey = cartKey + "_whatsapp_pending";
+        var windowName = "prato_delivery_whatsapp";
+        var shouldOpen = false;
+        try {
+            shouldOpen = sessionStorage.getItem(pendingKey) === "1";
+            sessionStorage.removeItem(pendingKey);
+        } catch (error) {
+            shouldOpen = true;
+        }
+        if (shouldOpen) {
+            window.open("{{ whatsapp_url|escapejs }}", windowName);
+        }
+        try {
+            localStorage.removeItem(cartKey);
+            localStorage.removeItem(cartKey + "_checkout_draft");
+        } catch (error) {
+            // Ignora falha de storage.
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

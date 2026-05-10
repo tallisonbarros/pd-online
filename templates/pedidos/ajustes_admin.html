@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Ajustes | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell">
+    {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main ajustes-page">
+        <section class="ped-detail-hero ajustes-hero">
+            <div>
+                <p class="ops-kicker">Ajustes operacionais</p>
+                <h1>Configuracao de frete</h1>
+                <p>Confirme a origem usada no calculo, teste destinos e ajuste as faixas de km para valor no mesmo painel.</p>
+            </div>
+        </section>
+
+        <section class="ajustes-tabs" aria-label="Guias de ajustes">
+            <a class="ajustes-tab {% if ajustes_aba == 'frete' %}is-active{% endif %}" {% if ajustes_aba == 'frete' %}aria-current="page"{% endif %} href="?aba=frete">Frete</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'google' %}is-active{% endif %}" {% if ajustes_aba == 'google' %}aria-current="page"{% endif %} href="?aba=google">Google Maps</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
+        </section>
+
+        {% if feedback %}
+            <div class="ajustes-feedback {% if feedback_kind == 'error' %}is-error{% endif %}">
+                {{ feedback }}
+            </div>
+        {% endif %}
+
+        {% if ajustes_aba == 'frete' %}
+        <form method="post" class="ajustes-grid">
+            {% csrf_token %}
+
+            <section class="ped-detail-card ajustes-card">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Origem</p>
+                        <h2>Ponto de saida</h2>
+                        <p class="ajustes-origin-official-label">Origem Oficial</p>
+                    </div>
+                </header>
+
+                <div class="ajustes-map-stack">
+                    <input type="hidden" name="origem_endereco" id="ajustes-origem-endereco" value="{{ origem.endereco }}">
+                    <input type="hidden" name="origem_latitude" id="ajustes-origem-lat" value="{{ origem.latitude|default:'' }}">
+                    <input type="hidden" name="origem_longitude" id="ajustes-origem-lng" value="{{ origem.longitude|default:'' }}">
+                    <input type="hidden" id="ajustes-origem-label-input" value="{{ origem_resolution.label }}">
+                    <input type="hidden" id="ajustes-origem-tipo-input" value="{{ origem_resolution.type }}">
+                    <input type="hidden" id="ajustes-origem-precision-input" value="{{ origem_resolution.precision }}">
+
+                    <div class="address-map-shell ajustes-map-shell">
+                        <div id="ajustes-origem-map" class="address-map-canvas" aria-label="Mapa para confirmar a origem do calculo"></div>
+                        <div class="address-map-pin" aria-hidden="true"></div>
+                    </div>
+
+                    <div class="ajustes-map-actions">
+                        <button type="button" id="ajustes-origem-use-location" class="secondary-pill compact">Usar minha localizacao</button>
+                        <button type="button" id="ajustes-origem-confirm" class="primary-button" data-save-on-confirm="true">Confirmar origem</button>
+                    </div>
+
+                    <small id="ajustes-origem-feedback" class="field-help">Mova o mapa e confirme o ponto exato da origem.</small>
+
+                    <div class="resolved-address-inline ajustes-resolved-inline">
+                        <p class="resolved-address-inline-text">
+                            <strong id="ajustes-origem-street">{{ origem_resolution.street|default:origem_resolution.label|default:"Confirme um ponto no mapa" }}</strong>
+                            <span id="ajustes-origem-district">{% if origem_resolution.district %}{{ origem_resolution.district }}, {% endif %}{{ origem_resolution.city|default:"Rio Verde" }}, {{ origem_resolution.state|default:"GO" }}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="ajustes-note">
+                    <p>A Origem Oficial salva aqui e usada em todo calculo de frete, distancia e rota.</p>
+                </div>
+            </section>
+
+            <section class="ped-detail-card ajustes-card">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Simulacao</p>
+                        <h2>Destino de teste</h2>
+                    </div>
+                </header>
+
+                <div class="ajustes-map-stack">
+                    <input type="hidden" name="destino_teste" id="ajustes-destino-teste" value="{% if preview %}{{ preview.destino_digitado }}{% endif %}">
+                    <input type="hidden" name="destino_teste_lat" id="ajustes-destino-lat" value="{% if preview %}{{ preview.destino_lat }}{% endif %}">
+                    <input type="hidden" name="destino_teste_lng" id="ajustes-destino-lng" value="{% if preview %}{{ preview.destino_lng }}{% endif %}">
+                    <input type="hidden" name="destino_teste_label" id="ajustes-destino-label-input" value="{% if preview %}{{ preview.destino_label }}{% endif %}">
+                    <input type="hidden" name="destino_teste_tipo" id="ajustes-destino-tipo-input" value="{% if preview %}{{ preview.destino_tipo }}{% endif %}">
+                    <input type="hidden" name="destino_teste_precision" id="ajustes-destino-precision-input" value="{% if preview %}{{ preview.destino_precision }}{% endif %}">
+
+                    <div class="address-map-shell ajustes-map-shell">
+                        <div id="ajustes-destino-map" class="address-map-canvas" aria-label="Mapa para confirmar o destino de teste"></div>
+                        <div class="address-map-pin" aria-hidden="true"></div>
+                    </div>
+
+                    <div class="ajustes-map-actions">
+                        <button type="button" id="ajustes-destino-use-location" class="secondary-pill compact">Usar minha localizacao</button>
+                        <button type="button" id="ajustes-destino-confirm" class="primary-button">Confirmar destino</button>
+                    </div>
+
+                    <small id="ajustes-destino-feedback" class="field-help">Mova o mapa e confirme o ponto exato do destino de teste.</small>
+
+                    <div class="resolved-address-inline ajustes-resolved-inline">
+                        <p class="resolved-address-inline-text">
+                            <strong id="ajustes-destino-street">{% if preview %}{{ preview.destino_label }}{% else %}Confirme um ponto no mapa{% endif %}</strong>
+                            <span id="ajustes-destino-district">{% if preview %}{{ preview.destino_digitado }}{% else %}Rio Verde, GO{% endif %}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="ajustes-actions">
+                    <button type="submit" class="ped-btn ped-btn-primary" name="action" value="test_frete">Calcular teste</button>
+                    <button type="submit" class="ped-btn ped-btn-soft" name="action" value="save_frete">Salvar ajustes</button>
+                </div>
+
+                {% if preview %}
+                    {% if preview.origem_nao_salva %}
+                        <div class="ajustes-feedback is-error">
+                            Este teste usou uma origem ainda nao salva. Pedidos novos continuam usando a origem oficial salva ate clicar em Salvar ajustes.
+                        </div>
+                    {% endif %}
+
+                    <div class="ajustes-preview-grid">
+                        <div class="ajustes-preview-card">
+                            <span>Origem usada</span>
+                            <strong>{{ preview.origem_endereco }}</strong>
+                            <small>{{ preview.origem_lat|floatformat:6 }}, {{ preview.origem_lng|floatformat:6 }} | {{ preview.origem_precision_label }}</small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>Destino resolvido</span>
+                            <strong>{{ preview.destino_label }}</strong>
+                            <small>{{ preview.destino_lat|floatformat:6 }}, {{ preview.destino_lng|floatformat:6 }} | {{ preview.destino_precision_label }}</small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>Distancia da rota</span>
+                            <strong>{{ preview.distance_km|floatformat:2 }} km</strong>
+                            <small>{{ preview.duration_minutes }} min na rota base</small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>Frete calculado</span>
+                            <strong>R$ {{ preview.frete_valor|floatformat:2 }}</strong>
+                            <small>{{ preview.faixa_label }}</small>
+                        </div>
+                    </div>
+                {% endif %}
+            </section>
+
+            <section class="ped-detail-card ajustes-card ajustes-card--wide">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Faixas</p>
+                        <h2>Conversao de km para real</h2>
+                    </div>
+                </header>
+
+                <div class="ajustes-frete-table">
+                    <div class="ajustes-frete-head">
+                        <span>Tipo</span>
+                        <span>Km limite</span>
+                        <span>Valor</span>
+                        <span>Ativa</span>
+                        <span>Ordem</span>
+                        <span>Excluir</span>
+                    </div>
+
+                    {% for row in faixa_rows %}
+                        <div class="ajustes-frete-row">
+                            <input type="hidden" name="faixa_row_key" value="{{ row.row_key }}">
+                            <input type="hidden" name="faixa_id" value="{{ row.id }}">
+
+                            <label>
+                                <span class="sr-only">Tipo</span>
+                                <select name="faixa_tipo">
+                                    <option value="ate" {% if row.tipo == 'ate' %}selected{% endif %}>Ate</option>
+                                    <option value="acima" {% if row.tipo == 'acima' %}selected{% endif %}>Acima de</option>
+                                </select>
+                            </label>
+
+                            <label>
+                                <span class="sr-only">Km limite</span>
+                                <input type="number" step="0.01" name="faixa_km_limite" value="{{ row.km_limite }}" placeholder="5.00">
+                            </label>
+
+                            <label>
+                                <span class="sr-only">Valor</span>
+                                <input type="number" step="0.01" name="faixa_valor" value="{{ row.valor }}" placeholder="10.00">
+                            </label>
+
+                            <label class="ajustes-check">
+                                <input type="checkbox" name="faixa_ativo" value="{{ row.row_key }}" {% if row.ativo %}checked{% endif %}>
+                                <span>{% if row.ativo %}Ativa{% else %}Inativa{% endif %}</span>
+                            </label>
+
+                            <label>
+                                <span class="sr-only">Ordem</span>
+                                <input type="number" name="faixa_ordem" value="{{ row.ordem }}">
+                            </label>
+
+                            <label class="ajustes-check">
+                                <input type="checkbox" name="faixa_delete" value="{{ row.row_key }}">
+                                <span>Excluir</span>
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+        </form>
+
+        {% if ultimo_pedido_auditoria %}
+            <section class="ped-detail-card ajustes-card ajustes-card--wide">
+                <header class="ped-detail-card-head">
+                    <div>
+                        <p class="ops-kicker">Auditoria recente</p>
+                        <h2>Ultimo pedido registrado</h2>
+                    </div>
+                    <a class="secondary-pill compact" href="{% url 'pedidos:pedido_detalhe_admin' ultimo_pedido_auditoria.pedido.id %}">Abrir detalhe</a>
+                </header>
+
+                <div class="ped-detail-audit-list">
+                    <div>
+                        <dt>Pedido</dt>
+                        <dd>#{{ ultimo_pedido_auditoria.pedido.numero }} | {{ ultimo_pedido_auditoria.pedido.nome_cliente }}</dd>
+                    </div>
+                    <div>
+                        <dt>Endereco formatado salvo</dt>
+                        <dd>{{ ultimo_pedido_auditoria.pedido.endereco_formatado|default:"Nao informado" }}</dd>
+                    </div>
+                    <div>
+                        <dt>Coordenadas salvas</dt>
+                        <dd>
+                            {% if ultimo_pedido_auditoria.pedido.latitude and ultimo_pedido_auditoria.pedido.longitude %}
+                                {{ ultimo_pedido_auditoria.pedido.latitude }}, {{ ultimo_pedido_auditoria.pedido.longitude }}
+                            {% else %}
+                                Nao registradas
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Distancia salva</dt>
+                        <dd>{{ ultimo_pedido_auditoria.pedido.distancia_km|floatformat:2 }} km</dd>
+                    </div>
+                    <div>
+                        <dt>Frete salvo</dt>
+                        <dd>R$ {{ ultimo_pedido_auditoria.pedido.valor_frete|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Frete esperado hoje</dt>
+                        <dd>{{ ultimo_pedido_auditoria.faixa_label }}</dd>
+                    </div>
+                    <div>
+                        <dt>Diferenca do frete</dt>
+                        <dd>R$ {{ ultimo_pedido_auditoria.diferenca_frete|floatformat:2 }}</dd>
+                    </div>
+                    <div>
+                        <dt>Total recalculado</dt>
+                        <dd>R$ {{ ultimo_pedido_auditoria.total_recalculado|floatformat:2 }}</dd>
+                    </div>
+                </div>
+            </section>
+        {% endif %}
+        {% elif ajustes_aba == 'google' %}
+            <section class="ajustes-guide-grid">
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Status atual</p>
+                            <h2>Provedor do checkout</h2>
+                        </div>
+                    </header>
+
+                    <div class="ajustes-preview-grid">
+                        <div class="ajustes-preview-card">
+                            <span>Provider ativo</span>
+                            <strong>{{ google_maps_status.provider_label }}</strong>
+                            <small>
+                                {% if google_maps_status.enabled %}
+                                    O checkout usa Google Maps para mapa e reverse geocode quando a chave esta configurada.
+                                {% else %}
+                                    Sem chave configurada, o checkout cai no fallback atual com OpenStreetMap / Photon.
+                                {% endif %}
+                            </small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>API key</span>
+                            <strong>
+                                {% if google_maps_status.enabled %}
+                                    {{ google_maps_status.api_key_masked }}
+                                {% else %}
+                                    Nao configurada
+                                {% endif %}
+                            </strong>
+                            <small>Variavel usada: {{ google_maps_status.env_var_names.0 }}</small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>Idioma / regiao</span>
+                            <strong>{{ google_maps_status.language }} / {{ google_maps_status.region }}</strong>
+                            <small>Esses valores localizam labels e ajudam na resposta de geocoding.</small>
+                        </div>
+
+                        <div class="ajustes-preview-card">
+                            <span>APIs obrigatorias</span>
+                            <strong>{{ google_maps_status.required_apis|join:", " }}</strong>
+                            <small>Sem essas APIs habilitadas o checkout nao vai reproduzir a experiencia esperada.</small>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Chave</p>
+                            <h2>Salvar configuracao do Google</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_google">
+
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Google Maps API Key</span>
+                            <input
+                                type="text"
+                                name="google_maps_api_key"
+                                id="google-maps-api-key"
+                                value="{{ google_maps_status.api_key_value }}"
+                                placeholder="Cole aqui a chave browser do Google Maps"
+                                autocomplete="off"
+                            >
+                            <small class="field-help">Essa chave passa a ser a fonte principal do checkout, substituindo o fallback atual quando estiver preenchida.</small>
+                        </label>
+
+                        <label class="field ajustes-field">
+                            <span>Idioma</span>
+                            <input type="text" name="google_maps_language" id="google-maps-language" value="{{ google_maps_status.language_value|default:google_maps_status.language }}" placeholder="pt-BR">
+                        </label>
+
+                        <label class="field ajustes-field">
+                            <span>Regiao</span>
+                            <input type="text" name="google_maps_region" id="google-maps-region" value="{{ google_maps_status.region_value|default:google_maps_status.region }}" placeholder="BR">
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar configuracao</button>
+                            <button type="button" class="ped-btn ped-btn-soft" id="google-maps-test-button">Testar chave agora</button>
+                        </div>
+                    </form>
+
+                    <div id="google-maps-test-status" class="ajustes-google-status">
+                        <strong>Status do teste</strong>
+                        <p>Preencha a chave acima e clique em <em>Testar chave agora</em> para validar sem sair da tela.</p>
+                    </div>
+
+                    <div id="google-maps-test-map" class="ajustes-google-map hidden" aria-label="Mapa de teste do Google"></div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Checklist</p>
+                            <h2>O que o admin precisa fazer</h2>
+                        </div>
+                    </header>
+
+                    <ol class="ajustes-guide-list">
+                        <li>Criar ou selecionar o projeto no Google Cloud usado pela operacao do app.</li>
+                        <li>Habilitar <strong>Maps JavaScript API</strong> e <strong>Geocoding API</strong> no mesmo projeto.</li>
+                        <li>Gerar uma browser key com restricao por dominio para localhost, Render e dominio final da operacao.</li>
+                        <li>Preencher <code>GOOGLE_MAPS_API_KEY</code> no ambiente local e na hospedagem.</li>
+                        <li>Opcionalmente ajustar <code>GOOGLE_MAPS_LANGUAGE</code> e <code>GOOGLE_MAPS_REGION</code> se o projeto operar fora do padrao <code>pt-BR / BR</code>.</li>
+                        <li>Reiniciar a aplicacao depois de salvar as variaveis, para o checkout carregar o novo provedor.</li>
+                    </ol>
+
+                    <div class="ajustes-note">
+                        <p>Depois da chave ativa, o checkout passa a usar Google Maps como fonte principal da rua, bairro e reverse geocode. O frete continua sendo calculado no backend pelas coordenadas confirmadas no mapa.</p>
+                    </div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Variaveis</p>
+                            <h2>Configuracao esperada no ambiente</h2>
+                        </div>
+                    </header>
+
+                    <div class="ped-detail-audit-list">
+                        <div>
+                            <dt>GOOGLE_MAPS_API_KEY</dt>
+                            <dd>Chave browser do Google Maps Platform usada no checkout.</dd>
+                        </div>
+                        <div>
+                            <dt>GOOGLE_MAPS_LANGUAGE</dt>
+                            <dd>Padrao recomendado: {{ google_maps_status.language }}</dd>
+                        </div>
+                        <div>
+                            <dt>GOOGLE_MAPS_REGION</dt>
+                            <dd>Padrao recomendado: {{ google_maps_status.region }}</dd>
+                        </div>
+                        <div>
+                            <dt>Comportamento sem chave</dt>
+                            <dd>O checkout continua funcional, mas volta para o fallback atual com OpenStreetMap / Photon.</dd>
+                        </div>
+                    </div>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'whatsapp' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">WhatsApp</p>
+                            <h2>Numero para finalizar pedidos</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_whatsapp">
+
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>WhatsApp oficial</span>
+                            <input type="tel" name="whatsapp_numero" value="{{ whatsapp_numero }}" placeholder="5564999999999" inputmode="numeric">
+                            <small class="field-help">Use DDI + DDD + numero, somente digitos. Esse numero recebe o resumo enviado pelo checkout.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar WhatsApp</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+        {% else %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Pagamento</p>
+                            <h2>Chave Pix online</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_pagamento">
+
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Chave Pix</span>
+                            <input type="text" name="pix_chave" value="{{ pix_chave }}" placeholder="email, telefone, CPF/CNPJ ou chave aleatoria">
+                            <small class="field-help">Essa chave aparece no checkout quando o cliente escolhe Online Pix.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar pagamento</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/ajustes.js' %}?v={% now 'U' %}"></script>
+{% endblock %}
