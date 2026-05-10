@@ -1367,6 +1367,210 @@ textarea {
     bottom: 12px;
 }
 
+[data-page="carrinho"] .checkout-stage-shell {
+    margin-top: 10px;
+    gap: 10px;
+}
+
+[data-page="carrinho"] .checkout-stage-panel {
+    gap: 10px;
+}
+
+[data-page="carrinho"] .checkout-summary-panel {
+    padding: 12px;
+    border-radius: 22px;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .panel-head {
+    margin-bottom: 8px;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .panel-head h2 {
+    font-size: 1.18rem;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .checkout-items {
+    gap: 8px;
+    padding-bottom: 10px;
+}
+
+[data-page="carrinho"] .checkout-item {
+    padding: 8px;
+    border-radius: 16px;
+    gap: 6px;
+    box-shadow: 0 6px 16px rgba(34, 19, 17, 0.04);
+}
+
+[data-page="carrinho"] .checkout-item-main {
+    gap: 9px;
+    align-items: center;
+}
+
+[data-page="carrinho"] .checkout-item-media {
+    width: 58px;
+    min-width: 58px;
+    height: 58px;
+    border-radius: 12px;
+}
+
+[data-page="carrinho"] .checkout-item-body {
+    gap: 6px;
+    padding-bottom: 0;
+}
+
+[data-page="carrinho"] .checkout-item-top {
+    gap: 8px;
+}
+
+[data-page="carrinho"] .checkout-item-title {
+    font-size: 0.9rem;
+    line-height: 1.16;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+[data-page="carrinho"] .checkout-item-price {
+    font-size: 0.88rem;
+    line-height: 1.1;
+}
+
+[data-page="carrinho"] .checkout-item-bottom {
+    margin-top: 0;
+    gap: 6px;
+}
+
+[data-page="carrinho"] .checkout-item-qty-control {
+    gap: 4px;
+    padding: 3px;
+}
+
+[data-page="carrinho"] .checkout-item-qty-control .qty-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 0.9rem;
+}
+
+[data-page="carrinho"] .checkout-item-qty-control .qty-value {
+    min-width: 20px;
+    font-size: 0.82rem;
+}
+
+[data-page="carrinho"] .checkout-item-actions {
+    padding: 0;
+    margin: 0;
+}
+
+[data-page="carrinho"] .checkout-item-actions .icon-button {
+    width: 32px;
+    height: 32px;
+}
+
+[data-page="carrinho"] .checkout-item-actions .icon-button svg {
+    width: 15px;
+    height: 15px;
+}
+
+[data-page="carrinho"] .checkout-item-note-wrap {
+    margin-left: 67px;
+}
+
+[data-page="carrinho"] .checkout-item-note {
+    padding: 6px 8px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    line-height: 1.28;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .checkout-total {
+    padding-top: 10px;
+    margin-top: 0;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .checkout-total span {
+    font-size: 0.94rem;
+}
+
+[data-page="carrinho"] .checkout-summary-panel .checkout-total strong {
+    font-size: 1.32rem;
+}
+
+[data-page="carrinho"] .checkout-name-field input {
+    min-height: 50px;
+    padding: 12px 16px;
+    font-size: 1rem;
+}
+
+[data-page="carrinho"] .checkout-talheres-field {
+    padding: 7px 10px;
+    border-radius: 15px;
+}
+
+[data-page="carrinho"] .talheres-toggle-wrap {
+    justify-content: flex-start;
+}
+
+[data-page="carrinho"] .talheres-toggle {
+    width: 100%;
+    gap: 10px;
+}
+
+[data-page="carrinho"] .talheres-slider {
+    width: 88px;
+    height: 36px;
+}
+
+[data-page="carrinho"] .talheres-knob {
+    top: 3px;
+    left: 3px;
+    width: 28px;
+    height: 28px;
+}
+
+[data-page="carrinho"] .talheres-knob svg {
+    width: 16px;
+    height: 16px;
+}
+
+[data-page="carrinho"] .talheres-toggle input[type="checkbox"]:checked + .talheres-slider .talheres-knob {
+    transform: translateX(52px);
+}
+
+[data-page="carrinho"] .talheres-status {
+    min-width: 0;
+    font-size: 0.86rem;
+}
+
+[data-page="carrinho"] .checkout-order-note-field textarea {
+    min-height: 86px;
+    padding: 14px 16px;
+    font-size: 0.96rem;
+    line-height: 1.35;
+}
+
+[data-page="carrinho"] .checkout-stage-actions--capsule {
+    padding: 4px;
+    margin-top: 2px;
+}
+
+[data-page="carrinho"] .checkout-stage-actions--capsule .primary-button,
+[data-page="carrinho"] .checkout-stage-actions--capsule .secondary-pill {
+    min-height: 50px;
+    padding-inline: 10px;
+    font-size: 0.86rem;
+    gap: 7px;
+}
+
+[data-page="carrinho"] .checkout-mode-button svg {
+    width: 18px;
+    height: 18px;
+}
+
 .checkout-footer-back {
     width: 100%;
     justify-content: center;

@@ -4,8 +4,6 @@
     const checkoutProfilesKey = `${cartKey}_checkout_profiles`;
     const legacyCheckoutProfileKey = `${cartKey}_checkout_profile`;
     const checkoutDraftKey = `${cartKey}_checkout_draft`;
-    const whatsappPendingKey = `${cartKey}_whatsapp_pending`;
-    const whatsappWindowName = "prato_delivery_whatsapp";
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const checkoutLookup = (() => {
         const node = document.getElementById("checkout-pratos-lookup");
@@ -1809,7 +1807,7 @@
 
         let selectedShippingFee = Number.parseFloat(shippingValueInput?.value || "0") || 0;
         let activeStage = "delivery";
-        let whatsappSubmitConfirmed = false;
+        let whatsappSubmitInProgress = false;
 
         function redirectToCardapio() {
             window.location.href = cardapioLink;
@@ -2061,28 +2059,20 @@
             syncCheckoutNamePayload();
             syncTalheresPayload();
             persistCheckoutProfileFromForm(form);
-            if (!whatsappSubmitConfirmed) {
+            if (!whatsappSubmitInProgress) {
                 event.preventDefault();
-                showUiNotice("Seu pedido sera salvo e voce sera redirecionado a finalizar no whatsapp. Continuar?", {
+                showUiNotice("Seu pedido sera salvo e voce ira para a tela de pedido encerrado. La voce finaliza o envio no WhatsApp. Continuar?", {
                     title: "Finalizar no WhatsApp",
                     onConfirm() {
-                        try {
-                            const pendingWindow = window.open("", whatsappWindowName);
-                            if (pendingWindow) {
-                                pendingWindow.document.title = "Abrindo WhatsApp";
-                                pendingWindow.document.body.innerHTML = "<p style='font-family: sans-serif; padding: 24px;'>Abrindo WhatsApp...</p>";
-                                sessionStorage.setItem(whatsappPendingKey, "1");
-                            }
-                        } catch (error) {
-                            sessionStorage.setItem(whatsappPendingKey, "1");
-                        }
-                        whatsappSubmitConfirmed = true;
-                        form.requestSubmit();
+                        whatsappSubmitInProgress = true;
+                        form.querySelectorAll("button, input[type='submit']").forEach((button) => {
+                            button.disabled = true;
+                        });
+                        form.submit();
                     },
                 });
                 return;
             }
-            whatsappSubmitConfirmed = false;
         });
 
         render();
@@ -2177,24 +2167,17 @@
             }
             persistDraftFromPage();
         });
+        let pickupSubmitInProgress = false;
         goPickupButton?.addEventListener("click", () => {
             const cart = getCart();
-            if (!cart.length || !pickupForm) return;
+            if (!cart.length || !pickupForm || pickupSubmitInProgress) return;
             persistDraftFromPage();
             syncPickupFormPayload();
-            showUiNotice("Seu pedido sera salvo como retirada e voce sera redirecionado a finalizar no whatsapp. Continuar?", {
+            showUiNotice("Seu pedido sera salvo como retirada e voce ira para a tela de pedido encerrado. La voce finaliza o envio no WhatsApp. Continuar?", {
                 title: "Fazer retirada",
                 onConfirm() {
-                    try {
-                        const pendingWindow = window.open("", whatsappWindowName);
-                        if (pendingWindow) {
-                            pendingWindow.document.title = "Abrindo WhatsApp";
-                            pendingWindow.document.body.innerHTML = "<p style='font-family: sans-serif; padding: 24px;'>Abrindo WhatsApp...</p>";
-                            sessionStorage.setItem(whatsappPendingKey, "1");
-                        }
-                    } catch (error) {
-                        sessionStorage.setItem(whatsappPendingKey, "1");
-                    }
+                    pickupSubmitInProgress = true;
+                    goPickupButton.disabled = true;
                     pickupForm.submit();
                 },
             });

@@ -720,7 +720,9 @@ class CriarPedidoFreteTests(TestCase):
 
         success_response = self.client.get(response.url)
         self.assertContains(success_response, "Pedido encerrado")
+        self.assertContains(success_response, "Finalizar no WhatsApp")
         self.assertContains(success_response, "https://wa.me/5564999999999?text=")
+        self.assertNotContains(success_response, "window.open")
 
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
     def test_order_creation_accepts_bebida_as_independent_item(self, _mock_route):
@@ -854,7 +856,9 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(response.status_code, 302)
         pedido = Pedido.objects.get()
         success_response = self.client.get(response.url)
+        self.assertContains(success_response, "Finalizar no WhatsApp")
         self.assertContains(success_response, f"https://wa.me/556488887777?text=")
+        self.assertNotContains(success_response, "window.open")
         self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_APROVACAO)
 
     @patch("pedidos.views._fetch_route_summary")

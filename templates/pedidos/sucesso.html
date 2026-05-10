@@ -24,7 +24,7 @@
                 <span class="status-badge">{{ pedido.get_status_display }}</span>
             </header>
 
-            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Finalize o envio no WhatsApp.</p>
+            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Toque no botao abaixo para finalizar o envio no WhatsApp.</p>
 
             <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
                 <span><strong>{{ pedido.itens.count }}</strong> itens</span>
@@ -61,29 +61,16 @@
 
             <div class="success-actions order-closed-actions">
                 {% if whatsapp_url %}
-                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Abrir WhatsApp</a>
+                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Finalizar no WhatsApp</a>
                 {% endif %}
                 <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
             </div>
         </article>
     </section>
 </main>
-{% if whatsapp_url %}
 <script>
     window.addEventListener("load", function () {
         var cartKey = (window.PRATO_CONFIG && window.PRATO_CONFIG.cartKey) || "prato_delivery_cart";
-        var pendingKey = cartKey + "_whatsapp_pending";
-        var windowName = "prato_delivery_whatsapp";
-        var shouldOpen = false;
-        try {
-            shouldOpen = sessionStorage.getItem(pendingKey) === "1";
-            sessionStorage.removeItem(pendingKey);
-        } catch (error) {
-            shouldOpen = true;
-        }
-        if (shouldOpen) {
-            window.open("{{ whatsapp_url|escapejs }}", windowName);
-        }
         try {
             localStorage.removeItem(cartKey);
             localStorage.removeItem(cartKey + "_checkout_draft");
@@ -92,5 +79,4 @@
         }
     });
 </script>
-{% endif %}
 {% endblock %}
