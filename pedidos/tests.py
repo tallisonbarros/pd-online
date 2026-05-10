@@ -187,6 +187,16 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class PublicFlowCacheTests(TestCase):
+    def test_cart_checkout_and_menu_are_not_browser_cached(self):
+        for path in ["/", "/carrinho/", "/checkout/"]:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+
+
 class PedidoDetalheAdminTests(TestCase):
     def setUp(self):
         User = get_user_model()

@@ -17,6 +17,7 @@ from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import BebidaForm, PratoForm
@@ -151,6 +152,7 @@ def _build_whatsapp_order_url(pedido, config=None):
     return f"https://wa.me/{numero}?text={quote(montar_mensagem_whatsapp(pedido))}"
 
 
+@never_cache
 def cardapio(request):
     pratos = [prato for prato in Prato.objects.filter(ativo=True) if prato_disponivel_hoje(prato)]
     bebidas = Bebida.objects.filter(ativo=True)
@@ -168,6 +170,7 @@ def cardapio(request):
     )
 
 
+@never_cache
 def checkout(request):
     config = ConfiguracaoEntrega.get_solo()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
@@ -185,6 +188,7 @@ def checkout(request):
     )
 
 
+@never_cache
 def carrinho(request):
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
     bebidas_lookup = {
@@ -1469,6 +1473,7 @@ def criar_retirada(request):
     return redirect("pedidos:sucesso", numero=pedido.numero)
 
 
+@never_cache
 def sucesso(request, numero):
     pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), numero=numero)
     mensagem = montar_mensagem_whatsapp(pedido)
