@@ -260,7 +260,7 @@ class PedidoDetalheAdminTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Frete salvo")
-        self.assertContains(response, "Distancia calculada")
+        self.assertContains(response, "Distância calculada")
         self.assertEqual(response.context["pedido"], pedido)
         self.assertEqual(response.context["frete_esperado"], Decimal("10.00"))
         self.assertEqual(response.context["itens_subtotal"], Decimal("24.00"))
@@ -285,7 +285,7 @@ class PedidoDetalheAdminTests(TestCase):
         response = self.client.get("/controle/pedidos/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Pedidos para aprovacao")
+        self.assertContains(response, "Pedidos para aprovação")
         self.assertContains(response, "Aprovar pedido")
         self.assertIn(pedido, list(response.context["pedidos_aprovacao"]))
 
@@ -320,7 +320,7 @@ class AjustesAdminTests(TestCase):
         response = self.client.get("/controle/ajustes/?aba=geral")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Horario de funcionamento")
+        self.assertContains(response, "Horário de funcionamento")
         self.assertContains(response, 'value="10:30"')
         self.assertContains(response, 'value="14:45"')
 
@@ -442,7 +442,7 @@ class AjustesAdminTests(TestCase):
         self.assertEqual(preview["frete_valor"], Decimal("21.00"))
         self.assertIn("10,00 km", preview["faixa_label"])
         self.assertTrue(preview["origem_nao_salva"])
-        self.assertContains(response, "Este teste usou uma origem ainda nao salva")
+        self.assertContains(response, "Este teste usou uma origem ainda não salva")
 
     @override_settings(GOOGLE_MAPS_API_KEY="abcdef1234567890", GOOGLE_MAPS_LANGUAGE="pt-BR", GOOGLE_MAPS_REGION="BR")
     def test_google_tab_displays_provider_status(self):
@@ -631,7 +631,8 @@ class CardapioOperationalDayTests(TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "<span>PRATO DE</span>", html=True)
+        self.assertContains(response, "<span>PRATO</span>", html=True)
+        self.assertContains(response, "<span>DE</span>", html=True)
         self.assertContains(response, "<span>TERCA</span>", html=True)
         self.assertContains(response, "Prato Terca")
         self.assertNotContains(response, "Prato Segunda")
@@ -645,7 +646,8 @@ class CardapioOperationalDayTests(TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "<span>PRATO DE</span>", html=True)
+        self.assertContains(response, "<span>PRATO</span>", html=True)
+        self.assertContains(response, "<span>DE</span>", html=True)
         self.assertContains(response, "<span>QUARTA</span>", html=True)
         self.assertContains(response, "Prato Quarta")
         self.assertNotContains(response, "Prato Terca")
@@ -754,7 +756,7 @@ class AddressApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload[0]["precision"], "exact")
-        self.assertEqual(payload[0]["precision_label"], "Endereco confirmado")
+        self.assertEqual(payload[0]["precision_label"], "Endereço confirmado")
         self.assertEqual(payload[0]["type"], "house")
 
     @patch(
@@ -807,7 +809,7 @@ class AddressApiTests(TestCase):
             "lng": -50.91,
             "type": "street",
             "precision": "approximate",
-            "precision_label": "Endereco aproximado",
+            "precision_label": "Endereço aproximado",
         },
     )
     def test_reverse_geocode_returns_expected_payload(self, _mock_reverse):
@@ -903,8 +905,8 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(response.url, f"/pedido/{pedido.numero}/sucesso/")
 
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "Pedido encerrado")
-        self.assertContains(success_response, "Finalizar no WhatsApp")
+        self.assertContains(success_response, "Pedido gerado")
+        self.assertContains(success_response, "Abrir WhatsApp")
         self.assertContains(success_response, "Redirecionando para o WhatsApp em")
         self.assertContains(success_response, "data-whatsapp-countdown")
         self.assertContains(success_response, "https://wa.me/5564999999999?text=")
@@ -1112,7 +1114,7 @@ class CriarPedidoFreteTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertContains(response, "Configure o numero do WhatsApp", status_code=400)
+        self.assertContains(response, "Configure o número do WhatsApp", status_code=400)
         mock_route.assert_not_called()
         self.assertFalse(Pedido.objects.exists())
 

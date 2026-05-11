@@ -110,7 +110,7 @@
             } catch (error) {
                 deleteButton.disabled = false;
                 deleteButton.textContent = originalText;
-                if (filename) filename.textContent = error.message || "Nao foi possivel excluir a imagem";
+                if (filename) filename.textContent = error.message || "Não foi possível excluir a imagem";
             }
         });
     });

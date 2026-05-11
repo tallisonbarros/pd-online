@@ -29,7 +29,7 @@ class PratoForm(forms.ModelForm):
             "descricao": forms.Textarea(
                 attrs={
                     "rows": 4,
-                    "placeholder": "Descricao curta para aparecer no cardapio.",
+                    "placeholder": "Descrição curta para aparecer no cardápio.",
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
@@ -65,7 +65,7 @@ class BebidaForm(forms.ModelForm):
             "descricao": forms.Textarea(
                 attrs={
                     "rows": 4,
-                    "placeholder": "Descricao curta para aparecer no cardapio.",
+                    "placeholder": "Descrição curta para aparecer no cardápio.",
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "6.00"}),
@@ -82,7 +82,7 @@ class AdicionalForm(forms.ModelForm):
             "descricao": forms.Textarea(
                 attrs={
                     "rows": 4,
-                    "placeholder": "Descricao curta para aparecer no cardapio.",
+                    "placeholder": "Descrição curta para aparecer no cardápio.",
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "5.00"}),

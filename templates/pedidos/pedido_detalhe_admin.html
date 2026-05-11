@@ -12,7 +12,7 @@
             <div>
                 <p class="ops-kicker">Auditoria do pedido</p>
                 <h1>Pedido #{{ pedido.numero }}</h1>
-                <p>Detalhes completos do pedido, com conferencia de itens, frete salvo e distancia usada no calculo.</p>
+                <p>Detalhes completos do pedido, com conferência de itens, frete salvo e distância usada no cálculo.</p>
             </div>
             <div class="ped-detail-hero-actions">
                 <span class="ped-detail-status">{{ pedido.get_status_display }}</span>
@@ -46,7 +46,7 @@
                         <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong>
                     </div>
                     <div class="ped-detail-kpi">
-                        <span>Distancia calculada</span>
+                        <span>Distância calculada</span>
                         <strong>{{ pedido.distancia_km|floatformat:2 }} km</strong>
                     </div>
                 </div>
@@ -75,35 +75,35 @@
                     </div>
                     <div>
                         <dt>Talheres</dt>
-                        <dd>{% if pedido.enviar_talheres %}Enviar{% else %}Nao enviar{% endif %}</dd>
+                        <dd>{% if pedido.enviar_talheres %}Enviar{% else %}Não enviar{% endif %}</dd>
                     </div>
                     <div class="is-wide">
-                        <dt>Endereco</dt>
+                        <dt>Endereço</dt>
                         <dd>{{ pedido.endereco }}</dd>
                     </div>
                     <div>
                         <dt>Lote / Quadra</dt>
-                        <dd>{{ pedido.lote_quadra|default:"Nao informado" }}</dd>
+                        <dd>{{ pedido.lote_quadra|default:"Não informado" }}</dd>
                     </div>
                     <div>
                         <dt>Complemento</dt>
-                        <dd>{{ pedido.complemento|default:"Nao informado" }}</dd>
+                        <dd>{{ pedido.complemento|default:"Não informado" }}</dd>
                     </div>
                     <div class="is-wide">
-                        <dt>Ponto de referencia</dt>
-                        <dd>{{ pedido.ponto_referencia|default:"Nao informado" }}</dd>
+                        <dt>Ponto de referência</dt>
+                        <dd>{{ pedido.ponto_referencia|default:"Não informado" }}</dd>
                     </div>
                     <div class="is-wide">
-                        <dt>Endereco formatado</dt>
-                        <dd>{{ pedido.endereco_formatado|default:"Nao informado" }}</dd>
+                        <dt>Endereço formatado</dt>
+                        <dd>{{ pedido.endereco_formatado|default:"Não informado" }}</dd>
                     </div>
                     <div>
                         <dt>Latitude</dt>
-                        <dd>{% if pedido.latitude %}{{ pedido.latitude }}{% else %}Nao registrada{% endif %}</dd>
+                        <dd>{% if pedido.latitude %}{{ pedido.latitude }}{% else %}Não registrada{% endif %}</dd>
                     </div>
                     <div>
                         <dt>Longitude</dt>
-                        <dd>{% if pedido.longitude %}{{ pedido.longitude }}{% else %}Nao registrada{% endif %}</dd>
+                        <dd>{% if pedido.longitude %}{{ pedido.longitude }}{% else %}Não registrada{% endif %}</dd>
                     </div>
                 </dl>
             </article>
@@ -136,7 +136,7 @@
 
                 {% if pedido.observacao_geral %}
                     <div class="ped-detail-note">
-                        <p class="ops-kicker">Observacao geral</p>
+                        <p class="ops-kicker">Observação geral</p>
                         <p>{{ pedido.observacao_geral }}</p>
                     </div>
                 {% endif %}
@@ -146,7 +146,7 @@
                 <header class="ped-detail-card-head">
                     <div>
                         <p class="ops-kicker">Auditoria</p>
-                        <h2>Frete e calculo</h2>
+                        <h2>Frete e cálculo</h2>
                     </div>
                     <span class="ped-audit-badge {% if frete_confere and total_confere %}is-ok{% else %}is-warn{% endif %}">
                         {% if frete_confere and total_confere %}Conferido{% else %}Revisar{% endif %}
@@ -155,11 +155,11 @@
 
                 <dl class="ped-detail-audit-list">
                     <div>
-                        <dt>Distancia salva no pedido</dt>
+                        <dt>Distância salva no pedido</dt>
                         <dd>{{ pedido.distancia_km|floatformat:2 }} km</dd>
                     </div>
                     <div>
-                        <dt>Faixa de frete atual para essa distancia</dt>
+                        <dt>Faixa de frete atual para essa distância</dt>
                         <dd>{% if faixa_frete_atual %}{{ faixa_frete_atual }}{% else %}Nenhuma faixa encontrada{% endif %}</dd>
                     </div>
                     <div>
@@ -185,7 +185,7 @@
                 </dl>
 
                 <div class="ped-detail-audit-note">
-                    <p>Use esta tela para comparar o valor salvo no pedido com a regra de frete atual. Isso ajuda a detectar calculo incorreto, alteracao posterior de faixa ou dados inconsistentes de distancia.</p>
+                    <p>Use esta tela para comparar o valor salvo no pedido com a regra de frete atual. Isso ajuda a detectar cálculo incorreto, alteração posterior de faixa ou dados inconsistentes de distância.</p>
                 </div>
             </article>
         </section>

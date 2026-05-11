@@ -63,7 +63,7 @@ class Pedido(models.Model):
         CARTAO = "cartao_entrega", "Cartao na entrega"
 
     class Status(models.TextChoices):
-        AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovacao"
+        AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovação"
         NOVO = "novo", "Novo"
         EM_PREPARO = "em_preparo", "Em preparo"
         SAIU_ENTREGA = "saiu_entrega", "Saiu para entrega"
@@ -144,7 +144,7 @@ class ItemPedido(models.Model):
 
 class FaixaFrete(models.Model):
     class Tipo(models.TextChoices):
-        ATE = "ate", "Ate"
+        ATE = "ate", "Até"
         ACIMA = "acima", "Acima de"
 
     tipo = models.CharField(max_length=10, choices=Tipo.choices, default=Tipo.ATE)
@@ -160,7 +160,7 @@ class FaixaFrete(models.Model):
         verbose_name_plural = "Faixas de frete"
 
     def __str__(self):
-        prefixo = "Ate" if self.tipo == self.Tipo.ATE else "Acima de"
+        prefixo = "Até" if self.tipo == self.Tipo.ATE else "Acima de"
         return f"{prefixo} {self.km_limite} km - R$ {self.valor}"
 
 
@@ -179,11 +179,11 @@ class ConfiguracaoEntrega(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Configuracao de entrega"
+        verbose_name = "Configuração de entrega"
         verbose_name_plural = "Configuracoes de entrega"
 
     def __str__(self):
-        return "Configuracao de entrega"
+        return "Configuração de entrega"
 
     def save(self, *args, **kwargs):
         self.pk = 1

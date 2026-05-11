@@ -26,14 +26,14 @@
         </header>
 
         <section class="ops-headline">
-            <p class="ops-kicker">Operacao</p>
+            <p class="ops-kicker">Operação</p>
             <h2>Dashboard da cozinha</h2>
-            <p>Acompanhe vendas, comportamento por horario, ranking de pratos e indicadores principais da operacao.</p>
+            <p>Acompanhe vendas, comportamento por horário, ranking de pratos e indicadores principais da operação.</p>
         </section>
 
         <div class="ops-period-switch">
-            <a class="ops-period-btn {% if periodo_key == '7d' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=7d">Ultimos 7 dias</a>
-            <a class="ops-period-btn {% if periodo_key == 'month' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=month">Este mes</a>
+            <a class="ops-period-btn {% if periodo_key == '7d' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=7d">Últimos 7 dias</a>
+            <a class="ops-period-btn {% if periodo_key == 'month' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=month">Este mês</a>
         </div>
 
         <section class="ops-card ops-heatmap-card" data-heatmap-url="{% url 'pedidos:api_order_heatmap' %}">
@@ -42,7 +42,7 @@
                     <p class="ops-kicker">Mapa de calor</p>
                     <h3>Mapa de calor dos pedidos</h3>
                 </div>
-                <div class="ops-heatmap-filters" role="group" aria-label="Filtrar periodo do mapa de calor">
+                <div class="ops-heatmap-filters" role="group" aria-label="Filtrar período do mapa de calor">
                     <button type="button" class="ops-heatmap-filter-btn" data-period="today">Hoje</button>
                     <button type="button" class="ops-heatmap-filter-btn" data-period="7d">7 dias</button>
                     <button type="button" class="ops-heatmap-filter-btn" data-period="30d">30 dias</button>
@@ -51,7 +51,7 @@
             </div>
             <div class="ops-heatmap-layout">
                 <div>
-                    <p id="orders-heatmap-empty" class="ops-heatmap-empty hidden">Ainda nao ha pedidos com localizacao confirmada para gerar o mapa de calor.</p>
+                    <p id="orders-heatmap-empty" class="ops-heatmap-empty hidden">Ainda não há pedidos com localização confirmada para gerar o mapa de calor.</p>
                     <div class="ops-heatmap-map-shell">
                         <div id="orders-heatmap" class="ops-heatmap-map" aria-label="Mapa de calor das entregas em Rio Verde"></div>
                     </div>
@@ -66,7 +66,7 @@
                                     <strong>R$ {{ row.total|floatformat:2 }}</strong>
                                 </li>
                             {% empty %}
-                                <li class="is-empty">Sem compras no periodo.</li>
+                                <li class="is-empty">Sem compras no período.</li>
                             {% endfor %}
                         </ol>
                     </section>
@@ -76,7 +76,7 @@
                             {% for bairro in bairros_sem_compra %}
                                 <li><span>{{ bairro }}</span></li>
                             {% empty %}
-                                <li class="is-empty">Todos os bairros do historico compraram neste periodo.</li>
+                                <li class="is-empty">Todos os bairros do histórico compraram neste periodo.</li>
                             {% endfor %}
                         </ul>
                     </section>
@@ -91,14 +91,14 @@
                 <span>Quantidade de pratos vendidos hoje</span>
             </article>
             <article class="ops-kpi-card">
-                <p>Media diaria</p>
+                <p>Média diária</p>
                 <strong>{{ media_diaria|floatformat:1 }}</strong>
-                <span>Media do periodo selecionado</span>
+                <span>Média do período selecionado</span>
             </article>
             <article class="ops-kpi-card">
                 <p>Vs. ontem</p>
                 <strong class="{% if variacao_percentual < 0 %}is-down{% elif variacao_percentual > 0 %}is-up{% endif %}">{{ variacao_percentual }}%</strong>
-                <span>Comparacao entre hoje e ontem</span>
+                <span>Comparação entre hoje e ontem</span>
             </article>
             <article class="ops-kpi-card">
                 <p>Faturamento do dia</p>
@@ -108,10 +108,10 @@
             <article class="ops-kpi-card">
                 <p>Ticket medio</p>
                 <strong>{{ ticket_medio_fmt }}</strong>
-                <span>Valor medio por pedido no periodo</span>
+                <span>Valor médio por pedido no periodo</span>
             </article>
             <article class="ops-kpi-card">
-                <p>Meta diaria</p>
+                <p>Meta diária</p>
                 <strong>{{ vendas_hoje }}/{{ meta_diaria }}</strong>
                 <div class="ops-goal-bar"><span style="width: {{ percentual_meta }}%;"></span></div>
                 <span>{{ percentual_meta }}% da meta atingida hoje</span>
@@ -123,17 +123,17 @@
                 <div>
                     <p class="ops-kicker">Vendas de pratos</p>
                     <h3>Quantidade vendida ao longo do tempo</h3>
-                    <p>Historico dos {{ periodo_label|lower }}.</p>
+                    <p>Histórico dos {{ periodo_label|lower }}.</p>
                 </div>
                 <aside class="ops-period-pill">
-                    <p>Periodo analisado</p>
+                    <p>Período analisado</p>
                     <strong>{{ total_vendido_periodo }}</strong>
                     <span>pratos vendidos</span>
                 </aside>
             </div>
             <div class="ops-chart-legend">
                 <span><i class="dot"></i> Pratos vendidos</span>
-                <span><i class="line"></i> Media diaria</span>
+                <span><i class="line"></i> Média diária</span>
             </div>
             <div class="ops-chart-stage">
                 <svg id="dash-sales-chart" viewBox="0 0 960 320" preserveAspectRatio="xMidYMid meet" aria-label="Grafico de vendas"></svg>
@@ -146,7 +146,7 @@
                 <h3>{{ insight_texto }}</h3>
             </div>
             <aside class="ops-period-pill">
-                <p>Pico do periodo</p>
+                <p>Pico do período</p>
                 <strong>{{ pico_periodo }}</strong>
                 <span>pratos em um unico dia</span>
             </aside>
@@ -156,13 +156,13 @@
             <article class="ops-card ops-chart-wrap">
                 <div class="ops-chart-head">
                     <div>
-                        <p class="ops-kicker">Vendas por horario</p>
-                        <h3>Distribuicao ao longo do dia</h3>
+                        <p class="ops-kicker">Vendas por horário</p>
+                        <h3>Distribuição ao longo do dia</h3>
                         <p>Maior pico em {{ pico_hora_indice|stringformat:"02d" }}h com {{ pico_hora_valor }} pratos</p>
                     </div>
                 </div>
                 <div class="ops-chart-stage is-compact">
-                    <svg id="dash-hour-chart" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet" aria-label="Grafico por horario"></svg>
+                    <svg id="dash-hour-chart" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet" aria-label="Gráfico por horário"></svg>
                 </div>
             </article>
 
@@ -177,7 +177,7 @@
                             <b>{{ item.total }}</b>
                         </li>
                     {% empty %}
-                        <li class="is-empty">Sem vendas no periodo selecionado.</li>
+                        <li class="is-empty">Sem vendas no período selecionado.</li>
                     {% endfor %}
                 </ol>
             </article>
@@ -187,7 +187,7 @@
             <article class="ops-kpi-card">
                 <p>Pratos ativos</p>
                 <strong>{{ pratos_ativos }}</strong>
-                <span>Disponiveis para montagem no cardapio</span>
+                <span>Disponíveis para montagem no cardapio</span>
             </article>
             <article class="ops-kpi-card">
                 <p>Itens de cozinha</p>

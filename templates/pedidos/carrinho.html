@@ -5,9 +5,9 @@
 
 {% block content %}
 <main class="layout public-layout" data-page="carrinho">
-    <header class="context-header" aria-label="Cabecalho da pagina">
+    <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
-            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
             <span class="context-header-label">CARRINHO</span>
@@ -43,13 +43,13 @@
                         </span>
                         <span class="talheres-status" aria-hidden="true">
                             <span class="state-on">Sim, incluir talheres</span>
-                            <span class="state-off">Nao enviar talheres</span>
+                            <span class="state-off">Não enviar talheres</span>
                         </span>
                     </label>
                 </div>
             </fieldset>
             <label class="field checkout-order-note-field">
-                <textarea id="checkout-order-note" rows="4" placeholder="Observacao geral do pedido. Ex.: sem cebola, entregar na portaria..."></textarea>
+                <textarea id="checkout-order-note" rows="4" placeholder="Observação geral do pedido. Ex.: sem cebola, entregar na portaria..."></textarea>
             </label>
         </section>
     </section>
@@ -82,16 +82,16 @@
         </div>
     </div>
     <div class="checkout-page-footer" aria-label="Acoes auxiliares do carrinho">
-        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
     </div>
 </main>
 
 <div id="checkout-notice-modal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card notice-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="checkout-notice-title" aria-describedby="checkout-notice-message">
-        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">×</button>
+        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">&times;</button>
         <div class="modal-content notice-modal-body">
             <div class="notice-modal-copy">
-                <strong id="checkout-notice-title">Atenção</strong>
+                <strong id="checkout-notice-title">Atencao</strong>
                 <p id="checkout-notice-message">Revise os dados e tente novamente.</p>
             </div>
             <div class="notice-modal-actions">

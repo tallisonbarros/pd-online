@@ -42,29 +42,29 @@ RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,m
 OSRM_ROUTE_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
 
 RIO_VERDE_BAIRROS_OFICIAIS = [
-    "Anhanguera", "Área Rural de Rio Verde", "César Bastos", "Céu Azul", "Cidade Empresarial Nova Aliança",
-    "Conjunto Maurício Arantes", "Conjunto Morada do Sol", "Conjunto Vila Verde", "Distrito Agroindustrial (DARV)",
-    "Eldorado", "Eldorado Prolongamento", "Jardim Adriana", "Jardim América", "Jardim Bela Vista", "Jardim Brasília",
-    "Jardim Cruvinel", "Jardim das Margaridas", "Jardim Diniz", "Jardim Eleonora", "Jardim Floresta", "Jardim Goiás",
-    "Jardim Marconal", "Jardim Mondale", "Jardim Neves", "Jardim Presidente", "Jardim São Tomaz", "Liberdade",
-    "Lindolfina", "Loteamento Gameleira", "Maristela", "Martins", "Medeiros", "Nova Vila Maria", "Odília",
-    "Paraguassu", "Parque Bandeirante", "Parque Betel", "Parque das Acácias", "Parque das Laranjeiras",
-    "Parque das Paineiras", "Parque Dom Miguel", "Parque dos Buritis", "Parque dos Girassóis", "Parque dos Jatobás",
-    "Popular", "Presidente Nasser", "Primavera", "Residencial Água Santa", "Residencial Araguaia",
-    "Residencial Arco Iris", "Residencial Atalaia", "Residencial Canaã", "Residencial Dona Iza",
+    "Anhanguera", "Area Rural de Rio Verde", "Cesar Bastos", "Ceu Azul", "Cidade Empresarial Nova Alianca",
+    "Conjunto Mauricio Arantes", "Conjunto Morada do Sol", "Conjunto Vila Verde", "Distrito Agroindustrial (DARV)",
+    "Eldorado", "Eldorado Prolongamento", "Jardim Adriana", "Jardim America", "Jardim Bela Vista", "Jardim Brasilia",
+    "Jardim Cruvinel", "Jardim das Margaridas", "Jardim Diniz", "Jardim Eleonora", "Jardim Floresta", "Jardim Goias",
+    "Jardim Marconal", "Jardim Mondale", "Jardim Neves", "Jardim Presidente", "Jardim Sao Tomaz", "Liberdade",
+    "Lindolfina", "Loteamento Gameleira", "Maristela", "Martins", "Medeiros", "Nova Vila Maria", "Odilia",
+    "Paraguassu", "Parque Bandeirante", "Parque Betel", "Parque das Acacias", "Parque das Laranjeiras",
+    "Parque das Paineiras", "Parque Dom Miguel", "Parque dos Buritis", "Parque dos Girassois", "Parque dos Jatobas",
+    "Popular", "Presidente Nasser", "Primavera", "Residencial Agua Santa", "Residencial Araguaia",
+    "Residencial Arco Iris", "Residencial Atalaia", "Residencial Canaa", "Residencial Dona Iza",
     "Residencial dos Buritis", "Residencial Gameleira", "Residencial Green Park", "Residencial Interlagos",
     "Residencial Jardim Campestre", "Residencial Jardim Helena", "Residencial Maranata",
-    "Residencial Nilson Veloso", "Residencial Parque dos Ipês", "Residencial Recanto do Bosque",
-    "Residencial Solar dos Ataídes", "Residencial Tocantins", "Residencial Veneza",
-    "Residencial Villagio Terra Cota", "Santo Agostinho", "Santo Antônio de Lisboa", "São Felipe", "São João",
-    "São Joaquim", "Serra Dourada", "Setor Alvorada", "Setor Central", "Setor Dona Gercina",
-    "Setor dos Funcionários", "Setor Industrial", "Setor Morada do Sol", "Setor Oeste", "Setor Pauzanes",
-    "Setor Santa Luzia", "Setor Universitário", "Solar Campestre", "Solar Monte Sião", "Vila Amália",
-    "Vila André Luiz", "Vila Baylão", "Vila Borges", "Vila Carolina", "Vila Dinara", "Vila Dona Auta",
+    "Residencial Nilson Veloso", "Residencial Parque dos Ipes", "Residencial Recanto do Bosque",
+    "Residencial Solar dos Ataides", "Residencial Tocantins", "Residencial Veneza",
+    "Residencial Villagio Terra Cota", "Santo Agostinho", "Santo Antonio de Lisboa", "Sao Felipe", "Sao Joao",
+    "Sao Joaquim", "Serra Dourada", "Setor Alvorada", "Setor Central", "Setor Dona Gercina",
+    "Setor dos Funcionarios", "Setor Industrial", "Setor Morada do Sol", "Setor Oeste", "Setor Pauzanes",
+    "Setor Santa Luzia", "Setor Universitario", "Solar Campestre", "Solar Monte Siao", "Vila Amalia",
+    "Vila Andre Luiz", "Vila Baylao", "Vila Borges", "Vila Carolina", "Vila Dinara", "Vila Dona Auta",
     "Vila Gomes", "Vila Maria", "Vila Mariana", "Vila Meneses", "Vila Miafiori", "Vila Modelo", "Vila Morais",
-    "Vila Mutirão", "Vila Olinda", "Vila Promissão", "Vila Renovação", "Vila Rocha", "Vila Rosalina",
-    "Vila Santa Bárbara", "Vila Santa Cruz", "Vila Santo André", "Vila Santo Antônio", "Vila Serpro",
-    "Vitória Régia",
+    "Vila Mutirao", "Vila Olinda", "Vila Promissao", "Vila Renovacao", "Vila Rocha", "Vila Rosalina",
+    "Vila Santa Barbara", "Vila Santa Cruz", "Vila Santo Andre", "Vila Santo Antonio", "Vila Serpro",
+    "Vitoria Regia",
 ]
 
 
@@ -74,13 +74,13 @@ def _prato_dias_disponiveis(prato):
     return {dia.strip().lower() for dia in prato.dias_disponiveis.split(",") if dia.strip()}
 
 
-def prato_disponivel_no_dia(prato, weekday_key):
+def prato_disponível_no_dia(prato, weekday_key):
     return weekday_key in _prato_dias_disponiveis(prato)
 
 
-def prato_disponivel_hoje(prato):
+def prato_disponível_hoje(prato):
     hoje = WEEKDAYS[timezone.localtime().weekday()]
-    return prato_disponivel_no_dia(prato, hoje)
+    return prato_disponível_no_dia(prato, hoje)
 
 
 def _resolve_cardapio_pratos(config=None, now=None):
@@ -93,15 +93,14 @@ def _resolve_cardapio_pratos(config=None, now=None):
     for offset in range(start_offset, start_offset + 7):
         weekday_index = (current.weekday() + offset) % 7
         weekday_key = WEEKDAYS[weekday_index]
-        pratos = [prato for prato in active_pratos if prato_disponivel_no_dia(prato, weekday_key)]
+        pratos = [prato for prato in active_pratos if prato_disponível_no_dia(prato, weekday_key)]
         if pratos:
             is_today = offset == 0
             return {
                 "pratos": pratos,
                 "weekday_key": weekday_key,
                 "is_today": is_today,
-                "title_line_1": "PRATO" if is_today else "PRATO DE",
-                "title_line_2": "DO DIA" if is_today else WEEKDAY_LABELS[weekday_key],
+                "title_lines": ["PRATO", "DO DIA"] if is_today else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
                 "empty_label": "hoje" if is_today else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
             }
 
@@ -110,8 +109,7 @@ def _resolve_cardapio_pratos(config=None, now=None):
         "pratos": [],
         "weekday_key": weekday_key,
         "is_today": start_offset == 0,
-        "title_line_1": "PRATO" if start_offset == 0 else "PRATO DE",
-        "title_line_2": "DO DIA" if start_offset == 0 else WEEKDAY_LABELS[weekday_key],
+        "title_lines": ["PRATO", "DO DIA"] if start_offset == 0 else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
         "empty_label": "hoje" if start_offset == 0 else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
     }
 
@@ -156,7 +154,7 @@ def montar_mensagem_whatsapp(pedido):
         f"*Status:* {pedido.get_status_display()}",
         "",
         f"*Cliente:* {pedido.nome_cliente}",
-        f"*Endereco:* {pedido.endereco}",
+        f"*Endereço:* {pedido.endereco}",
     ]
     if pedido.telefone:
         linhas.insert(5, f"*Telefone:* {pedido.telefone}")
@@ -165,10 +163,10 @@ def montar_mensagem_whatsapp(pedido):
     if pedido.complemento:
         linhas.append(f"*Complemento:* {pedido.complemento}")
     if pedido.ponto_referencia:
-        linhas.append(f"*Ponto de referencia:* {pedido.ponto_referencia}")
+        linhas.append(f"*Ponto de referência:* {pedido.ponto_referencia}")
     linhas.extend(
         [
-            f"*Talheres:* {'Sim' if pedido.enviar_talheres else 'Nao'}",
+            f"*Talheres:* {'Sim' if pedido.enviar_talheres else 'Não'}",
             "",
             "*Itens:*",
         ]
@@ -180,7 +178,7 @@ def montar_mensagem_whatsapp(pedido):
         if item.observacao:
             linhas.append(f"  Obs: {item.observacao}")
     if pedido.observacao_geral:
-        linhas.extend(["", f"*Observacao geral:* {pedido.observacao_geral}"])
+        linhas.extend(["", f"*Observação geral:* {pedido.observacao_geral}"])
     linhas.extend(["", f"*Pagamento:* {pedido.get_forma_pagamento_display()}"])
     if pedido.forma_pagamento == Pedido.FormaPagamento.PIX:
         pix_chave = _safe_text(getattr(ConfiguracaoEntrega.get_solo(), "pix_chave", ""))
@@ -232,8 +230,7 @@ def cardapio(request):
             "pratos_json": json.dumps(pratos_serializados, ensure_ascii=False),
             "adicionais_json": json.dumps(adicionais_serializados, ensure_ascii=False),
             "bebidas_json": json.dumps(bebidas_serializadas, ensure_ascii=False),
-            "cardapio_title_line_1": cardapio_context["title_line_1"],
-            "cardapio_title_line_2": cardapio_context["title_line_2"],
+            "cardapio_title_lines": cardapio_context["title_lines"],
             "cardapio_empty_label": cardapio_context["empty_label"],
         },
     )
@@ -301,7 +298,7 @@ def _parse_optional_time(value):
         return None
     parsed = parse_time(raw)
     if parsed is None:
-        raise ValueError("Informe um horario valido no formato HH:MM.")
+        raise ValueError("Informe um horário válido no formato HH:MM.")
     return parsed
 
 
@@ -439,7 +436,7 @@ out center;
             continue
         # Ignore clearly non-neighborhood labels that may appear in admin boundaries.
         low = nome.lower()
-        if low in {"rio verde", "goias", "goiás", "brasil", "brazil"}:
+        if low in {"rio verde", "goias", "goias", "brasil", "brazil"}:
             continue
         if len(nome) < 2:
             continue
@@ -832,7 +829,7 @@ def _calcular_frete_por_distancia(distance_km, faixas=None):
 def _format_faixa_label(faixa):
     if not faixa:
         return "Nenhuma faixa encontrada"
-    prefixo = "Ate" if faixa.tipo == FaixaFrete.Tipo.ATE else "Acima de"
+    prefixo = "Até" if faixa.tipo == FaixaFrete.Tipo.ATE else "Acima de"
     return f"{prefixo} {faixa.km_limite} km -> R$ {faixa.valor:.2f}".replace(".", ",")
 
 
@@ -1084,8 +1081,8 @@ def _address_precision(item):
 
 def _address_precision_label(precision):
     mapping = {
-        "exact": "Endereco confirmado",
-        "approximate": "Endereco aproximado",
+        "exact": "Endereço confirmado",
+        "approximate": "Endereço aproximado",
         "manual": "Coordenadas manuais",
         "fallback": "Origem padrao",
         "pending": "A confirmar",
@@ -1145,7 +1142,7 @@ def _normalize_autocomplete_item(feature):
 def _autocomplete_priority(item):
     country_ok = item["countrycode"] == "BR" or item["country"].lower() == "brasil"
     state_norm = item["state"].lower()
-    state_ok = "goias" in state_norm or "goiás" in state_norm or state_norm == "go"
+    state_ok = "goias" in state_norm or "goias" in state_norm or state_norm == "go"
     city_ok = item["city"].lower() == "rio verde"
     if country_ok and state_ok and city_ok:
         return 0
@@ -1164,7 +1161,7 @@ def _autocomplete_priority_with_hints(item, bairro_hint="", city_hint="", state_
     bairro_norm = _normalize_key(bairro_hint)
     city_target = _normalize_key(city_hint or "Rio Verde")
     state_target = _normalize_key(state_hint or "GO")
-    state_ok = "goias" in state_norm or "goiÃ¡s" in state_norm or state_norm == "go"
+    state_ok = "goias" in state_norm or state_norm == "go"
     city_ok = city_norm == "rio verde"
     state_match = _normalize_key(item.get("state")) in {state_target, "goias", "go"}
     city_match = _normalize_key(item.get("city")) == city_target
@@ -1363,7 +1360,7 @@ def _create_order_items_from_payload(pedido, itens_payload):
             prato = pratos.get(item_id)
             catalog_item = prato
         if not catalog_item:
-            raise ValueError("Um dos itens nao esta mais disponivel.")
+            raise ValueError("Um dos itens não est? mais disponível.")
         try:
             preco_bruto = str(item.get("preco", catalog_item.preco or "0.00")).replace("R$", "").replace(" ", "")
             if "," in preco_bruto:
@@ -1421,7 +1418,7 @@ def criar_pedido(request):
     forma_pagamento = _safe_text(request.POST.get("forma_pagamento"))
     config_entrega = ConfiguracaoEntrega.get_solo()
     if not _configured_whatsapp_number(config_entrega):
-        return HttpResponseBadRequest("Configure o numero do WhatsApp antes de finalizar pedidos.")
+        return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
 
     endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
     endereco = endereco_base or endereco_formatado or endereco_antigo
@@ -1476,7 +1473,7 @@ def criar_pedido(request):
         destination_result["lng"],
     )
     if duration_seconds is None or distance_meters is None:
-        return HttpResponseBadRequest("Nao foi possivel calcular a rota para o ponto de entrega.")
+        return HttpResponseBadRequest("Não foi possível calcular a rota para o ponto de entrega.")
     distancia_km = Decimal(str(round(max(distance_meters / 1000.0, 0.0), 2)))
     valor_frete, _ = _calcular_frete_por_distancia(distancia_km)
 
@@ -1536,7 +1533,7 @@ def criar_retirada(request):
 
     config_entrega = ConfiguracaoEntrega.get_solo()
     if not _configured_whatsapp_number(config_entrega):
-        return HttpResponseBadRequest("Configure o numero do WhatsApp antes de finalizar pedidos.")
+        return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
 
     nome_cliente = request.POST.get("nome_cliente", "").strip() or "Cliente"
     observacao_geral = request.POST.get("observacao_geral", "").strip()
@@ -1590,14 +1587,14 @@ def _dashboard_periodo(period):
         inicio = hoje.replace(day=1)
         return {
             "key": "month",
-            "label": "Este mes",
+            "label": "Este mês",
             "inicio": inicio,
             "fim": hoje,
         }
     inicio = hoje - timedelta(days=6)
     return {
         "key": "7d",
-        "label": "Ultimos 7 dias",
+        "label": "Últimos 7 dias",
         "inicio": inicio,
         "fim": hoje,
     }
@@ -1962,11 +1959,11 @@ def api_bairros_polygons(request):
 def _weekday_label_pt(date_value):
     names = [
         "SEGUNDA-FEIRA",
-        "TERÇA-FEIRA",
+        "TERCA-FEIRA",
         "QUARTA-FEIRA",
         "QUINTA-FEIRA",
         "SEXTA-FEIRA",
-        "SÁBADO",
+        "SABADO",
         "DOMINGO",
     ]
     return names[date_value.weekday()]
@@ -2189,7 +2186,7 @@ def ajustes_admin(request):
                 origem_lng = origem_resolution["lng"]
                 destino_resolvido = _destination_result_from_values(request.POST)
                 if not destino_resolvido:
-                    feedback = "Nao foi possivel localizar o destino de teste informado."
+                    feedback = "Não foi possível localizar o destino de teste informado."
                     feedback_kind = "error"
                 else:
                     duration_seconds, distance_meters = _fetch_route_summary(
@@ -2199,7 +2196,7 @@ def ajustes_admin(request):
                         destino_resolvido["lng"],
                     )
                     if duration_seconds is None or distance_meters is None:
-                        feedback = "Nao foi possivel calcular a rota viaria para esse destino."
+                        feedback = "Não foi possível calcular a rota viaria para esse destino."
                         feedback_kind = "error"
                     else:
                         distance_km = round(max(distance_meters / 1000.0, 0.0), 2)
@@ -2299,7 +2296,7 @@ def outros_admin(request):
         {
             "active": "outros",
             "titulo": "Outros",
-            "descricao": "Área dedicada para itens e configurações complementares da operação.",
+            "descricao": "Area dedicada para itens e configuracoes complementares da operacao.",
         },
     )
 
@@ -2312,7 +2309,7 @@ def cupons_admin(request):
         {
             "active": "cupons",
             "titulo": "Cupons",
-            "descricao": "Área dedicada para criação e gestão de cupons promocionais.",
+            "descricao": "Area dedicada para criacao e gestao de cupons promocionais.",
         },
     )
 

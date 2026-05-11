@@ -429,7 +429,7 @@ textarea {
 }
 
 [data-page="checkout"] {
-    padding-bottom: 110px;
+    padding-bottom: 150px;
 }
 
 .header-actions {
@@ -550,16 +550,18 @@ textarea {
 .menu-feature-title h1 {
     margin: 0;
     display: grid;
-    gap: 2px;
+    gap: 0;
     font-family: "Poppins", sans-serif;
-    font-size: clamp(2rem, 5vw, 3.6rem);
-    line-height: 0.92;
-    letter-spacing: -0.04em;
+    font-size: clamp(1.82rem, 4.7vw, 3.2rem);
+    line-height: 0.9;
+    letter-spacing: 0;
     color: #fffdfa;
     font-weight: 800;
+    text-transform: uppercase;
 }
 
 .menu-feature-title h1 span {
+    display: block;
     white-space: nowrap;
 }
 
@@ -1707,6 +1709,8 @@ body.modal-open {
     transform: translateX(-50%);
     z-index: 24;
     width: min(100%, 320px);
+    display: grid;
+    gap: 8px;
     pointer-events: none;
 }
 
@@ -1733,7 +1737,7 @@ body.modal-open {
 }
 
 [data-page="checkout"] {
-    padding-bottom: 84px;
+    padding-bottom: 150px;
 }
 
 [data-page="checkout"] .context-header {
@@ -1765,25 +1769,26 @@ body.modal-open {
 
 [data-page="checkout"] .checkout-form,
 [data-page="checkout"] .checkout-payment-stage {
-    gap: 10px;
+    gap: 8px;
 }
 
 [data-page="checkout"] .panel-head {
-    gap: 8px;
+    gap: 6px;
 }
 
 [data-page="checkout"] .panel-head h2 {
     font-size: 1.04rem;
-}
-
-[data-page="checkout"] .checkout-delivery-head .secondary-pill {
-    min-height: 40px;
-    padding: 8px 12px;
+    line-height: 1.1;
+    margin: 0;
 }
 
 [data-page="checkout"] .checkout-address-selector {
     display: grid;
-    gap: 8px;
+    gap: 2px;
+}
+
+[data-page="checkout"] #checkout-delivery-fields:empty {
+    display: none;
 }
 
 [data-page="checkout"] .address-resolution-card {
@@ -2059,6 +2064,7 @@ body.modal-open {
     height: 18px;
 }
 
+.checkout-footer-action,
 .checkout-footer-back {
     width: 100%;
     justify-content: center;
@@ -2642,6 +2648,14 @@ body.modal-open {
     line-height: 1.55;
 }
 
+.notice-modal-copy p span {
+    display: block;
+}
+
+.notice-modal-copy p span + span {
+    margin-top: 5px;
+}
+
 .notice-modal-actions {
     display: flex;
     flex-wrap: wrap;
@@ -2672,6 +2686,27 @@ body.modal-open {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.checkout-address-cta .saved-profile-create--compact {
+    width: auto;
+    min-height: 28px;
+    margin-left: auto;
+    padding: 3px 10px;
+    border-color: transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.checkout-address-cta .saved-profile-create--compact:hover,
+.checkout-address-cta .saved-profile-create--compact:focus-visible {
+    border-color: var(--line);
+    background: rgba(246, 240, 237, 0.52);
+    color: var(--brand);
 }
 
 .address-preview-shell {
@@ -5015,8 +5050,8 @@ fieldset.field {
     [data-page="cardapio"] .menu-feature-band {
         --menu-feature-safe-right: 34px;
         --menu-feature-safe-left: 22px;
-        grid-template-columns: 82px minmax(0, 136px);
-        gap: 10px;
+        grid-template-columns: 106px minmax(0, 136px);
+        gap: 8px;
         padding: 12px var(--menu-feature-safe-right) 12px var(--menu-feature-safe-left);
         width: 100%;
         max-width: 100%;
@@ -5035,14 +5070,14 @@ fieldset.field {
     }
 
     [data-page="cardapio"] .menu-feature-title {
-        width: 82px;
+        width: 106px;
         padding-left: 0;
         align-self: center;
     }
 
     [data-page="cardapio"] .menu-feature-title h1 {
-        font-size: clamp(1.18rem, 5.8vw, 1.58rem);
-        line-height: 0.9;
+        font-size: clamp(1.05rem, 4.9vw, 1.38rem);
+        line-height: 0.92;
     }
 
     [data-page="cardapio"] .menu-feature-carousel-wrap {
@@ -5175,18 +5210,19 @@ fieldset.field {
     [data-page="cardapio"] .menu-feature-band {
         --menu-feature-safe-left: 18px;
         --menu-feature-safe-right: 24px;
-        grid-template-columns: 76px minmax(0, 128px);
+        grid-template-columns: 92px minmax(0, 128px);
         gap: 8px;
         padding: 10px var(--menu-feature-safe-right) 10px var(--menu-feature-safe-left);
     }
 
     [data-page="cardapio"] .menu-feature-title {
-        width: 76px;
+        width: 92px;
         padding-left: 0;
     }
 
     [data-page="cardapio"] .menu-feature-title h1 {
-        font-size: 1rem;
+        font-size: 0.96rem;
+        line-height: 0.94;
     }
 
     [data-page="cardapio"] .dish-card {
@@ -5281,7 +5317,7 @@ fieldset.field {
 
     [data-page="checkout"] {
         padding-top: 4px;
-        padding-bottom: 74px;
+        padding-bottom: 150px;
     }
 
     [data-page="checkout"] .context-header {

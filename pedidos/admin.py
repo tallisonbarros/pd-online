@@ -5,7 +5,7 @@ from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedi
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
-admin.site.index_title = "Gestao do delivery"
+admin.site.index_title = "Gestão do delivery"
 
 
 @admin.register(Prato)
@@ -82,7 +82,7 @@ class PedidoAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Cliente", {"fields": ("nome_cliente", "telefone")}),
         (
-            "Endereco",
+            "Endereço",
             {
                 "fields": (
                     "rua",

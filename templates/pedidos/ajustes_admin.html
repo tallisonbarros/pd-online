@@ -11,7 +11,7 @@
         <section class="ped-detail-hero ajustes-hero">
             <div>
                 <p class="ops-kicker">Ajustes operacionais</p>
-                <h1>Configuracao do delivery</h1>
+                <h1>Configuração do delivery</h1>
                 <p>Configure funcionamento, origem, pagamentos e canais usados no fluxo de pedidos.</p>
             </div>
         </section>
@@ -36,7 +36,7 @@
                     <header class="ped-detail-card-head">
                         <div>
                             <p class="ops-kicker">Geral</p>
-                            <h2>Horario de funcionamento</h2>
+                            <h2>Horário de funcionamento</h2>
                         </div>
                     </header>
 
@@ -47,13 +47,13 @@
                         <label class="field ajustes-field">
                             <span>Abertura</span>
                             <input type="time" name="horario_abertura" value="{{ horario_abertura }}">
-                            <small class="field-help">Horario em que o delivery comeca a receber pedidos.</small>
+                            <small class="field-help">Horário em que o delivery começa a receber pedidos.</small>
                         </label>
 
                         <label class="field ajustes-field">
                             <span>Fechamento</span>
                             <input type="time" name="horario_fechamento" value="{{ horario_fechamento }}">
-                            <small class="field-help">Horario em que o delivery encerra o recebimento de pedidos.</small>
+                            <small class="field-help">Horário em que o delivery encerra o recebimento de pedidos.</small>
                         </label>
 
                         <div class="ajustes-actions ajustes-field ajustes-field--wide">
@@ -70,7 +70,7 @@
                 <header class="ped-detail-card-head">
                     <div>
                         <p class="ops-kicker">Origem</p>
-                        <h2>Ponto de saida</h2>
+                        <h2>Ponto de saída</h2>
                         <p class="ajustes-origin-official-label">Origem Oficial</p>
                     </div>
                 </header>
@@ -84,12 +84,12 @@
                     <input type="hidden" id="ajustes-origem-precision-input" value="{{ origem_resolution.precision }}">
 
                     <div class="address-map-shell ajustes-map-shell">
-                        <div id="ajustes-origem-map" class="address-map-canvas" aria-label="Mapa para confirmar a origem do calculo"></div>
+                        <div id="ajustes-origem-map" class="address-map-canvas" aria-label="Mapa para confirmar a origem do cálculo"></div>
                         <div class="address-map-pin" aria-hidden="true"></div>
                     </div>
 
                     <div class="ajustes-map-actions">
-                        <button type="button" id="ajustes-origem-use-location" class="secondary-pill compact">Usar minha localizacao</button>
+                        <button type="button" id="ajustes-origem-use-location" class="secondary-pill compact">Usar minha localização</button>
                         <button type="button" id="ajustes-origem-confirm" class="primary-button" data-save-on-confirm="true">Confirmar origem</button>
                     </div>
 
@@ -104,7 +104,7 @@
                 </div>
 
                 <div class="ajustes-note">
-                    <p>A Origem Oficial salva aqui e usada em todo calculo de frete, distancia e rota.</p>
+                    <p>A Origem Oficial salva aqui e usada em todo cálculo de frete, distância e rota.</p>
                 </div>
             </section>
 
@@ -130,7 +130,7 @@
                     </div>
 
                     <div class="ajustes-map-actions">
-                        <button type="button" id="ajustes-destino-use-location" class="secondary-pill compact">Usar minha localizacao</button>
+                        <button type="button" id="ajustes-destino-use-location" class="secondary-pill compact">Usar minha localização</button>
                         <button type="button" id="ajustes-destino-confirm" class="primary-button">Confirmar destino</button>
                     </div>
 
@@ -152,7 +152,7 @@
                 {% if preview %}
                     {% if preview.origem_nao_salva %}
                         <div class="ajustes-feedback is-error">
-                            Este teste usou uma origem ainda nao salva. Pedidos novos continuam usando a origem oficial salva ate clicar em Salvar ajustes.
+                            Este teste usou uma origem ainda não salva. Pedidos novos continuam usando a origem oficial salva até clicar em Salvar ajustes.
                         </div>
                     {% endif %}
 
@@ -170,7 +170,7 @@
                         </div>
 
                         <div class="ajustes-preview-card">
-                            <span>Distancia da rota</span>
+                            <span>Distância da rota</span>
                             <strong>{{ preview.distance_km|floatformat:2 }} km</strong>
                             <small>{{ preview.duration_minutes }} min na rota base</small>
                         </div>
@@ -210,7 +210,7 @@
                             <label>
                                 <span class="sr-only">Tipo</span>
                                 <select name="faixa_tipo">
-                                    <option value="ate" {% if row.tipo == 'ate' %}selected{% endif %}>Ate</option>
+                                    <option value="ate" {% if row.tipo == 'ate' %}selected{% endif %}>Até</option>
                                     <option value="acima" {% if row.tipo == 'acima' %}selected{% endif %}>Acima de</option>
                                 </select>
                             </label>
@@ -261,8 +261,8 @@
                         <dd>#{{ ultimo_pedido_auditoria.pedido.numero }} | {{ ultimo_pedido_auditoria.pedido.nome_cliente }}</dd>
                     </div>
                     <div>
-                        <dt>Endereco formatado salvo</dt>
-                        <dd>{{ ultimo_pedido_auditoria.pedido.endereco_formatado|default:"Nao informado" }}</dd>
+                        <dt>Endereço formatado salvo</dt>
+                        <dd>{{ ultimo_pedido_auditoria.pedido.endereco_formatado|default:"Não informado" }}</dd>
                     </div>
                     <div>
                         <dt>Coordenadas salvas</dt>
@@ -270,12 +270,12 @@
                             {% if ultimo_pedido_auditoria.pedido.latitude and ultimo_pedido_auditoria.pedido.longitude %}
                                 {{ ultimo_pedido_auditoria.pedido.latitude }}, {{ ultimo_pedido_auditoria.pedido.longitude }}
                             {% else %}
-                                Nao registradas
+                                Não registradas
                             {% endif %}
                         </dd>
                     </div>
                     <div>
-                        <dt>Distancia salva</dt>
+                        <dt>Distância salva</dt>
                         <dd>{{ ultimo_pedido_auditoria.pedido.distancia_km|floatformat:2 }} km</dd>
                     </div>
                     <div>
@@ -326,7 +326,7 @@
                                 {% if google_maps_status.enabled %}
                                     {{ google_maps_status.api_key_masked }}
                                 {% else %}
-                                    Nao configurada
+                                    Não configurada
                                 {% endif %}
                             </strong>
                             <small>Variavel usada: {{ google_maps_status.env_var_names.0 }}</small>
@@ -341,7 +341,7 @@
                         <div class="ajustes-preview-card">
                             <span>APIs obrigatorias</span>
                             <strong>{{ google_maps_status.required_apis|join:", " }}</strong>
-                            <small>Sem essas APIs habilitadas o checkout nao vai reproduzir a experiencia esperada.</small>
+                            <small>Sem essas APIs habilitadas o checkout não vai reproduzir a experiência esperada.</small>
                         </div>
                     </div>
                 </article>
@@ -350,7 +350,7 @@
                     <header class="ped-detail-card-head">
                         <div>
                             <p class="ops-kicker">Chave</p>
-                            <h2>Salvar configuracao do Google</h2>
+                            <h2>Salvar configuração do Google</h2>
                         </div>
                     </header>
 
@@ -382,7 +382,7 @@
                         </label>
 
                         <div class="ajustes-actions ajustes-field ajustes-field--wide">
-                            <button type="submit" class="ped-btn ped-btn-primary">Salvar configuracao</button>
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar configuração</button>
                             <button type="button" class="ped-btn ped-btn-soft" id="google-maps-test-button">Testar chave agora</button>
                         </div>
                     </form>
@@ -404,12 +404,12 @@
                     </header>
 
                     <ol class="ajustes-guide-list">
-                        <li>Criar ou selecionar o projeto no Google Cloud usado pela operacao do app.</li>
+                        <li>Criar ou selecionar o projeto no Google Cloud usado pela operação do app.</li>
                         <li>Habilitar <strong>Maps JavaScript API</strong> e <strong>Geocoding API</strong> no mesmo projeto.</li>
-                        <li>Gerar uma browser key com restricao por dominio para localhost, Render e dominio final da operacao.</li>
+                        <li>Gerar uma browser key com restrição por domínio para localhost, Render e domínio final da operação.</li>
                         <li>Preencher <code>GOOGLE_MAPS_API_KEY</code> no ambiente local e na hospedagem.</li>
                         <li>Opcionalmente ajustar <code>GOOGLE_MAPS_LANGUAGE</code> e <code>GOOGLE_MAPS_REGION</code> se o projeto operar fora do padrao <code>pt-BR / BR</code>.</li>
-                        <li>Reiniciar a aplicacao depois de salvar as variaveis, para o checkout carregar o novo provedor.</li>
+                        <li>Reiniciar a aplicação depois de salvar as variáveis, para o checkout carregar o novo provedor.</li>
                     </ol>
 
                     <div class="ajustes-note">
@@ -420,8 +420,8 @@
                 <article class="ped-detail-card ajustes-card ajustes-card--wide">
                     <header class="ped-detail-card-head">
                         <div>
-                            <p class="ops-kicker">Variaveis</p>
-                            <h2>Configuracao esperada no ambiente</h2>
+                            <p class="ops-kicker">Variáveis</p>
+                            <h2>Configuração esperada no ambiente</h2>
                         </div>
                     </header>
 
@@ -451,7 +451,7 @@
                     <header class="ped-detail-card-head">
                         <div>
                             <p class="ops-kicker">WhatsApp</p>
-                            <h2>Numero para finalizar pedidos</h2>
+                            <h2>Número para finalizar pedidos</h2>
                         </div>
                     </header>
 
@@ -462,7 +462,7 @@
                         <label class="field ajustes-field ajustes-field--wide">
                             <span>WhatsApp oficial</span>
                             <input type="tel" name="whatsapp_numero" value="{{ whatsapp_numero }}" placeholder="5564999999999" inputmode="numeric">
-                            <small class="field-help">Use DDI + DDD + numero, somente digitos. Esse numero recebe o resumo enviado pelo checkout.</small>
+                            <small class="field-help">Use DDI + DDD + numero, somente dígitos. Esse numero recebe o resumo enviado pelo checkout.</small>
                         </label>
 
                         <div class="ajustes-actions ajustes-field ajustes-field--wide">

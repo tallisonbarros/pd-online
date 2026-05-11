@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Pedido encerrado | PRATO-DELIVERY{% endblock %}
+{% block title %}Pedido gerado | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <main class="layout public-layout order-closed-page" data-page="checkout">
-    <header class="context-header" aria-label="Cabecalho da pagina">
+    <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
-            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
             <span class="context-header-label">CAIXA</span>
@@ -18,18 +18,18 @@
         <article class="panel checkout-form order-closed-panel">
             <header class="panel-head checkout-delivery-head">
                 <div>
-                    <p class="address-resolution-kicker">Pedido encerrado</p>
+                    <p class="address-resolution-kicker">Pedido gerado</p>
                     <h2>#{{ pedido.numero }}</h2>
                 </div>
                 <span class="status-badge">{{ pedido.get_status_display }}</span>
             </header>
 
-            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Vamos tentar abrir o WhatsApp automaticamente.</p>
+            <p class="order-closed-copy">Seu pedido foi gerado e está aguardando confirmação. Vamos tentar abrir o WhatsApp automaticamente.</p>
             {% if whatsapp_url %}
                 <div class="whatsapp-countdown-card" data-whatsapp-redirect="{{ whatsapp_url|escape }}" aria-live="polite">
                     <span>Redirecionando para o WhatsApp em</span>
                     <strong><span data-whatsapp-countdown>5</span>s</strong>
-                    <small>Se nao abrir, toque em Finalizar no WhatsApp.</small>
+                    <small>Se não abrir, toque em Finalizar no WhatsApp.</small>
                 </div>
             {% endif %}
 
@@ -42,13 +42,13 @@
 
             <section class="address-resolution-card is-exact order-closed-address">
                 <div class="address-resolution-head">
-                    <p class="address-resolution-kicker">Endereco selecionado</p>
+                    <p class="address-resolution-kicker">Endereço selecionado</p>
                 </div>
                 <strong>{{ pedido.endereco }}</strong>
                 <small>
                     {% if pedido.lote_quadra %}{{ pedido.lote_quadra }}{% endif %}
-                    {% if pedido.complemento %}{% if pedido.lote_quadra %} • {% endif %}{{ pedido.complemento }}{% endif %}
-                    {% if pedido.ponto_referencia %}{% if pedido.lote_quadra or pedido.complemento %} • {% endif %}{{ pedido.ponto_referencia }}{% endif %}
+                    {% if pedido.complemento %}{% if pedido.lote_quadra %}  {% endif %}{{ pedido.complemento }}{% endif %}
+                    {% if pedido.ponto_referencia %}{% if pedido.lote_quadra or pedido.complemento %}  {% endif %}{{ pedido.ponto_referencia }}{% endif %}
                 </small>
             </section>
 
@@ -68,9 +68,9 @@
 
             <div class="success-actions order-closed-actions">
                 {% if whatsapp_url %}
-                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Finalizar no WhatsApp</a>
+                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Abrir WhatsApp</a>
                 {% endif %}
-                <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+                <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
             </div>
         </article>
     </section>

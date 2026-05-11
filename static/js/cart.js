@@ -30,7 +30,7 @@
 
     function loadGoogleMapsAssets() {
         if (!hasGoogleMapsProvider()) {
-            return Promise.reject(new Error("Google Maps nao configurado."));
+            return Promise.reject(new Error("Google Maps não configurado."));
         }
         if (window.google?.maps?.importLibrary) {
             return Promise.resolve(window.google.maps);
@@ -164,10 +164,19 @@
             modal.dataset.bound = "true";
         }
 
-        titleNode.textContent = String(options.title || "Atenção");
-        messageNode.textContent = String(message || "");
+        titleNode.textContent = String(options.title || "Atencao");
+        const messageLines = Array.isArray(options.messageLines) ? options.messageLines : [message];
+        messageNode.innerHTML = "";
+        messageLines.filter((line) => String(line || "").trim()).forEach((line) => {
+            const paragraph = document.createElement("span");
+            paragraph.textContent = String(line);
+            messageNode.appendChild(paragraph);
+        });
         modal.__noticeConfirm = typeof options.onConfirm === "function" ? options.onConfirm : null;
         const isConfirm = Boolean(modal.__noticeConfirm);
+        if (cancelButton) cancelButton.textContent = String(options.cancelLabel || "Cancelar");
+        if (confirmButton) confirmButton.textContent = String(options.confirmLabel || "Continuar");
+        if (dismissButton) dismissButton.textContent = String(options.dismissLabel || "Entendi");
         dismissButton?.classList.toggle("hidden", isConfirm);
         cancelButton?.classList.toggle("hidden", !isConfirm);
         confirmButton?.classList.toggle("hidden", !isConfirm);
@@ -634,7 +643,7 @@
             image.alt = dish.nome;
             name.textContent = dish.nome;
             description.textContent = dish.descricao || "";
-            price.textContent = dish.preco_formatado || "Preco sob consulta";
+            price.textContent = dish.preco_formatado || "Preço sob consulta";
             modal.classList.remove("hidden");
             modal.setAttribute("aria-hidden", "false");
         }
@@ -692,7 +701,7 @@
             const qtyValue = card.querySelector("[data-card-qty-value]");
             const addCardButton = card.querySelector("[data-card-add-cart]");
             const dish = JSON.parse(card.dataset.prato || "{}");
-            if (!qtyValue || !addCardButton || !dish?.id) return;
+            if (!qtyValue || !addCardButton || !dish.id) return;
 
             card.querySelectorAll("[data-card-qty-change]").forEach((button) => {
                 button.addEventListener("click", (event) => {
@@ -842,14 +851,14 @@
         }
 
         function buildProfileTitle(profile) {
-            return [profile.rua || profile.endereco_formatado || "Endereco salvo", profile.numero].filter(Boolean).join(", ");
+            return [profile.rua || profile.endereco_formatado || "Endereço salvo", profile.numero].filter(Boolean).join(", ");
         }
 
         function buildProfileSubtitle(profile) {
             return [profile.bairro, profile.lote_quadra, profile.complemento || profile.ponto_referencia, profile.cidade || "Rio Verde"]
                 .filter(Boolean)
                 .slice(0, 3)
-                .join(" • ");
+                .join("  ");
         }
 
         function renderSummary(profile) {
@@ -865,10 +874,10 @@
             summaryCard.classList.add(tone.tone);
             summaryLabel.textContent = cached.destinationLabel || buildProfileDestinationText(profile);
             summaryMeta.textContent = cached.error === "origin_not_configured"
-                ? "Origem oficial nao configurada"
+                ? "Origem oficial não configurada"
                 : Number.isFinite(cached.distanceKm)
-                ? `Distancia ${cached.distanceKm.toFixed(2)} km`
-                : "Distancia --";
+                ? `Distância ${cached.distanceKm.toFixed(2)} km`
+                : "Distância --";
         }
 
         function pushShipping(profile) {
@@ -1094,7 +1103,8 @@
             const profiles = getSavedCheckoutProfiles();
             if (!profiles.length) {
                 clearSelection();
-                openButton.textContent = "Cadastrar novo endereco";
+                openButton.textContent = "Cadastrar novo endereço";
+                openButton.classList.remove("saved-profile-create--compact");
                 list.innerHTML = `
                     <div class="saved-profile-empty">
                         <strong>Nenhum endereco salvo ainda.</strong>
@@ -1104,7 +1114,8 @@
                 return;
             }
 
-            openButton.textContent = "Meus enderecos";
+            openButton.textContent = "Meus endereços";
+            openButton.classList.add("saved-profile-create--compact");
             if (!profiles.some((profile) => profile.id === selectedProfileId)) {
                 selectedProfileId = "";
             }
@@ -1137,7 +1148,7 @@
                                     aria-expanded="${isMenuOpen ? "true" : "false"}"
                                     aria-label="Acoes do endereco salvo"
                                 >
-                                    ⋯
+
                                 </button>
                                 <div class="saved-profile-menu-list ${isMenuOpen ? "" : "hidden"}" role="menu">
                                     <button type="button" class="saved-profile-menu-item" role="menuitem" data-profile-action="edit" data-profile-id="${escapeHtml(profile.id)}">
@@ -1220,7 +1231,7 @@
             event.preventDefault();
             const saved = upsertCheckoutProfile(readProfileFromEditor());
             if (!saved) {
-                showUiNotice("Confirme um ponto no mapa e informe o numero para salvar o endereco.");
+                showUiNotice("Confirme um ponto no mapa e informe o número para salvar o endereço.");
                 return;
             }
             applyProfile(saved);
@@ -1356,7 +1367,7 @@
         function setCurrentLocationLoadingState(isLoading) {
             isRequestingCurrentLocation = isLoading;
             useLocationButton.disabled = isLoading;
-            useLocationButton.textContent = isLoading ? "Carregando..." : "Usar minha localizacao";
+            useLocationButton.textContent = isLoading ? "Carregando..." : "Usar minha localização";
             mapShell?.classList.toggle("is-locating", isLoading);
         }
 
@@ -1367,9 +1378,9 @@
 
         function updateResolvedDisplay(data) {
             resolvedStreetDisplay.textContent = data?.street || data?.label || "Confirme um ponto no mapa";
-            resolvedDistrictDisplay.textContent = data?.district || "Aguardando confirmacao";
-            previewTitle.textContent = data?.street || data?.label || "Rua aguardando confirmacao";
-            previewSubtitle.textContent = [data?.district, data?.city || "Rio Verde", data?.state || "GO"].filter(Boolean).join(", ") || "Setor, cidade e estado aparecerao aqui.";
+            resolvedDistrictDisplay.textContent = data?.district || "Aguardando confirmação";
+            previewTitle.textContent = data?.street || data?.label || "Rua aguardando confirmação";
+            previewSubtitle.textContent = [data?.district, data?.city || "Rio Verde", data?.state || "GO"].filter(Boolean).join(", ") || "Setor, cidade e estado aparecerão aqui.";
         }
 
         function renderResolutionState(data) {
@@ -1467,7 +1478,7 @@
             syncCoordsWarning();
             showDetailsStep(false);
             if (!options.keepFeedback) showFeedback("", false);
-            if (!options.keepMapFeedback) showMapFeedback("Mova o mapa ate o pin central ficar no local exato da entrega.");
+            if (!options.keepMapFeedback) showMapFeedback("Mova o mapa até o pin central ficar no local exato da entrega.");
         }
 
         function getGoogleComponent(components, type, field = "long_name") {
@@ -1662,11 +1673,11 @@
                         await syncAddressFromMapCenter({ confirmed: false });
                     });
 
-                    showMapFeedback("Google Maps pronto. Mova o mapa ate o pin central ficar no local exato da entrega.");
+                    showMapFeedback("Google Maps pronto. Mova o mapa até o pin central ficar no local exato da entrega.");
                     return;
                 } catch (error) {
                     currentProvider = "openstreetmap";
-                    showMapFeedback("Google Maps indisponivel no momento. Usando mapa alternativo.", true);
+                    showMapFeedback("Google Maps indisponível no momento. Usando mapa alternativo.", true);
                 }
             }
 
@@ -1732,20 +1743,20 @@
                 });
 
                 setTimeout(() => mapInstance.invalidateSize(), 60);
-                showMapFeedback("Mova o mapa ate o pin central ficar no local exato da entrega.");
+                showMapFeedback("Mova o mapa até o pin central ficar no local exato da entrega.");
             } catch (error) {
-                showMapFeedback("Nao foi possivel carregar o mapa neste momento.", true);
+                showMapFeedback("Não foi possível carregar o mapa neste momento.", true);
             }
         }
 
         function requestCurrentLocation() {
             if (isRequestingCurrentLocation) return;
             if (!navigator.geolocation) {
-                showMapFeedback("Seu navegador nao permite usar localizacao.", true);
+                showMapFeedback("Seu navegador não permite usar localização.", true);
                 return;
             }
             setCurrentLocationLoadingState(true);
-            showMapFeedback("Carregando sua localizacao...");
+            showMapFeedback("Carregando sua localização...");
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     setMapCenter(position.coords.latitude, position.coords.longitude, 18);
@@ -1754,7 +1765,7 @@
                 },
                 () => {
                     setCurrentLocationLoadingState(false);
-                    showMapFeedback("Nao foi possivel acessar sua localizacao atual.", true);
+                    showMapFeedback("Não foi possível acessar sua localização atual.", true);
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
@@ -1935,8 +1946,8 @@
             const distanceKm = Number(data?.distanceKm);
             if (!Number.isFinite(shippingFee) || shippingFee < 0) {
                 selectedShippingFee = 0;
-                if (shippingReviewElement) shippingReviewElement.textContent = data?.error === "origin_not_configured" ? "Origem nao configurada" : "--";
-                if (shippingReviewPaymentElement) shippingReviewPaymentElement.textContent = data?.error === "origin_not_configured" ? "Origem nao configurada" : "--";
+                if (shippingReviewElement) shippingReviewElement.textContent = data?.error === "origin_not_configured" ? "Origem não configurada" : "--";
+                if (shippingReviewPaymentElement) shippingReviewPaymentElement.textContent = data?.error === "origin_not_configured" ? "Origem não configurada" : "--";
                 if (heroEtaElement) heroEtaElement.textContent = Number.isFinite(Number(data?.etaMinutes)) ? `${Math.max(1, Math.round(Number(data.etaMinutes)))} min` : "--";
                 if (shippingValueInput) shippingValueInput.value = "0.00";
                 if (distanceInput) distanceInput.value = Number.isFinite(distanceKm) ? distanceKm.toFixed(2) : "0.00";
@@ -2038,7 +2049,7 @@
             }
 
             if (type === "pix" && !pixConfigured && options.notice !== false) {
-                showUiNotice("Pix online ainda nao esta configurado.");
+                showUiNotice("Pix online ainda não est? configurado.");
             }
         }
 
@@ -2086,7 +2097,7 @@
                 feedback?.classList.remove("hidden");
                 window.setTimeout(() => feedback?.classList.add("hidden"), 1600);
             } catch (error) {
-                showUiNotice("Nao foi possivel copiar a chave Pix automaticamente.");
+                showUiNotice("Não foi possível copiar a chave Pix automaticamente.");
             }
         });
 
@@ -2124,8 +2135,14 @@
             persistCheckoutProfileFromForm(form);
             if (!whatsappSubmitInProgress) {
                 event.preventDefault();
-                showUiNotice("Seu pedido sera salvo e voce ira para a tela de pedido encerrado. La voce finaliza o envio no WhatsApp. Continuar?", {
+                showUiNotice("", {
                     title: "Finalizar no WhatsApp",
+                    messageLines: [
+                        "Seu pedido será gerado e o WhatsApp abrirá com o resumo pronto.",
+                        "Depois é só enviar a mensagem para nossa equipe confirmar.",
+                    ],
+                    cancelLabel: "Cancelar",
+                    confirmLabel: "Continuar",
                     onConfirm() {
                         whatsappSubmitInProgress = true;
                         form.querySelectorAll("button, input[type='submit']").forEach((button) => {
@@ -2249,8 +2266,14 @@
             if (!cart.length || !pickupForm || pickupSubmitInProgress) return;
             persistDraftFromPage();
             syncPickupFormPayload();
-            showUiNotice("Seu pedido sera salvo como retirada e voce ira para a tela de pedido encerrado. La voce finaliza o envio no WhatsApp. Continuar?", {
+            showUiNotice("", {
                 title: "Fazer retirada",
+                messageLines: [
+                    "Vamos gerar seu pedido e abrir o WhatsApp com a mensagem pronta.",
+                    "Envie a mensagem para confirmar com nossa equipe.",
+                ],
+                cancelLabel: "Voltar",
+                confirmLabel: "Abrir WhatsApp",
                 onConfirm() {
                     pickupSubmitInProgress = true;
                     goPickupButton.disabled = true;
@@ -2285,21 +2308,21 @@
                 </div>
                 <div class="kitchen-meta">
                     <p><strong>Telefone:</strong> ${escapeHtml(pedido.telefone)}</p>
-                    <p><strong>Endereco:</strong> ${escapeHtml(pedido.endereco)}</p>
+                    <p><strong>Endereço:</strong> ${escapeHtml(pedido.endereco)}</p>
                     ${pedido.lote_quadra ? `<p><strong>Lote/Quadra:</strong> ${escapeHtml(pedido.lote_quadra)}</p>` : ""}
                     ${pedido.complemento ? `<p><strong>Complemento:</strong> ${escapeHtml(pedido.complemento)}</p>` : ""}
-                    ${pedido.ponto_referencia ? `<p><strong>Ponto de referencia:</strong> ${escapeHtml(pedido.ponto_referencia)}</p>` : ""}
+                    ${pedido.ponto_referencia ? `<p><strong>Ponto de referência:</strong> ${escapeHtml(pedido.ponto_referencia)}</p>` : ""}
                     <p><strong>Talheres:</strong> ${pedido.enviar_talheres ? "Sim" : "Nao"}</p>
-                    <p><strong>Horario:</strong> ${escapeHtml(pedido.horario)}</p>
+                    <p><strong>Horário:</strong> ${escapeHtml(pedido.horario)}</p>
                 </div>
                 <ul class="kitchen-items">${itens}</ul>
-                ${pedido.observacao_geral ? `<p class="kitchen-note"><strong>Observacao geral:</strong> ${escapeHtml(pedido.observacao_geral)}</p>` : ""}
+                ${pedido.observacao_geral ? `<p class="kitchen-note"><strong>Observação geral:</strong> ${escapeHtml(pedido.observacao_geral)}</p>` : ""}
                 <div class="header-actions">
                     <a class="secondary-pill compact" href="${escapeHtml(pedido.google_maps_route_url || "#")}" target="_blank" rel="noopener noreferrer">
                         Abrir rota no Google Maps
                     </a>
                 </div>
-                ${pedido.has_coordinates ? "" : `<p class="kitchen-note">Rota baseada no endereco digitado pelo cliente.</p>`}
+                ${pedido.has_coordinates ? "" : `<p class="kitchen-note">Rota baseada no endereço digitado pelo cliente.</p>`}
                 <div class="status-actions">${statusButtons}</div>
             </article>
         `;

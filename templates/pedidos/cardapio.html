@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Cardapio | PRATO-DELIVERY{% endblock %}
+{% block title %}Cardápio | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <main class="layout public-layout" data-page="cardapio">
-    <header class="context-header" aria-label="Cabecalho da pagina">
+    <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
-            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
-            <span class="context-header-label">CARDAPIO</span>
+            <span class="context-header-label">CARDÁPIO</span>
         </div>
     </header>
 
@@ -18,8 +18,9 @@
         <img class="menu-feature-shape" src="{% static 'img/menu-feature-shape-base-cardapio.svg' %}" alt="" aria-hidden="true">
         <div class="menu-feature-title">
             <h1 id="menu-feature-title">
-                <span>{{ cardapio_title_line_1 }}</span>
-                <span>{{ cardapio_title_line_2 }}</span>
+                {% for line in cardapio_title_lines %}
+                    <span>{{ line }}</span>
+                {% endfor %}
             </h1>
         </div>
         <div class="menu-feature-carousel-wrap">
@@ -67,8 +68,8 @@
                     </article>
                 {% empty %}
                     <div class="empty-state">
-                        <h2>Nenhum prato disponivel {{ cardapio_empty_label }}.</h2>
-                        <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardapio.</p>
+                        <h2>Nenhum prato disponível {{ cardapio_empty_label }}.</h2>
+                        <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardápio.</p>
                     </div>
                 {% endfor %}
             </section>
@@ -77,8 +78,8 @@
 
     <section class="menu-promo-card" aria-labelledby="menu-promo-title">
         <div class="menu-promo-copy">
-            <p class="menu-promo-kicker">Promocao especial</p>
-            <h2 id="menu-promo-title">Compre 4 marmitas, a 5a e por nossa conta.</h2>
+            <p class="menu-promo-kicker">Promoção especial</p>
+            <h2 id="menu-promo-title">Compre 4 marmitas, a 5ª é por nossa conta.</h2>
             <p>Marmitas seladas, feitas no dia.</p>
         </div>
     </section>
@@ -133,7 +134,7 @@
                 </article>
             {% empty %}
                 <div class="extras-empty-card">
-                    <strong>Nenhum adicional disponivel</strong>
+                    <strong>Nenhum adicional disponível</strong>
                     <p>Cadastre adicionais no menu da cozinha para publicar aqui.</p>
                 </div>
             {% endfor %}
@@ -188,7 +189,7 @@
                 </article>
             {% empty %}
                 <div class="extras-empty-card">
-                    <strong>Nenhuma bebida disponivel</strong>
+                    <strong>Nenhuma bebida disponível</strong>
                     <p>Cadastre bebidas no menu da cozinha para publicar aqui.</p>
                 </div>
             {% endfor %}
@@ -212,7 +213,7 @@
 
 <div class="modal-backdrop hidden" id="pedido-modal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prato-nome">
-        <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal">×</button>
+        <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal"></button>
         <img id="modal-prato-imagem" class="modal-image" src="" alt="">
         <div class="modal-content">
             <p class="eyebrow">Montar pedido</p>
@@ -220,7 +221,7 @@
             <p id="modal-prato-descricao" class="modal-description"></p>
             <p id="modal-prato-preco" class="modal-price"></p>
             <label class="field">
-                <span>Observacao</span>
+                <span>Observação</span>
                 <textarea id="modal-observacao" rows="3" placeholder="Obs..."></textarea>
             </label>
             <div class="qty-row">

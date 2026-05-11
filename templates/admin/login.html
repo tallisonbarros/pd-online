@@ -79,7 +79,7 @@
                     <p class="eyebrow">Acesso da equipe</p>
                     <h1>Entrar no painel</h1>
                 </div>
-                <p>Use seu login de staff para acessar a gestao personalizada de pratos e o painel operacional.</p>
+                <p>Use seu login de staff para acessar a gestão personalizada de pratos e o painel operacional.</p>
             </div>
 
             {% if form.errors %}
@@ -87,7 +87,7 @@
             {% endif %}
 
             {% if user.is_authenticated and not user.is_staff %}
-                <div class="auth-error">Sua conta existe, mas nao tem permissao para acessar esta area.</div>
+                <div class="auth-error">Sua conta existe, mas não tem permissão para acessar esta área.</div>
             {% endif %}
 
             <form action="{{ app_path }}" method="post" id="login-form" class="checkout-form">
@@ -107,8 +107,8 @@
             </form>
 
             <div class="auth-links">
-                <a class="secondary-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
-                <a class="secondary-link" href="{% url 'pedidos:gestao_pratos' %}">Ir para gestao de pratos</a>
+                <a class="secondary-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+                <a class="secondary-link" href="{% url 'pedidos:gestao_pratos' %}">Ir para gestão de pratos</a>
             </div>
         </section>
     </main>

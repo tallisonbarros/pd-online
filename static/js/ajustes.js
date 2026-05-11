@@ -15,7 +15,7 @@
     }
 
     function loadGoogleMapsRuntime(apiKey = googleMapsApiKey, language = googleMapsLanguage, region = googleMapsRegion, forceReload = false) {
-        if (!apiKey) return Promise.reject(new Error("Google Maps nao configurado."));
+        if (!apiKey) return Promise.reject(new Error("Google Maps não configurado."));
 
         if (!forceReload && window.google?.maps?.importLibrary && googleMapsLoadedKey === apiKey) {
             return Promise.resolve(window.google.maps);
@@ -230,7 +230,7 @@
             if (commit) {
                 writeHidden(data);
                 confirmedCenter = { lat: Number(center.lat), lng: Number(center.lng) };
-                setFeedback("Ponto confirmado para este calculo.", false);
+                setFeedback("Ponto confirmado para este cálculo.", false);
                 return;
             }
             if (!hasCenterChanged(center)) {
@@ -243,11 +243,11 @@
 
         async function centerOnLocation() {
             if (!navigator.geolocation) {
-                setFeedback("Seu navegador nao permite usar localizacao nesta tela.", true);
+                setFeedback("Seu navegador não permite usar localização nesta tela.", true);
                 return;
             }
             useLocationButton.disabled = true;
-            setFeedback("Buscando sua localizacao atual...", false);
+            setFeedback("Buscando sua localização atual...", false);
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const nextCenter = {
@@ -269,7 +269,7 @@
                 },
                 () => {
                     useLocationButton.disabled = false;
-                    setFeedback("Nao foi possivel acessar sua localizacao atual.", true);
+                    setFeedback("Não foi possível acessar sua localização atual.", true);
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
@@ -426,7 +426,7 @@
                 const response = await geocoder.geocode({ location: center, language });
                 const result = response?.results?.[0];
                 if (!result) {
-                    throw new Error("O Google respondeu, mas nao retornou endereco para o ponto de teste.");
+                    throw new Error("O Google respondeu, mas não retornou endereco para o ponto de teste.");
                 }
 
                 mapRoot.classList.remove("hidden");
@@ -442,10 +442,10 @@
                     map.setCenter(center);
                     map.setZoom(15);
                 }
-                setGoogleTestStatus(`Chave valida. Endereco de teste resolvido: ${result.formatted_address}`, "is-success");
+                setGoogleTestStatus(`Chave válida. Endereço de teste resolvido: ${result.formatted_address}`, "is-success");
             } catch (error) {
                 mapRoot.classList.add("hidden");
-                setGoogleTestStatus(error.message || "Nao foi possivel validar a chave do Google Maps.", "is-error");
+                setGoogleTestStatus(error.message || "Não foi possível validar a chave do Google Maps.", "is-error");
             } finally {
                 button.disabled = false;
             }

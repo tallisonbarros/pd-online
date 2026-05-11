@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Gestao de Pratos | PRATO-DELIVERY{% endblock %}
+{% block title %}Gestão de Pratos | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <div class="ops-shell ops-shell--cozinha">
@@ -13,7 +13,7 @@
                 <button type="button" class="management-create-card" data-open-management-modal="#prato-form-modal">
                     <span class="management-create-icon" aria-hidden="true">+</span>
                     <strong>Novo prato</strong>
-                    <small>Cadastrar item do cardapio</small>
+                    <small>Cadastrar item do cardápio</small>
                 </button>
                 {% for prato in pratos %}
                     <article class="dish-card management-card">
@@ -37,7 +37,7 @@
                                 </span>
                             </div>
                             <div class="management-meta">
-                                <p><strong>Preco:</strong> {% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% else %}Nao informado{% endif %}</p>
+                                <p><strong>Preço:</strong> {% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
                                 <p><strong>Dias:</strong> {{ prato.dias_disponiveis|default:"Todos os dias" }}</p>
                             </div>
                             <div class="management-actions">
@@ -54,7 +54,7 @@
                 {% empty %}
                     <div class="empty-state">
                         <h2>Nenhum prato cadastrado.</h2>
-                        <p>Use o botao Novo prato para publicar o primeiro item do cardapio.</p>
+                        <p>Use o botao Novo prato para publicar o primeiro item do cardápio.</p>
                     </div>
                 {% endfor %}
             </div>
@@ -82,7 +82,7 @@
                         </label>
 
                         <label class="field">
-                            <span>Descricao</span>
+                            <span>Descrição</span>
                             {{ form.descricao }}
                         </label>
 
@@ -92,12 +92,12 @@
                         {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=prato_edicao.imagem delete_url=delete_image_url %}
 
                         <label class="field">
-                            <span>Preco</span>
+                            <span>Preço</span>
                             {{ form.preco }}
                         </label>
 
                         <label class="field">
-                            <span>Dias disponiveis</span>
+                            <span>Dias disponíveis</span>
                             <div class="weekday-check-grid">
                                 {{ form.dias_disponiveis }}
                             </div>
@@ -105,7 +105,7 @@
 
                         <label class="choice-card switch-card">
                             {{ form.ativo }}
-                            <span>Prato ativo no cardapio</span>
+                            <span>Prato ativo no cardápio</span>
                         </label>
 
                         <button type="submit" class="primary-button wide">

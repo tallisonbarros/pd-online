@@ -5,9 +5,9 @@
 
 {% block content %}
 <main class="layout public-layout" data-page="checkout">
-    <header class="context-header" aria-label="Cabecalho da pagina">
+    <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
-            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
             <span class="context-header-label">CAIXA</span>
@@ -21,7 +21,6 @@
                 <input type="hidden" name="carrinho_payload" id="carrinho-payload">
                 <div class="panel-head checkout-delivery-head">
                     <h2>Entrega</h2>
-                    <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill compact">Voltar ao carrinho</a>
                 </div>
 
                 <input type="hidden" name="nome_cliente" id="checkout-nome-payload">
@@ -29,13 +28,13 @@
                 <section class="checkout-address-selector">
                     <section id="checkout-address-summary" class="address-resolution-card hidden" aria-live="polite" role="button" tabindex="0">
                         <div class="address-resolution-head">
-                            <p class="address-resolution-kicker">Endereco selecionado</p>
+                            <p class="address-resolution-kicker">Endereço selecionado</p>
                         </div>
-                        <strong id="checkout-address-summary-label">Cadastre ou selecione um endereco para revisar o ponto usado no calculo.</strong>
-                        <small id="checkout-address-summary-meta">Distancia --</small>
+                        <strong id="checkout-address-summary-label">Cadastre ou selecione um endereco para revisar o ponto usado no cálculo.</strong>
+                        <small id="checkout-address-summary-meta">Distância --</small>
                     </section>
                     <div class="checkout-address-cta">
-                        <button type="button" id="saved-profile-open" class="saved-profile-create">Cadastrar novo endereco</button>
+                        <button type="button" id="saved-profile-open" class="saved-profile-create">Cadastrar novo endereço</button>
                     </div>
                 </section>
 
@@ -103,7 +102,7 @@
                             <small id="pix-copy-feedback" class="pix-copy-feedback hidden">Chave copiada</small>
                             <small>Envie o comprovante pelo WhatsApp apos finalizar.</small>
                         {% else %}
-                            <strong>Pix nao configurado</strong>
+                            <strong>Pix não configurado</strong>
                             <small>Cadastre a chave Pix em Ajustes > Pagamento.</small>
                         {% endif %}
                     </div>
@@ -114,21 +113,22 @@
         </section>
     </section>
     <div class="checkout-page-footer" aria-label="Acoes auxiliares do checkout">
-        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
+        <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill checkout-footer-action">Voltar ao carrinho</a>
+        <a class="secondary-pill checkout-footer-action checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
     </div>
 </main>
 
 <div id="profile-editor-modal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card profile-modal-card profile-selector-modal">
-        <button type="button" class="modal-close" data-profile-editor-close aria-label="Fechar">×</button>
+        <button type="button" class="modal-close" data-profile-editor-close aria-label="Fechar"></button>
         <div class="modal-content profile-selector-modal-body">
             <section id="profile-selector-panel" class="profile-selector-panel hidden">
                 <div class="profile-selector-head">
-                    <strong>Meus enderecos</strong>
+                    <strong>Meus endereços</strong>
                 </div>
                 <div id="saved-checkout-profiles-list" class="saved-profile-list"></div>
                 <div class="saved-profile-selector-actions">
-                    <button type="button" id="saved-profile-create" class="saved-profile-create">Cadastrar novo endereco</button>
+                    <button type="button" id="saved-profile-create" class="saved-profile-create">Cadastrar novo endereço</button>
                 </div>
             </section>
 
@@ -137,7 +137,7 @@
                 </div>
 
                 <form id="profile-form" class="profile-form" novalidate>
-                    <div class="address-flow-steps" aria-label="Etapas do endereco">
+                    <div class="address-flow-steps" aria-label="Etapas do endereço">
                         <span class="address-flow-step is-active" aria-label="Etapa 1"></span>
                         <span id="address-step-marker-details" class="address-flow-step" aria-label="Etapa 2"></span>
                     </div>
@@ -148,7 +148,7 @@
                                 <p class="address-map-kicker">Etapa 1</p>
                                 <strong>Selecione o ponto da entrega no mapa</strong>
                             </div>
-                            <button type="button" id="use-current-location" class="secondary-pill compact">Usar minha localizacao</button>
+                            <button type="button" id="use-current-location" class="secondary-pill compact">Usar minha localização</button>
                         </div>
                         <div class="address-map-shell">
                             <div id="address-map" class="address-map-canvas" aria-label="Mapa para confirmar local da entrega"></div>
@@ -162,7 +162,7 @@
                         <div class="resolved-address-inline">
                             <p class="resolved-address-inline-text">
                                 <strong id="resolved-street-display">Confirme um ponto no mapa</strong>
-                                <span id="resolved-district-display">Aguardando confirmacao</span>
+                                <span id="resolved-district-display">Aguardando confirmação</span>
                             </p>
                         </div>
                     </section>
@@ -182,12 +182,12 @@
                         </div>
 
                         <div class="address-preview-copy">
-                            <strong id="address-preview-title">Rua aguardando confirmacao</strong>
-                            <small id="address-preview-subtitle">Setor, cidade e estado aparecerao aqui.</small>
+                            <strong id="address-preview-title">Rua aguardando confirmação</strong>
+                            <small id="address-preview-subtitle">Setor, cidade e estado aparecerão aqui.</small>
                         </div>
 
                         <label class="field">
-                            <input type="text" id="profile-numero" name="numero" inputmode="numeric" required placeholder="Numero (ex.: 120)">
+                            <input type="text" id="profile-numero" name="numero" inputmode="numeric" required placeholder="Número (ex.: 120)">
                         </label>
 
                         <label class="field">
@@ -199,12 +199,12 @@
                         </label>
 
                         <p id="coords-warning" class="coords-warning hidden">
-                            Endereco sem coordenadas confirmadas. O frete pode ficar aproximado enquanto isso.
+                            Endereço sem coordenadas confirmadas. O frete pode ficar aproximado enquanto isso.
                         </p>
 
                         <div class="profile-editor-actions">
                             <button type="button" class="secondary-pill" data-profile-editor-close>Cancelar</button>
-                            <button type="submit" class="primary-button">Salvar endereco</button>
+                            <button type="submit" class="primary-button">Salvar endereço</button>
                         </div>
                     </section>
 
@@ -225,10 +225,10 @@
 
 <div id="checkout-notice-modal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card notice-modal-card" role="alertdialog" aria-modal="true" aria-labelledby="checkout-notice-title" aria-describedby="checkout-notice-message">
-        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">×</button>
+        <button type="button" class="modal-close" data-notice-close aria-label="Fechar">&times;</button>
         <div class="modal-content notice-modal-body">
             <div class="notice-modal-copy">
-                <strong id="checkout-notice-title">Atenção</strong>
+                <strong id="checkout-notice-title">Atencao</strong>
                 <p id="checkout-notice-message">Revise os dados e tente novamente.</p>
             </div>
             <div class="notice-modal-actions">

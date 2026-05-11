@@ -10,9 +10,9 @@
     <main class="ops-main pedidos-admin-page">
         <section class="ped-headline">
             <div>
-                <p class="ops-kicker">Operacao</p>
-                <h1>Gestao de pedidos</h1>
-                <p>Acompanhe os pedidos em tempo real, veja a etapa atual e mova o fluxo com atualizacao imediata.</p>
+                <p class="ops-kicker">Operação</p>
+                <h1>Gestão de pedidos</h1>
+                <p>Acompanhe os pedidos em tempo real, veja a etapa atual e mova o fluxo com atualização imediata.</p>
             </div>
             <a class="ped-add-btn" href="{% url 'pedidos:cardapio' %}" target="_blank" rel="noopener noreferrer">+ Adicionar pedido</a>
         </section>
@@ -20,8 +20,8 @@
         <details class="ped-collapse" open>
             <summary>
                 <div>
-                    <h3>Pedidos para aprovacao</h3>
-                    <p>{% if aprovacao_count %}{{ aprovacao_count }} pedido(s) aguardando confirmacao pelo WhatsApp.{% else %}Nenhum pedido aguardando aprovacao.{% endif %}</p>
+                    <h3>Pedidos para aprovação</h3>
+                    <p>{% if aprovacao_count %}{{ aprovacao_count }} pedido(s) aguardando confirmação pelo WhatsApp.{% else %}Nenhum pedido aguardando aprovação.{% endif %}</p>
                 </div>
                 <span class="ped-badge">{{ aprovacao_count }}</span>
             </summary>
@@ -54,7 +54,7 @@
                         <div class="ped-stats">
                             <div class="ped-chip-box">
                                 <span>Status</span>
-                                <strong>Aguardando aprovacao</strong>
+                                <strong>Aguardando aprovação</strong>
                             </div>
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
@@ -63,7 +63,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="ped-motoboy">Aguardando confirmacao no WhatsApp</div>
+                <div class="ped-motoboy">Aguardando confirmação no WhatsApp</div>
                 <div class="ped-actions">
                     <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
                         {% csrf_token %}
@@ -114,7 +114,7 @@
 
                         <div class="ped-stats">
                             <div class="ped-chip-box">
-                                <span>Tempo em producao</span>
+                                <span>Tempo em produção</span>
                                 <strong>
                                     {% if pedido.status == "em_preparo" %}
                                         {{ pedido.criado_em|timesince }}
@@ -137,7 +137,7 @@
                     <p>Fluxo do pedido</p>
                     <div class="ped-stages">
                         <div class="ped-stage {% if pedido.status == 'novo' %}is-active{% endif %}"><i>1</i><span>Pedido recebido</span></div>
-                        <div class="ped-stage {% if pedido.status == 'em_preparo' %}is-active{% endif %}"><i>2</i><span>Em producao</span></div>
+                        <div class="ped-stage {% if pedido.status == 'em_preparo' %}is-active{% endif %}"><i>2</i><span>Em produção</span></div>
                         <div class="ped-stage"><i>3</i><span>Aguardando entregador</span></div>
                         <div class="ped-stage {% if pedido.status == 'saiu_entrega' %}is-active{% endif %}"><i>4</i><span>Saiu para entrega</span></div>
                         <div class="ped-stage {% if pedido.status == 'finalizado' %}is-active{% endif %}"><i>5</i><span>Entregue</span></div>
@@ -167,14 +167,14 @@
         {% empty %}
             <div class="empty-state">
                 <h2>Nenhum pedido ativo</h2>
-                <p>Os pedidos em andamento aparecerao aqui.</p>
+                <p>Os pedidos em andamento aparecerão aqui.</p>
             </div>
         {% endfor %}
 
         <details class="ped-collapse" open>
             <summary>
                 <div>
-                    <h3>Concluidos</h3>
+                    <h3>Concluídos</h3>
                     <p>{{ concluidos_count }} pedido(s) entregue(s)</p>
                 </div>
                 <span class="ped-badge done">{{ concluidos_count }}</span>
