@@ -593,6 +593,71 @@
             saveCart(cart);
         }
 
+        function buildCardCartItem(dish, quantityToAdd = 1) {
+            const dishType = dish.tipo || "prato";
+            return {
+                tipo: dishType,
+                item_id: dish.id,
+                prato_id: dishType === "prato" ? dish.id : undefined,
+                adicional_id: dishType === "adicional" ? dish.id : undefined,
+                bebida_id: dishType === "bebida" ? dish.id : undefined,
+                nome: dish.nome,
+                preco: parsePrice(dish.preco),
+                quantidade: Math.max(1, Number(quantityToAdd || 1)),
+                observacao: "",
+                imagem: dish.imagem || placeholderImage,
+            };
+        }
+
+        function getCartQuantityForDish(dish) {
+            const key = cartItemKey(normalizeCatalogCartFields(dish));
+            return getCart()
+                .filter((item) => cartItemKey(item) === key)
+                .reduce((total, item) => total + Number(item.quantidade || 0), 0);
+        }
+
+        function syncCardQuantityBadges() {
+            document.querySelectorAll("[data-prato-card]").forEach((card) => {
+                const qtyValue = card.querySelector("[data-card-qty-value]");
+                if (!qtyValue) return;
+                const dish = JSON.parse(card.dataset.prato || "{}");
+                qtyValue.textContent = String(getCartQuantityForDish(dish));
+            });
+        }
+
+        function incrementCardCartItem(dish, delta) {
+            const normalizedDish = normalizeCatalogCartFields(dish);
+            const key = cartItemKey(normalizedDish);
+            const cart = getCart();
+
+            if (delta > 0) {
+                addDishToCart(buildCardCartItem(dish, delta));
+                syncCardQuantityBadges();
+                return true;
+            }
+
+            const simpleIndex = cart.findIndex((item) => cartItemKey(item) === key && !item.observacao);
+            let fallbackIndex = -1;
+            for (let index = cart.length - 1; index >= 0; index -= 1) {
+                if (cartItemKey(cart[index]) === key) {
+                    fallbackIndex = index;
+                    break;
+                }
+            }
+            const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
+            if (index < 0) return false;
+
+            const nextQuantity = Number(cart[index].quantidade || 0) - 1;
+            if (nextQuantity > 0) {
+                cart[index].quantidade = nextQuantity;
+            } else {
+                cart.splice(index, 1);
+            }
+            saveCart(cart);
+            syncCardQuantityBadges();
+            return true;
+        }
+
         function animateAddFeedback(button, quantityAdded) {
             if (button) {
                 if (button._confirmTimer) {
@@ -688,6 +753,7 @@
             };
             addDishToCart(incomingItem);
             animateAddFeedback(addButton, incomingItem.quantidade);
+            syncCardQuantityBadges();
             closeModal();
         });
 
@@ -706,31 +772,19 @@
                 button.addEventListener("click", (event) => {
                     event.preventDefault();
                     const delta = Number(button.getAttribute("data-card-qty-change"));
-                    const nextValue = Math.max(1, Number(qtyValue.textContent || "1") + delta);
-                    qtyValue.textContent = String(nextValue);
+                    const changed = incrementCardCartItem(dish, delta);
+                    if (changed && delta > 0) animateAddFeedback(button, delta);
                 });
             });
 
             addCardButton.addEventListener("click", (event) => {
                 event.preventDefault();
-                const quantityToAdd = Math.max(1, Number(qtyValue.textContent || "1"));
-                const dishType = dish.tipo || "prato";
-                addDishToCart({
-                    tipo: dishType,
-                    item_id: dish.id,
-                    prato_id: dishType === "prato" ? dish.id : undefined,
-                    adicional_id: dishType === "adicional" ? dish.id : undefined,
-                    bebida_id: dishType === "bebida" ? dish.id : undefined,
-                    nome: dish.nome,
-                    preco: parsePrice(dish.preco),
-                    quantidade: quantityToAdd,
-                    observacao: "",
-                    imagem: dish.imagem || placeholderImage,
-                });
-                animateAddFeedback(addCardButton, quantityToAdd);
-                qtyValue.textContent = "1";
+                incrementCardCartItem(dish, 1);
+                animateAddFeedback(addCardButton, 1);
             });
         });
+
+        syncCardQuantityBadges();
 
         document.addEventListener("keydown", function (event) {
             if (event.key === "Escape") closeModal();
