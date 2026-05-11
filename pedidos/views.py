@@ -260,22 +260,7 @@ def checkout(request):
 
 @never_cache
 def carrinho(request):
-    pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
-    adicionais_lookup = {
-        f"adicional:{adicional.id}": {**serializar_adicional(adicional), "tipo": "adicional"}
-        for adicional in Adicional.objects.all()
-    }
-    bebidas_lookup = {
-        f"bebida:{bebida.id}": {**serializar_bebida(bebida), "tipo": "bebida"} for bebida in Bebida.objects.all()
-    }
-    itens_lookup = {**pratos_lookup, **adicionais_lookup, **bebidas_lookup}
-    return render(
-        request,
-        "pedidos/carrinho.html",
-        {
-            "pratos_lookup_json": itens_lookup,
-        },
-    )
+    return render(request, "pedidos/carrinho.html")
 
 
 def _safe_text(value):

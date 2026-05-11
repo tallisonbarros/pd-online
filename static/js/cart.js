@@ -515,7 +515,7 @@
             <article class="checkout-item">
                 <div class="checkout-item-main">
                     <div class="checkout-item-media">
-                        <img src="${escapeHtml(item.imagem || placeholderImage)}" alt="${escapeHtml(item.nome)}">
+                        <img src="${escapeHtml(item.imagem || placeholderImage)}" alt="${escapeHtml(item.nome)}" loading="lazy" decoding="async">
                     </div>
                     <div class="checkout-item-body">
                         <div class="checkout-item-top">
