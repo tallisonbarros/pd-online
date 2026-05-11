@@ -5,6 +5,7 @@
     const legacyCheckoutProfileKey = `${cartKey}_checkout_profile`;
     const checkoutDraftKey = `${cartKey}_checkout_draft`;
     const checkoutPaymentKey = `${cartKey}_checkout_payment`;
+    const checkoutCustomerNameKey = `${cartKey}_checkout_customer_name`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const checkoutLookup = (() => {
         const node = document.getElementById("checkout-pratos-lookup");
@@ -303,16 +304,28 @@
 
     function saveCheckoutDraft(draft) {
         try {
+            const nome = String(draft?.nome || "").trim();
+            if (nome) {
+                localStorage.setItem(checkoutCustomerNameKey, nome);
+            }
             localStorage.setItem(
                 checkoutDraftKey,
                 JSON.stringify({
-                    nome: String(draft?.nome || "").trim(),
+                    nome,
                     observacao_geral: String(draft?.observacao_geral || "").trim(),
                     enviar_talheres: draft?.enviar_talheres === "nao" ? "nao" : "sim",
                 })
             );
         } catch (error) {
             // Ignora falha de storage.
+        }
+    }
+
+    function getCheckoutCustomerName() {
+        try {
+            return String(localStorage.getItem(checkoutCustomerNameKey) || "").trim();
+        } catch (error) {
+            return "";
         }
     }
 
@@ -1989,7 +2002,7 @@
         const addressController = profileForm ? initAddressEditor(profileForm) : null;
         initSavedCheckoutProfiles(form, profileForm, addressController, updateShippingDisplay);
         const draft = getCheckoutDraft();
-        if (checkoutNamePayloadInput) checkoutNamePayloadInput.value = draft.nome || "";
+        if (checkoutNamePayloadInput) checkoutNamePayloadInput.value = draft.nome || getCheckoutCustomerName();
         if (orderNotePayloadInput) orderNotePayloadInput.value = draft.observacao_geral || "";
         if (talheresPayloadInput) talheresPayloadInput.value = draft.enviar_talheres === "nao" ? "nao" : "sim";
         checkoutNameInput?.addEventListener("input", clearCheckoutFieldHighlights);
@@ -2158,6 +2171,13 @@
             saveCheckoutDraft(readDraftFromPage());
         }
 
+        function persistCustomerNameFromPage() {
+            saveCheckoutDraft({
+                ...getCheckoutDraft(),
+                nome: nameInput?.value || "",
+            });
+        }
+
         function syncPickupFormPayload() {
             const cart = getCart();
             const draftPayload = readDraftFromPage();
@@ -2168,7 +2188,7 @@
         }
 
         const draft = getCheckoutDraft();
-        if (nameInput) nameInput.value = draft.nome || "";
+        if (nameInput) nameInput.value = draft.nome || getCheckoutCustomerName();
         if (orderNoteInput) orderNoteInput.value = draft.observacao_geral || "";
         if (talheresToggleInput) talheresToggleInput.checked = draft.enviar_talheres !== "nao";
 
@@ -2206,9 +2226,9 @@
             });
         }
 
-        nameInput?.addEventListener("input", persistDraftFromPage);
-        nameInput?.addEventListener("change", persistDraftFromPage);
-        nameInput?.addEventListener("blur", persistDraftFromPage);
+        nameInput?.addEventListener("input", persistCustomerNameFromPage);
+        nameInput?.addEventListener("change", persistCustomerNameFromPage);
+        nameInput?.addEventListener("blur", persistCustomerNameFromPage);
         orderNoteInput?.addEventListener("input", persistDraftFromPage);
         orderNoteInput?.addEventListener("change", persistDraftFromPage);
         orderNoteInput?.addEventListener("blur", persistDraftFromPage);
