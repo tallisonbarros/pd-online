@@ -2,6 +2,9 @@
 {% load static %}
 
 {% block title %}Cardápio | PRATO-DELIVERY{% endblock %}
+{% block extra_css %}
+<link rel="prefetch" href="{% url 'pedidos:carrinho' %}" as="document">
+{% endblock %}
 
 {% block content %}
 <main class="layout public-layout" data-page="cardapio">
@@ -212,7 +215,7 @@
 </a>
 
 <div class="modal-backdrop hidden" id="pedido-modal" aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prato-nome">
+    <div class="modal-card order-modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prato-nome">
         <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal"></button>
         <img id="modal-prato-imagem" class="modal-image" src="" alt="">
         <div class="modal-content">
@@ -222,7 +225,7 @@
             <p id="modal-prato-preco" class="modal-price"></p>
             <label class="field">
                 <span>Observação</span>
-                <textarea id="modal-observacao" rows="3" placeholder="Obs..."></textarea>
+                <textarea id="modal-observacao" rows="1" placeholder="Obs..."></textarea>
             </label>
             <div class="qty-row">
                 <span>Quantidade</span>

@@ -2221,27 +2221,28 @@
             goDeliveryLink.classList.toggle("is-disabled", !cart.length);
             goDeliveryLink.setAttribute("aria-disabled", cart.length ? "false" : "true");
             if (goPickupButton) goPickupButton.disabled = !cart.length;
-
-            itemsContainer.querySelectorAll("[data-qty-change]").forEach((button) => {
-                button.addEventListener("click", function () {
-                    const index = Number(this.getAttribute("data-qty-change"));
-                    const delta = Number(this.getAttribute("data-delta"));
-                    const updatedCart = getCart();
-                    if (!updatedCart[index]) return;
-                    updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
-                    saveCart(updatedCart);
-                    render();
-                });
-            });
-
-            itemsContainer.querySelectorAll("[data-remove-item]").forEach((button) => {
-                button.addEventListener("click", function () {
-                    const index = Number(this.getAttribute("data-remove-item"));
-                    saveCart(getCart().filter((_, itemIndex) => itemIndex !== index));
-                    render();
-                });
-            });
         }
+
+        itemsContainer.addEventListener("click", (event) => {
+            const qtyButton = event.target.closest("[data-qty-change]");
+            if (qtyButton) {
+                const index = Number(qtyButton.getAttribute("data-qty-change"));
+                const delta = Number(qtyButton.getAttribute("data-delta"));
+                const updatedCart = getCart();
+                if (!updatedCart[index]) return;
+                updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
+                saveCart(updatedCart);
+                render();
+                return;
+            }
+
+            const removeButton = event.target.closest("[data-remove-item]");
+            if (removeButton) {
+                const index = Number(removeButton.getAttribute("data-remove-item"));
+                saveCart(getCart().filter((_, itemIndex) => itemIndex !== index));
+                render();
+            }
+        });
 
         nameInput?.addEventListener("input", persistCustomerNameFromPage);
         nameInput?.addEventListener("change", persistCustomerNameFromPage);

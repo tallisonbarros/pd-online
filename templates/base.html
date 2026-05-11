@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PRATO-DELIVERY{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -27,7 +27,7 @@
             checkoutMapProvider: "{{ PRATO_FRONTEND_CONFIG.checkout_map_provider|escapejs }}"
         };
     </script>
-    <script src="{% static 'js/cart.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'js/cart.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

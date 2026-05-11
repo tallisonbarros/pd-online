@@ -3851,6 +3851,103 @@ fieldset.field {
     font-weight: 800;
 }
 
+.order-modal-card {
+    width: min(360px, 100%);
+    border-radius: 18px;
+}
+
+.order-modal-card .modal-close {
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+}
+
+.order-modal-card .modal-image {
+    aspect-ratio: 1.9 / 1;
+}
+
+.order-modal-card .modal-content {
+    padding: 12px;
+    gap: 8px;
+}
+
+.order-modal-card .eyebrow {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+}
+
+.order-modal-card .modal-content h2 {
+    font-size: 0.98rem;
+    line-height: 1.15;
+}
+
+.order-modal-card .modal-description {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.25;
+}
+
+.order-modal-card .modal-price {
+    margin: 0;
+    font-size: 0.98rem;
+}
+
+.order-modal-card .field {
+    gap: 4px;
+}
+
+.order-modal-card .field span,
+.order-modal-card .qty-row > span {
+    font-size: 0.86rem;
+}
+
+.order-modal-card .field textarea {
+    min-height: 42px;
+    max-height: 76px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    resize: none;
+}
+
+.order-modal-card .qty-row,
+.order-modal-card .modal-actions {
+    gap: 8px;
+}
+
+.order-modal-card .qty-control {
+    gap: 8px;
+    padding: 4px;
+}
+
+.order-modal-card .qty-control button {
+    width: 30px;
+    height: 30px;
+}
+
+.order-modal-card .qty-control strong {
+    min-width: 18px;
+    text-align: center;
+}
+
+.order-modal-card .modal-actions {
+    align-items: center;
+}
+
+.order-modal-card .secondary-link {
+    flex: 0 0 auto;
+    font-size: 0.82rem;
+    line-height: 1.1;
+}
+
+.order-modal-card .primary-button {
+    min-height: 42px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+}
+
 .success-card {
     padding: 24px 20px;
     margin-top: 28px;
