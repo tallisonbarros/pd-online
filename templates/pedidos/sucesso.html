@@ -24,7 +24,14 @@
                 <span class="status-badge">{{ pedido.get_status_display }}</span>
             </header>
 
-            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Toque no botao abaixo para finalizar o envio no WhatsApp.</p>
+            <p class="order-closed-copy">Seu pedido foi salvo e esta aguardando aprovacao. Vamos tentar abrir o WhatsApp automaticamente.</p>
+            {% if whatsapp_url %}
+                <div class="whatsapp-countdown-card" data-whatsapp-redirect="{{ whatsapp_url|escape }}" aria-live="polite">
+                    <span>Redirecionando para o WhatsApp em</span>
+                    <strong><span data-whatsapp-countdown>5</span>s</strong>
+                    <small>Se nao abrir, toque em Finalizar no WhatsApp.</small>
+                </div>
+            {% endif %}
 
             <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
                 <span><strong>{{ pedido.itens.count }}</strong> itens</span>
@@ -71,12 +78,26 @@
 <script>
     window.addEventListener("load", function () {
         var cartKey = (window.PRATO_CONFIG && window.PRATO_CONFIG.cartKey) || "prato_delivery_cart";
+        var countdownCard = document.querySelector("[data-whatsapp-redirect]");
+        var countdownNode = document.querySelector("[data-whatsapp-countdown]");
         try {
             localStorage.removeItem(cartKey);
             localStorage.removeItem(cartKey + "_checkout_draft");
         } catch (error) {
             // Ignora falha de storage.
         }
+        if (!countdownCard || !countdownNode) return;
+
+        var remaining = 5;
+        var whatsappUrl = countdownCard.getAttribute("data-whatsapp-redirect");
+        var timer = window.setInterval(function () {
+            remaining -= 1;
+            countdownNode.textContent = String(Math.max(remaining, 0));
+            if (remaining > 0) return;
+
+            window.clearInterval(timer);
+            window.location.href = whatsappUrl;
+        }, 1000);
     });
 </script>
 {% endblock %}

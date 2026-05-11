@@ -3367,6 +3367,29 @@ fieldset.field {
     line-height: 1.45;
 }
 
+.whatsapp-countdown-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(47, 111, 79, 0.24);
+    border-radius: 18px;
+    background: rgba(47, 111, 79, 0.08);
+    color: var(--text-soft);
+}
+
+.whatsapp-countdown-card strong {
+    color: var(--brand-strong);
+    font-size: 1.24rem;
+    line-height: 1;
+}
+
+.whatsapp-countdown-card small {
+    grid-column: 1 / -1;
+    color: var(--text-soft);
+}
+
 .order-closed-address small:empty {
     display: none;
 }
