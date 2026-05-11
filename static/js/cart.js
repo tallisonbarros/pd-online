@@ -372,11 +372,13 @@
             const cartDockRefs = ensureCartDockStructure(cartDock);
             const cartDockSummary = cartDockRefs?.summary;
             const cartDockCount = cartDockRefs?.count;
+            const cartDockWrap = cartDock.closest(".cart-dock-wrap");
             const previousCount = Number(cartDock.dataset.cartCount || "0");
             const hydrated = cartDock.dataset.hydrated === "true";
             cartDock.dataset.cartCount = String(count);
             cartDock.dataset.hydrated = "true";
             cartDock.classList.toggle("is-visible", count > 0);
+            cartDockWrap?.classList.toggle("is-visible", count > 0);
 
             if (cartDockSummary) {
                 cartDockSummary.textContent = count === 1 ? "1 item no carrinho" : `${count} itens no carrinho`;
@@ -653,14 +655,6 @@
             modal.setAttribute("aria-hidden", "true");
         }
 
-        document.querySelectorAll("[data-open-modal]").forEach((button) => {
-            button.addEventListener("click", function () {
-                const card = this.closest("[data-prato-card]");
-                if (!card) return;
-                openModal(JSON.parse(card.dataset.prato));
-            });
-        });
-
         modal.addEventListener("click", function (event) {
             if (event.target === modal || event.target.hasAttribute("data-close-modal")) {
                 closeModal();
@@ -702,6 +696,11 @@
             const addCardButton = card.querySelector("[data-card-add-cart]");
             const dish = JSON.parse(card.dataset.prato || "{}");
             if (!qtyValue || !addCardButton || !dish.id) return;
+
+            card.addEventListener("click", (event) => {
+                if (event.target.closest("button, a, input, textarea, select, [data-card-qty-change], [data-card-add-cart]")) return;
+                openModal(dish);
+            });
 
             card.querySelectorAll("[data-card-qty-change]").forEach((button) => {
                 button.addEventListener("click", (event) => {

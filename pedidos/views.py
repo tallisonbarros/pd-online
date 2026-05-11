@@ -213,7 +213,8 @@ def _build_whatsapp_order_url(pedido, config=None):
 
 @never_cache
 def cardapio(request):
-    cardapio_context = _resolve_cardapio_pratos()
+    config = ConfiguracaoEntrega.get_solo()
+    cardapio_context = _resolve_cardapio_pratos(config=config)
     pratos = cardapio_context["pratos"]
     adicionais = Adicional.objects.filter(ativo=True)
     bebidas = Bebida.objects.filter(ativo=True)
@@ -232,6 +233,8 @@ def cardapio(request):
             "bebidas_json": json.dumps(bebidas_serializadas, ensure_ascii=False),
             "cardapio_title_lines": cardapio_context["title_lines"],
             "cardapio_empty_label": cardapio_context["empty_label"],
+            "horario_abertura": config.horario_abertura,
+            "horario_fechamento": config.horario_fechamento,
         },
     )
 

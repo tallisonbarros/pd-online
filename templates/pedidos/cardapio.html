@@ -14,11 +14,14 @@
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
             <span class="context-header-label">CARDÁPIO</span>
+            {% if horario_abertura and horario_fechamento %}
+                <span class="context-header-hours">{{ horario_abertura|time:"H:i" }} - {{ horario_fechamento|time:"H:i" }}</span>
+            {% endif %}
         </div>
     </header>
 
     <section class="menu-feature-band" aria-labelledby="menu-feature-title">
-        <img class="menu-feature-shape" src="{% static 'img/menu-feature-shape-base-cardapio.svg' %}" alt="" aria-hidden="true">
+        <img class="menu-feature-shape" src="{% static 'img/Barra.svg' %}" onerror="this.onerror=null;this.src='{% static 'img/menu-feature-shape-base-cardapio.svg' %}'" alt="" aria-hidden="true">
         <div class="menu-feature-title">
             <h1 id="menu-feature-title">
                 {% for line in cardapio_title_lines %}
@@ -26,56 +29,55 @@
                 {% endfor %}
             </h1>
         </div>
-        <div class="menu-feature-carousel-wrap">
-            <section class="menu-grid menu-carousel">
-                {% for prato in pratos %}
-                    <article
-                        class="dish-card"
-                        data-prato-card
-                        data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
-                    >
-                        <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ prato.nome }}"></button>
-                        <div class="dish-media">
-                            <div class="dish-top-badges">
-                                <div class="dish-qty-badge" aria-label="Controle de quantidade do prato">
-                                    <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                                    <strong data-card-qty-value>1</strong>
-                                    <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
-                                </div>
-                                <div class="dish-price-badge">
-                                    {% if prato.preco %}
-                                        <strong>R$ {{ prato.preco|floatformat:2 }}</strong>
-                                    {% else %}
-                                        <span>Consulte</span>
-                                    {% endif %}
-                                </div>
+        <div class="menu-feature-card-wrap">
+            {% with prato=pratos.0 %}
+                {% if prato %}
+                <article
+                    class="dish-card"
+                    data-prato-card
+                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                >
+                    <div class="dish-media">
+                        <div class="dish-top-badges">
+                            <div class="dish-qty-badge" aria-label="Controle de quantidade do prato">
+                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                                <strong data-card-qty-value>1</strong>
+                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
                             </div>
-                            {% if prato.imagem %}
-                                <img src="{{ prato.imagem.url }}" alt="{{ prato.nome }}">
-                            {% else %}
-                                <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ prato.nome }}">
-                            {% endif %}
-                        </div>
-                        <div class="dish-body">
-                            <div>
-                                <h2>{{ prato.nome }}</h2>
-                                {% if prato.descricao %}
-                                    <p>{{ prato.descricao }}</p>
+                            <div class="dish-price-badge">
+                                {% if prato.preco %}
+                                    <strong>R$ {{ prato.preco|floatformat:2 }}</strong>
+                                {% else %}
+                                    <span>Consulte</span>
                                 {% endif %}
                             </div>
                         </div>
-                        <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
-                            <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
-                            <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
-                        </button>
-                    </article>
-                {% empty %}
-                    <div class="empty-state">
-                        <h2>Nenhum prato disponível {{ cardapio_empty_label }}.</h2>
-                        <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardápio.</p>
+                        {% if prato.imagem %}
+                            <img src="{{ prato.imagem.url }}" alt="{{ prato.nome }}">
+                        {% else %}
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ prato.nome }}">
+                        {% endif %}
                     </div>
-                {% endfor %}
-            </section>
+                    <div class="dish-body">
+                        <div>
+                            <h2>{{ prato.nome }}</h2>
+                            {% if prato.descricao %}
+                                <p>{{ prato.descricao }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
+                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
+                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
+                    </button>
+                </article>
+                {% else %}
+                <div class="empty-state">
+                    <h2>Nenhum prato disponível {{ cardapio_empty_label }}.</h2>
+                    <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardápio.</p>
+                </div>
+                {% endif %}
+            {% endwith %}
         </div>
     </section>
 
@@ -100,7 +102,6 @@
                     data-prato-card
                     data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco":"{{ adicional.preco|default_if_none:'' }}","preco_formatado":"{% if adicional.preco %}R$ {{ adicional.preco|floatformat:2 }}{% endif %}","imagem":"{% if adicional.imagem %}{{ adicional.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
-                    <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ adicional.nome }}"></button>
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-qty-badge" aria-label="Controle de quantidade do adicional">
@@ -155,7 +156,6 @@
                     data-prato-card
                     data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco":"{{ bebida.preco|default_if_none:'' }}","preco_formatado":"{% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% endif %}","imagem":"{% if bebida.imagem %}{{ bebida.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
-                    <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ bebida.nome }}"></button>
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-qty-badge" aria-label="Controle de quantidade da bebida">
@@ -200,23 +200,25 @@
     </section>
 </main>
 
-<a class="cart-dock" data-cart-dock data-cart-anchor href="{% url 'pedidos:carrinho' %}" aria-label="Abrir carrinho">
-    <span class="cart-dock-icon" aria-hidden="true">
-        <svg class="cart-icon" viewBox="0 0 24 24">
-            <path d="M3 4h2.2a1 1 0 0 1 .97.758L6.6 6.5H20a1 1 0 0 1 .97 1.242l-1.5 6A1 1 0 0 1 18.5 14H8.1a1 1 0 0 1-.97-.757L5.1 5.5H3a1 1 0 1 1 0-2Z"></path>
-            <path d="M9 19.5a1.5 1.5 0 1 0 0 .01ZM17 19.5a1.5 1.5 0 1 0 0 .01Z"></path>
-        </svg>
-    </span>
-    <span class="cart-dock-copy">
-        <strong data-cart-dock-summary>0 itens no carrinho</strong>
-        <small>Toque para finalizar</small>
-    </span>
-    <span class="cart-dock-badge" data-cart-dock-count>0</span>
-</a>
+<div class="cart-dock-wrap">
+    <a class="cart-dock" data-cart-dock data-cart-anchor href="{% url 'pedidos:carrinho' %}" aria-label="Abrir carrinho">
+        <span class="cart-dock-icon" aria-hidden="true">
+            <svg class="cart-icon" viewBox="0 0 24 24">
+                <path d="M3 4h2.2a1 1 0 0 1 .97.758L6.6 6.5H20a1 1 0 0 1 .97 1.242l-1.5 6A1 1 0 0 1 18.5 14H8.1a1 1 0 0 1-.97-.757L5.1 5.5H3a1 1 0 1 1 0-2Z"></path>
+                <path d="M9 19.5a1.5 1.5 0 1 0 0 .01ZM17 19.5a1.5 1.5 0 1 0 0 .01Z"></path>
+            </svg>
+        </span>
+        <span class="cart-dock-copy">
+            <strong data-cart-dock-summary>0 itens no carrinho</strong>
+            <small>Toque para finalizar</small>
+        </span>
+        <span class="cart-dock-badge" data-cart-dock-count>0</span>
+    </a>
+</div>
 
 <div class="modal-backdrop hidden" id="pedido-modal" aria-hidden="true">
     <div class="modal-card order-modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prato-nome">
-        <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal"></button>
+        <button type="button" class="modal-close" data-close-modal aria-label="Fechar modal">&times;</button>
         <img id="modal-prato-imagem" class="modal-image" src="" alt="">
         <div class="modal-content">
             <p class="eyebrow">Montar pedido</p>

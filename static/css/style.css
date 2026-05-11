@@ -243,9 +243,58 @@ textarea {
     text-align: center;
 }
 
+.context-header-hours {
+    order: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: -1px;
+    color: rgba(92, 59, 49, 0.68);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1;
+}
+
+.context-header-hours::before,
+.context-header-hours::after {
+    content: "";
+    width: 14px;
+    height: 1px;
+    background: rgba(92, 59, 49, 0.24);
+}
+
 .context-header .brand-header-logo {
     order: 1;
     flex: 0 0 auto;
+}
+
+.cart-dock-wrap {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 156px;
+    z-index: 39;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+}
+
+.cart-dock-wrap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: rgba(255, 253, 250, 0.18);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    mask-image: linear-gradient(to top, #000 0%, #000 58%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 58%, transparent 100%);
+}
+
+.cart-dock-wrap.is-visible {
+    opacity: 1;
 }
 
 .cart-dock {
@@ -264,7 +313,7 @@ textarea {
     box-shadow: 0 18px 36px rgba(34, 19, 17, 0.24);
     opacity: 0;
     pointer-events: none;
-    z-index: 40;
+    z-index: 1;
     transition:
         transform 260ms var(--ease-out),
         opacity 220ms ease,
@@ -530,6 +579,7 @@ textarea {
 }
 
 .menu-feature-title {
+    order: 2;
     width: 180px;
     padding: 6px 0 0 18px;
     display: grid;
@@ -565,11 +615,12 @@ textarea {
     white-space: nowrap;
 }
 
-.menu-feature-carousel-wrap {
+.menu-feature-card-wrap {
+    order: 1;
     min-width: 0;
     width: fit-content;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     justify-self: start;
 }
 
@@ -662,7 +713,7 @@ textarea {
 .menu-divider {
     width: 100%;
     height: 1px;
-    margin: 18px 0 2px;
+    margin: 6px 0 0;
     background: linear-gradient(90deg, transparent 0%, rgba(214, 203, 194, 0.85) 12%, rgba(214, 203, 194, 0.85) 88%, transparent 100%);
 }
 
@@ -713,11 +764,11 @@ textarea {
 .extras-section {
     display: grid;
     gap: 14px;
-    margin-top: 10px;
+    margin-top: 4px;
 }
 
 [data-page="cardapio"] .extras-section {
-    gap: 10px;
+    gap: 8px;
 }
 
 [data-page="cardapio"] .extras-section + .extras-section {
@@ -741,24 +792,77 @@ textarea {
 
 .bebidas-grid {
     width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
     justify-items: stretch;
+    gap: 8px;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-card {
     width: 100%;
     min-width: 0;
     flex: initial;
+    border-radius: 14px;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-media {
-    aspect-ratio: 1 / 0.72;
+    aspect-ratio: 1 / 0.62;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-media img {
     object-fit: contain;
-    padding: 10px 8px;
+    padding: 6px 5px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-top-badges {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    gap: 3px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-price-badge {
+    min-height: 20px;
+    padding: 2px 5px;
+    font-size: 0.58rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge {
+    min-height: 20px;
+    padding: 1px;
+    gap: 2px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge button {
+    width: 13px;
+    height: 13px;
+    font-size: 0.56rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge strong {
+    min-width: 8px;
+    font-size: 0.58rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-body {
+    padding: 7px;
+    gap: 4px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-body h2 {
+    font-size: 0.74rem;
+    line-height: 1.12;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-body p {
+    display: none;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-add-button--footer {
+    min-height: 30px;
+    padding: 7px 8px;
+    border-radius: 0 0 14px 14px;
+    font-size: 0.7rem;
 }
 
 .extras-empty-card {
@@ -873,15 +977,7 @@ textarea {
     animation: fadeInUpFast var(--anim-ui) var(--ease-out) both;
     flex: 0 0 220px;
     width: 220px;
-}
-
-.card-hitbox {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: transparent;
     cursor: pointer;
-    z-index: 1;
 }
 
 .dish-media {
@@ -3861,6 +3957,15 @@ fieldset.field {
     right: 8px;
     width: 32px;
     height: 32px;
+    border: 1px solid rgba(255, 253, 250, 0.72);
+    background: rgba(34, 19, 17, 0.32);
+    color: #fffdfa;
+    font-size: 1.35rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(6px);
 }
 
 .order-modal-card .modal-image {
@@ -5177,25 +5282,13 @@ fieldset.field {
         line-height: 0.92;
     }
 
-    [data-page="cardapio"] .menu-feature-carousel-wrap {
+    [data-page="cardapio"] .menu-feature-card-wrap {
         width: 136px;
         max-width: 136px;
-        overflow-x: auto;
+        overflow-x: visible;
         overflow-y: visible;
-        scrollbar-width: none;
         align-self: center;
         justify-self: start;
-    }
-
-    [data-page="cardapio"] .menu-feature-carousel-wrap::-webkit-scrollbar {
-        display: none;
-    }
-
-    [data-page="cardapio"] .menu-carousel {
-        min-width: max-content;
-        width: max-content;
-        padding-right: 0;
-        gap: 8px;
     }
 
     [data-page="cardapio"] .dish-card {
@@ -5327,7 +5420,7 @@ fieldset.field {
         width: 128px;
     }
 
-    [data-page="cardapio"] .menu-feature-carousel-wrap {
+    [data-page="cardapio"] .menu-feature-card-wrap {
         width: 128px;
         max-width: 128px;
     }
@@ -5362,7 +5455,7 @@ fieldset.field {
     }
 
     .bebidas-grid {
-        grid-template-columns: repeat(3, minmax(0, 180px));
+        grid-template-columns: repeat(3, minmax(0, 117px));
     }
 
     .checkout-grid {
@@ -5563,6 +5656,21 @@ fieldset.field {
         border-radius: 16px;
     }
 
+    .order-modal-card .modal-content h2 {
+        font-size: 0.98rem;
+    }
+
+    .order-modal-card .field textarea {
+        padding: 8px 10px;
+        border-radius: 12px;
+    }
+
+    .order-modal-card .primary-button {
+        padding: 10px 14px;
+        border-radius: 14px;
+        font-size: 0.88rem;
+    }
+
     .cart-chip,
     .secondary-pill {
         padding: 10px 14px;
@@ -5580,7 +5688,7 @@ fieldset.field {
     }
 
     .bebidas-grid {
-        grid-template-columns: repeat(4, minmax(0, 180px));
+        grid-template-columns: repeat(4, minmax(0, 117px));
     }
 
     [data-page="cardapio"] .menu-grid {
@@ -5632,10 +5740,6 @@ fieldset.field {
     [data-page="cardapio"] .dish-body p {
         font-size: 0.82rem;
         line-height: 1.45;
-    }
-
-    [data-page="cardapio"] .menu-carousel {
-        padding-right: 4px;
     }
 
     [data-page="cardapio"] {
@@ -7219,5 +7323,128 @@ fieldset.field {
     .ajustes-form-grid,
     .ajustes-frete-row {
         grid-template-columns: 1fr;
+    }
+}
+
+[data-page="cardapio"] .menu-feature-band {
+    width: min(100%, 560px);
+    max-width: 100%;
+    margin-top: 18px;
+    aspect-ratio: 1698 / 1064;
+    box-sizing: border-box;
+    padding: clamp(18px, 5.6vw, 34px) clamp(56px, 13vw, 92px) clamp(20px, 5.8vw, 36px) clamp(26px, 7vw, 46px);
+    display: grid;
+    grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.52fr);
+    gap: clamp(12px, 4vw, 24px);
+    align-items: center;
+    justify-content: start;
+    overflow: hidden;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+[data-page="cardapio"] .menu-feature-shape {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    object-position: left center;
+    z-index: 0;
+    pointer-events: none;
+}
+
+[data-page="cardapio"] .menu-feature-title,
+[data-page="cardapio"] .menu-feature-card-wrap {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    align-self: center;
+    position: relative;
+    z-index: 1;
+}
+
+[data-page="cardapio"] .menu-feature-title {
+    justify-self: start;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap {
+    justify-self: start;
+    width: 100%;
+}
+
+[data-page="cardapio"] .menu-feature-title h1 {
+    max-width: 100%;
+    font-size: clamp(1.36rem, 4.4vw, 2.45rem);
+    line-height: 0.92;
+    overflow-wrap: normal;
+}
+
+[data-page="cardapio"] .menu-feature-title h1 span {
+    white-space: normal;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-card {
+    width: min(100%, 210px);
+    flex: 0 0 auto;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-media {
+    aspect-ratio: 1.35 / 0.7;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-body {
+    padding: 8px 10px;
+    gap: 4px;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-body h2 {
+    font-size: 0.86rem;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-body p {
+    font-size: 0.76rem;
+    line-height: 1.25;
+    -webkit-line-clamp: 2;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-add-button--footer {
+    min-height: 34px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 520px) {
+    [data-page="cardapio"] .menu-feature-band {
+        width: min(100%, 430px);
+        grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.52fr);
+        gap: 12px;
+        padding: 22px 48px 22px 24px;
+        border-radius: 0 28px 28px 0;
+    }
+
+    [data-page="cardapio"] .menu-feature-title h1 {
+        font-size: clamp(1rem, 5.8vw, 1.48rem);
+    }
+
+    [data-page="cardapio"] .menu-feature-card-wrap .dish-card {
+        width: min(100%, 150px);
+    }
+}
+
+@media (max-width: 360px) {
+    [data-page="cardapio"] .menu-feature-band {
+        gap: 8px;
+        padding: 16px 34px 16px 18px;
+    }
+
+    [data-page="cardapio"] .menu-feature-card-wrap .dish-card {
+        width: min(100%, 128px);
+    }
+
+    [data-page="cardapio"] .menu-feature-title h1 {
+        font-size: 0.96rem;
     }
 }

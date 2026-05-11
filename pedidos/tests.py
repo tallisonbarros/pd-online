@@ -572,6 +572,18 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, "Copiar chave Pix")
         self.assertContains(response, 'data-copy-pix="pix@pratodelivery.test"')
 
+    def test_cardapio_displays_opening_hours_when_configured(self):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 45)
+        config.save()
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "CARDÁPIO")
+        self.assertContains(response, "10:30 - 14:45")
+
     def test_carrinho_displays_cart_stage(self):
         response = self.client.get("/carrinho/")
 
