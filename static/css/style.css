@@ -886,6 +886,30 @@ textarea {
 .checkout-payment-stage {
     display: grid;
     gap: 16px;
+    border-radius: 18px;
+    transition: box-shadow var(--anim-fast) ease, background-color var(--anim-fast) ease;
+}
+
+.checkout-payment-stage.field-needs-attention {
+    background: rgba(255, 246, 239, 0.86);
+    box-shadow: 0 0 0 3px rgba(155, 63, 47, 0.16), 0 14px 30px rgba(34, 19, 17, 0.08);
+    animation: paymentAttentionPulse 520ms var(--ease-out) both;
+}
+
+.checkout-payment-stage.field-needs-attention .payment-choice-card:not(.is-selected) {
+    border-color: rgba(155, 63, 47, 0.42);
+}
+
+@keyframes paymentAttentionPulse {
+    0% {
+        transform: translateY(0);
+    }
+    35% {
+        transform: translateY(-2px);
+    }
+    100% {
+        transform: translateY(0);
+    }
 }
 
 .payment-choice-grid {

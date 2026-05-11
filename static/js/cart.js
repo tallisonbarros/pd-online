@@ -1938,6 +1938,7 @@
         function clearCheckoutFieldHighlights() {
             checkoutAddressSummary?.classList.remove("field-needs-attention");
             savedProfileOpenButton?.classList.remove("field-needs-attention");
+            stagePayment?.classList.remove("field-needs-attention");
         }
 
         function highlightMissingDeliveryField() {
@@ -1951,6 +1952,13 @@
             target?.focus?.();
             target?.scrollIntoView({ behavior: "smooth", block: "center" });
             return false;
+        }
+
+        function highlightMissingPaymentField() {
+            stagePayment?.classList.add("field-needs-attention");
+            stagePayment?.scrollIntoView({ behavior: "smooth", block: "center" });
+            const target = stagePayment?.querySelector("[data-payment-type]");
+            window.setTimeout(() => target?.focus?.(), 160);
         }
 
         function setActiveStage(stage) {
@@ -2096,6 +2104,9 @@
             paymentDeliveryOptions?.classList.toggle("hidden", type !== "entrega");
             paymentPixPanel?.classList.toggle("hidden", type !== "pix");
             if (paymentMethodInput) paymentMethodInput.value = method;
+            if (method) {
+                stagePayment?.classList.remove("field-needs-attention");
+            }
 
             if (options.persist !== false) {
                 saveCheckoutPaymentPreference({ type, method });
@@ -2178,6 +2189,7 @@
             if (!String(paymentMethodInput?.value || "").trim()) {
                 event.preventDefault();
                 setActiveStage("delivery");
+                highlightMissingPaymentField();
                 showUiNotice("Selecione uma forma de pagamento para continuar.");
                 return;
             }
