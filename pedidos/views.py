@@ -17,13 +17,23 @@ from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_time
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import BebidaForm, PratoForm
-from .models import Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .forms import AdicionalForm, BebidaForm, PratoForm
+from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
 
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+WEEKDAY_LABELS = {
+    "seg": "SEGUNDA",
+    "ter": "TERCA",
+    "qua": "QUARTA",
+    "qui": "QUINTA",
+    "sex": "SEXTA",
+    "sab": "SABADO",
+    "dom": "DOMINGO",
+}
 PHOTON_BASE_URL = "https://photon.komoot.io/api/"
 PHOTON_REVERSE_URL = "https://photon.komoot.io/reverse"
 OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
@@ -58,12 +68,52 @@ RIO_VERDE_BAIRROS_OFICIAIS = [
 ]
 
 
-def prato_disponivel_hoje(prato):
+def _prato_dias_disponiveis(prato):
     if not prato.dias_disponiveis.strip():
-        return True
-    hoje = WEEKDAYS[datetime.now().weekday()]
-    dias = [dia.strip().lower() for dia in prato.dias_disponiveis.split(",") if dia.strip()]
-    return hoje in dias
+        return set(WEEKDAYS)
+    return {dia.strip().lower() for dia in prato.dias_disponiveis.split(",") if dia.strip()}
+
+
+def prato_disponivel_no_dia(prato, weekday_key):
+    return weekday_key in _prato_dias_disponiveis(prato)
+
+
+def prato_disponivel_hoje(prato):
+    hoje = WEEKDAYS[timezone.localtime().weekday()]
+    return prato_disponivel_no_dia(prato, hoje)
+
+
+def _resolve_cardapio_pratos(config=None, now=None):
+    config = config or ConfiguracaoEntrega.get_solo()
+    current = now or timezone.localtime()
+    fechamento = getattr(config, "horario_fechamento", None)
+    start_offset = 1 if fechamento and current.time() >= fechamento else 0
+    active_pratos = list(Prato.objects.filter(ativo=True))
+
+    for offset in range(start_offset, start_offset + 7):
+        weekday_index = (current.weekday() + offset) % 7
+        weekday_key = WEEKDAYS[weekday_index]
+        pratos = [prato for prato in active_pratos if prato_disponivel_no_dia(prato, weekday_key)]
+        if pratos:
+            is_today = offset == 0
+            return {
+                "pratos": pratos,
+                "weekday_key": weekday_key,
+                "is_today": is_today,
+                "title_line_1": "PRATO" if is_today else "PRATO DE",
+                "title_line_2": "DO DIA" if is_today else WEEKDAY_LABELS[weekday_key],
+                "empty_label": "hoje" if is_today else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
+            }
+
+    weekday_key = WEEKDAYS[(current.weekday() + start_offset) % 7]
+    return {
+        "pratos": [],
+        "weekday_key": weekday_key,
+        "is_today": start_offset == 0,
+        "title_line_1": "PRATO" if start_offset == 0 else "PRATO DE",
+        "title_line_2": "DO DIA" if start_offset == 0 else WEEKDAY_LABELS[weekday_key],
+        "empty_label": "hoje" if start_offset == 0 else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
+    }
 
 
 def serializar_prato(prato):
@@ -85,6 +135,17 @@ def serializar_bebida(bebida):
         "preco": f"{bebida.preco:.2f}" if bebida.preco is not None else "",
         "preco_formatado": f"R$ {bebida.preco:.2f}".replace(".", ",") if bebida.preco is not None else "",
         "imagem": bebida.imagem.url if bebida.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
+    }
+
+
+def serializar_adicional(adicional):
+    return {
+        "id": adicional.id,
+        "nome": adicional.nome,
+        "descricao": adicional.descricao,
+        "preco": f"{adicional.preco:.2f}" if adicional.preco is not None else "",
+        "preco_formatado": f"R$ {adicional.preco:.2f}".replace(".", ",") if adicional.preco is not None else "",
+        "imagem": adicional.imagem.url if adicional.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
     }
 
 
@@ -154,18 +215,26 @@ def _build_whatsapp_order_url(pedido, config=None):
 
 @never_cache
 def cardapio(request):
-    pratos = [prato for prato in Prato.objects.filter(ativo=True) if prato_disponivel_hoje(prato)]
+    cardapio_context = _resolve_cardapio_pratos()
+    pratos = cardapio_context["pratos"]
+    adicionais = Adicional.objects.filter(ativo=True)
     bebidas = Bebida.objects.filter(ativo=True)
     pratos_serializados = [serializar_prato(prato) for prato in pratos]
+    adicionais_serializados = [serializar_adicional(adicional) for adicional in adicionais]
     bebidas_serializadas = [serializar_bebida(bebida) for bebida in bebidas]
     return render(
         request,
         "pedidos/cardapio.html",
         {
             "pratos": pratos,
+            "adicionais": adicionais,
             "bebidas": bebidas,
             "pratos_json": json.dumps(pratos_serializados, ensure_ascii=False),
+            "adicionais_json": json.dumps(adicionais_serializados, ensure_ascii=False),
             "bebidas_json": json.dumps(bebidas_serializadas, ensure_ascii=False),
+            "cardapio_title_line_1": cardapio_context["title_line_1"],
+            "cardapio_title_line_2": cardapio_context["title_line_2"],
+            "cardapio_empty_label": cardapio_context["empty_label"],
         },
     )
 
@@ -174,10 +243,14 @@ def cardapio(request):
 def checkout(request):
     config = ConfiguracaoEntrega.get_solo()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
+    adicionais_lookup = {
+        f"adicional:{adicional.id}": {**serializar_adicional(adicional), "tipo": "adicional"}
+        for adicional in Adicional.objects.all()
+    }
     bebidas_lookup = {
         f"bebida:{bebida.id}": {**serializar_bebida(bebida), "tipo": "bebida"} for bebida in Bebida.objects.all()
     }
-    itens_lookup = {**pratos_lookup, **bebidas_lookup}
+    itens_lookup = {**pratos_lookup, **adicionais_lookup, **bebidas_lookup}
     return render(
         request,
         "pedidos/checkout.html",
@@ -191,10 +264,14 @@ def checkout(request):
 @never_cache
 def carrinho(request):
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
+    adicionais_lookup = {
+        f"adicional:{adicional.id}": {**serializar_adicional(adicional), "tipo": "adicional"}
+        for adicional in Adicional.objects.all()
+    }
     bebidas_lookup = {
         f"bebida:{bebida.id}": {**serializar_bebida(bebida), "tipo": "bebida"} for bebida in Bebida.objects.all()
     }
-    itens_lookup = {**pratos_lookup, **bebidas_lookup}
+    itens_lookup = {**pratos_lookup, **adicionais_lookup, **bebidas_lookup}
     return render(
         request,
         "pedidos/carrinho.html",
@@ -216,6 +293,16 @@ def _safe_float(value):
         return float(normalized)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_optional_time(value):
+    raw = _safe_text(value)
+    if not raw:
+        return None
+    parsed = parse_time(raw)
+    if parsed is None:
+        raise ValueError("Informe um horario valido no formato HH:MM.")
+    return parsed
 
 
 def _setting_float(name, default):
@@ -1237,31 +1324,39 @@ def api_address_delivery_time(request):
 def _create_order_items_from_payload(pedido, itens_payload):
     total = Decimal("0.00")
     prato_ids = []
+    adicional_ids = []
     bebida_ids = []
     for item in itens_payload:
         tipo = _safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
         try:
-            item_id = int(item.get("item_id") or item.get("bebida_id") or item.get("prato_id"))
+            item_id = int(item.get("item_id") or item.get("adicional_id") or item.get("bebida_id") or item.get("prato_id"))
         except (TypeError, ValueError):
             raise ValueError("Um dos itens do carrinho e invalido.")
-        if tipo == "bebida":
+        if tipo == "adicional":
+            adicional_ids.append(item_id)
+        elif tipo == "bebida":
             bebida_ids.append(item_id)
         else:
             prato_ids.append(item_id)
     pratos = {prato.id: prato for prato in Prato.objects.filter(id__in=prato_ids, ativo=True)}
+    adicionais = {adicional.id: adicional for adicional in Adicional.objects.filter(id__in=adicional_ids, ativo=True)}
     bebidas = {bebida.id: bebida for bebida in Bebida.objects.filter(id__in=bebida_ids, ativo=True)}
 
     for item in itens_payload:
         tipo = _safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
         try:
-            item_id = int(item.get("item_id") or item.get("bebida_id") or item.get("prato_id"))
+            item_id = int(item.get("item_id") or item.get("adicional_id") or item.get("bebida_id") or item.get("prato_id"))
             quantidade = max(int(item.get("quantidade", 1)), 1)
         except (TypeError, ValueError):
             raise ValueError("Um dos itens do carrinho e invalido.")
         observacao = (item.get("observacao") or "").strip()
         prato = None
+        adicional = None
         bebida = None
-        if tipo == "bebida":
+        if tipo == "adicional":
+            adicional = adicionais.get(item_id)
+            catalog_item = adicional
+        elif tipo == "bebida":
             bebida = bebidas.get(item_id)
             catalog_item = bebida
         else:
@@ -1279,6 +1374,7 @@ def _create_order_items_from_payload(pedido, itens_payload):
         item_pedido = ItemPedido.objects.create(
             pedido=pedido,
             prato=prato,
+            adicional=adicional,
             bebida=bebida,
             nome_prato_snapshot=catalog_item.nome,
             preco_snapshot=preco,
@@ -1995,9 +2091,9 @@ def pedido_detalhe_admin(request, pedido_id):
 
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
-    ajustes_aba = (_safe_text(request.GET.get("aba")) or "frete").lower()
-    if ajustes_aba not in {"frete", "google", "whatsapp", "pagamento"}:
-        ajustes_aba = "frete"
+    ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento"}:
+        ajustes_aba = "geral"
 
     config = ConfiguracaoEntrega.get_solo()
     origem = _saved_origin_snapshot(config)
@@ -2013,6 +2109,15 @@ def ajustes_admin(request):
 
     if request.method == "POST":
         action = _safe_text(request.POST.get("action"))
+        action_tabs = {
+            "save_geral": "geral",
+            "save_frete": "frete",
+            "test_frete": "frete",
+            "save_google": "google",
+            "save_whatsapp": "whatsapp",
+            "save_pagamento": "pagamento",
+        }
+        ajustes_aba = action_tabs.get(action, ajustes_aba)
         origem = {
             "endereco": _safe_text(request.POST.get("origem_endereco")) or origem["endereco"],
             "latitude": _safe_text(request.POST.get("origem_latitude")) or (_safe_text(origem["latitude"]) if origem["latitude"] is not None else ""),
@@ -2024,6 +2129,16 @@ def ajustes_admin(request):
             else _blank_origin_result()
         )
         faixa_rows = _parse_faixa_rows(request.POST)
+
+        if action == "save_geral":
+            try:
+                config.horario_abertura = _parse_optional_time(request.POST.get("horario_abertura"))
+                config.horario_fechamento = _parse_optional_time(request.POST.get("horario_fechamento"))
+                config.save()
+                return redirect(f"{request.path}?saved=1&aba=geral")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
 
         if action == "save_frete":
             try:
@@ -2146,6 +2261,8 @@ def ajustes_admin(request):
             "google_maps_status": google_maps_status,
             "whatsapp_numero": config.whatsapp_numero,
             "pix_chave": config.pix_chave,
+            "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
+            "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
         },
     )
@@ -2153,13 +2270,23 @@ def ajustes_admin(request):
 
 @staff_member_required(login_url="/admin/login/")
 def adicionais_admin(request):
+    adicionais = Adicional.objects.all()
+    adicional_edicao = None
+    form = AdicionalForm()
+
+    edit_id = request.GET.get("edit")
+    if edit_id:
+        adicional_edicao = get_object_or_404(Adicional, id=edit_id)
+        form = AdicionalForm(instance=adicional_edicao)
+
     return render(
         request,
-        "pedidos/modulo_admin_placeholder.html",
+        "pedidos/adicionais_gestao.html",
         {
-            "active": "adicionais",
-            "titulo": "Adicionais",
-            "descricao": "Área dedicada para gerenciamento de adicionais. Vamos estruturar os formulários e regras nesta seção.",
+            "adicionais": adicionais,
+            "form": form,
+            "adicional_edicao": adicional_edicao,
+            "form_modal_open": bool(adicional_edicao),
         },
     )
 
@@ -2208,6 +2335,7 @@ def gestao_pratos(request):
             "pratos": pratos,
             "form": form,
             "prato_edicao": prato_edicao,
+            "form_modal_open": bool(prato_edicao),
         },
     )
 
@@ -2230,6 +2358,7 @@ def salvar_prato(request):
             "pratos": pratos,
             "form": form,
             "prato_edicao": prato,
+            "form_modal_open": True,
         },
         status=400,
     )
@@ -2242,6 +2371,35 @@ def alternar_prato(request, prato_id):
     prato.ativo = not prato.ativo
     prato.save(update_fields=["ativo"])
     return redirect("pedidos:gestao_pratos")
+
+
+def _delete_catalog_image(model, object_id):
+    item = get_object_or_404(model, id=object_id)
+    if not item.imagem:
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": "Item sem imagem.",
+                "placeholder": settings.STATIC_URL + "img/placeholder-prato.svg",
+            }
+        )
+
+    item.imagem.delete(save=False)
+    item.imagem = None
+    item.save(update_fields=["imagem"])
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": "Imagem excluida.",
+            "placeholder": settings.STATIC_URL + "img/placeholder-prato.svg",
+        }
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_imagem_prato(request, prato_id):
+    return _delete_catalog_image(Prato, prato_id)
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -2262,6 +2420,7 @@ def gestao_bebidas(request):
             "bebidas": bebidas,
             "form": form,
             "bebida_edicao": bebida_edicao,
+            "form_modal_open": bool(bebida_edicao),
         },
     )
 
@@ -2284,6 +2443,7 @@ def salvar_bebida(request):
             "bebidas": bebidas,
             "form": form,
             "bebida_edicao": bebida,
+            "form_modal_open": True,
         },
         status=400,
     )
@@ -2296,6 +2456,51 @@ def alternar_bebida(request, bebida_id):
     bebida.ativo = not bebida.ativo
     bebida.save(update_fields=["ativo"])
     return redirect("pedidos:gestao_bebidas")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_imagem_bebida(request, bebida_id):
+    return _delete_catalog_image(Bebida, bebida_id)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def salvar_adicional(request):
+    adicional_id = request.POST.get("adicional_id")
+    adicional = get_object_or_404(Adicional, id=adicional_id) if adicional_id else None
+    form = AdicionalForm(request.POST, request.FILES, instance=adicional)
+    if form.is_valid():
+        form.save()
+        return redirect("pedidos:adicionais_admin")
+
+    adicionais = Adicional.objects.all()
+    return render(
+        request,
+        "pedidos/adicionais_gestao.html",
+        {
+            "adicionais": adicionais,
+            "form": form,
+            "adicional_edicao": adicional,
+            "form_modal_open": True,
+        },
+        status=400,
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def alternar_adicional(request, adicional_id):
+    adicional = get_object_or_404(Adicional, id=adicional_id)
+    adicional.ativo = not adicional.ativo
+    adicional.save(update_fields=["ativo"])
+    return redirect("pedidos:adicionais_admin")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_imagem_adicional(request, adicional_id):
+    return _delete_catalog_image(Adicional, adicional_id)
 
 
 @require_POST

@@ -4,77 +4,17 @@
 {% block title %}Gestao de Bebidas | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<div class="ops-shell">
+<div class="ops-shell ops-shell--cozinha">
     {% include "pedidos/_ops_sidebar.html" with active="bebidas" bebidas_badge=bebidas|length %}
 
     <main class="ops-main">
-        <header class="ops-session">
-            <div>
-                <p class="ops-session-kicker">Catalogo</p>
-                <h1>Gestao de bebidas</h1>
-            </div>
-            <div class="ops-session-actions">
-                <a class="ops-logout" href="{% url 'pedidos:cozinha_pedidos' %}">Ver pedidos</a>
-            </div>
-        </header>
-
-        <section class="ops-headline">
-            <p class="ops-kicker">Bebidas</p>
-            <h2>Cadastre bebidas como itens separados</h2>
-            <p>As bebidas entram no cardapio abaixo do prato do dia e sao adicionadas ao pedido de forma independente.</p>
-        </section>
-
-        <section class="management-grid">
-            <div class="panel management-form-panel">
-                <div class="panel-head">
-                    <h2>{% if bebida_edicao %}Editar bebida{% else %}Nova bebida{% endif %}</h2>
-                    {% if bebida_edicao %}
-                        <a class="secondary-link" href="{% url 'pedidos:gestao_bebidas' %}">Limpar</a>
-                    {% endif %}
-                </div>
-                <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_bebida' %}" class="checkout-form">
-                    {% csrf_token %}
-                    {% if bebida_edicao %}
-                        <input type="hidden" name="bebida_id" value="{{ bebida_edicao.id }}">
-                    {% endif %}
-
-                    <label class="field">
-                        <span>Nome</span>
-                        {{ form.nome }}
-                    </label>
-
-                    <label class="field">
-                        <span>Descricao</span>
-                        {{ form.descricao }}
-                    </label>
-
-                    <label class="field">
-                        <span>Imagem</span>
-                        {{ form.imagem }}
-                    </label>
-
-                    <label class="field">
-                        <span>Preco</span>
-                        {{ form.preco }}
-                    </label>
-
-                    <label class="field">
-                        <span>Ordem</span>
-                        {{ form.ordem }}
-                    </label>
-
-                    <label class="choice-card switch-card">
-                        {{ form.ativo }}
-                        <span>Bebida ativa no cardapio</span>
-                    </label>
-
-                    <button type="submit" class="primary-button wide">
-                        {% if bebida_edicao %}Salvar alteracoes{% else %}Criar bebida{% endif %}
-                    </button>
-                </form>
-            </div>
-
-            <div class="management-list">
+        <section class="management-grid management-grid--cards">
+            <div class="management-list management-list--cards">
+                <button type="button" class="management-create-card" data-open-management-modal="#bebida-form-modal">
+                    <span class="management-create-icon" aria-hidden="true">+</span>
+                    <strong>Nova bebida</strong>
+                    <small>Cadastrar item separado</small>
+                </button>
                 {% for bebida in bebidas %}
                     <article class="dish-card management-card">
                         <div class="dish-media">
@@ -114,11 +54,69 @@
                 {% empty %}
                     <div class="empty-state">
                         <h2>Nenhuma bebida cadastrada.</h2>
-                        <p>Use o formulario ao lado para publicar a primeira bebida.</p>
+                        <p>Use o botao Nova bebida para publicar o primeiro item.</p>
                     </div>
                 {% endfor %}
             </div>
         </section>
+
+        <div id="bebida-form-modal" class="modal-backdrop hidden management-modal" data-management-modal {% if form_modal_open %}data-auto-open="true"{% endif %} aria-hidden="true">
+            <div class="modal-card management-modal-card" role="dialog" aria-modal="true" aria-labelledby="bebida-form-title">
+                <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+                <div class="modal-content">
+                    <div class="panel-head management-modal-head">
+                        <h2 id="bebida-form-title">{% if bebida_edicao %}Editar bebida{% else %}Nova bebida{% endif %}</h2>
+                        {% if bebida_edicao %}
+                            <a class="secondary-link" href="{% url 'pedidos:gestao_bebidas' %}">Limpar</a>
+                        {% endif %}
+                    </div>
+                    <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_bebida' %}" class="checkout-form">
+                        {% csrf_token %}
+                        {% if bebida_edicao %}
+                            <input type="hidden" name="bebida_id" value="{{ bebida_edicao.id }}">
+                        {% endif %}
+
+                        <label class="field">
+                            <span>Nome</span>
+                            {{ form.nome }}
+                        </label>
+
+                        <label class="field">
+                            <span>Descricao</span>
+                            {{ form.descricao }}
+                        </label>
+
+                        {% if bebida_edicao %}
+                            {% url 'pedidos:excluir_imagem_bebida' bebida_edicao.id as delete_image_url %}
+                        {% endif %}
+                        {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=bebida_edicao.imagem delete_url=delete_image_url %}
+
+                        <label class="field">
+                            <span>Preco</span>
+                            {{ form.preco }}
+                        </label>
+
+                        <label class="field">
+                            <span>Ordem</span>
+                            {{ form.ordem }}
+                        </label>
+
+                        <label class="choice-card switch-card">
+                            {{ form.ativo }}
+                            <span>Bebida ativa no cardapio</span>
+                        </label>
+
+                        <button type="submit" class="primary-button wide">
+                            {% if bebida_edicao %}Salvar alteracoes{% else %}Criar bebida{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

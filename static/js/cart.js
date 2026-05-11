@@ -4,6 +4,7 @@
     const checkoutProfilesKey = `${cartKey}_checkout_profiles`;
     const legacyCheckoutProfileKey = `${cartKey}_checkout_profile`;
     const checkoutDraftKey = `${cartKey}_checkout_draft`;
+    const checkoutPaymentKey = `${cartKey}_checkout_payment`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const checkoutLookup = (() => {
         const node = document.getElementById("checkout-pratos-lookup");
@@ -216,11 +217,11 @@
     }
 
     function cartItemType(item) {
-        return String(item?.tipo || (item?.bebida_id ? "bebida" : "prato")).trim() || "prato";
+        return String(item?.tipo || (item?.adicional_id ? "adicional" : item?.bebida_id ? "bebida" : "prato")).trim() || "prato";
     }
 
     function cartItemId(item) {
-        return item?.item_id || item?.bebida_id || item?.prato_id || item?.id;
+        return item?.item_id || item?.adicional_id || item?.bebida_id || item?.prato_id || item?.id;
     }
 
     function cartItemKey(item) {
@@ -235,6 +236,7 @@
             tipo,
             item_id: itemId,
             prato_id: tipo === "prato" ? itemId : undefined,
+            adicional_id: tipo === "adicional" ? itemId : undefined,
             bebida_id: tipo === "bebida" ? itemId : undefined,
         };
     }
@@ -309,6 +311,29 @@
                     enviar_talheres: draft?.enviar_talheres === "nao" ? "nao" : "sim",
                 })
             );
+        } catch (error) {
+            // Ignora falha de storage.
+        }
+    }
+
+    function getCheckoutPaymentPreference() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(checkoutPaymentKey) || "{}");
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function saveCheckoutPaymentPreference(preference) {
+        try {
+            const type = String(preference?.type || "").trim();
+            const method = String(preference?.method || "").trim();
+            if (!type && !method) {
+                localStorage.removeItem(checkoutPaymentKey);
+                return;
+            }
+            localStorage.setItem(checkoutPaymentKey, JSON.stringify({ type, method }));
         } catch (error) {
             // Ignora falha de storage.
         }
@@ -637,6 +662,7 @@
                 tipo: currentType,
                 item_id: currentDish.id,
                 prato_id: currentType === "prato" ? currentDish.id : undefined,
+                adicional_id: currentType === "adicional" ? currentDish.id : undefined,
                 bebida_id: currentType === "bebida" ? currentDish.id : undefined,
                 nome: currentDish.nome,
                 preco: parsePrice(currentDish.preco),
@@ -672,6 +698,7 @@
                     tipo: dishType,
                     item_id: dish.id,
                     prato_id: dishType === "prato" ? dish.id : undefined,
+                    adicional_id: dishType === "adicional" ? dish.id : undefined,
                     bebida_id: dishType === "bebida" ? dish.id : undefined,
                     nome: dish.nome,
                     preco: parsePrice(dish.preco),
@@ -1971,35 +1998,58 @@
         talheresToggleInput?.addEventListener("change", syncTalheresPayload);
         syncTalheresPayload();
 
+        function setPaymentSelection(paymentType, paymentMethod, options = {}) {
+            const type = String(paymentType || "").trim();
+            let method = String(paymentMethod || "").trim();
+            const pixConfigured = stagePayment?.dataset.pixConfigured === "true";
+
+            if (type === "pix" && !pixConfigured) {
+                method = "";
+            } else if (type === "pix") {
+                method = "pix";
+            }
+
+            document.querySelectorAll("[data-payment-type]").forEach((item) => {
+                item.classList.toggle("is-selected", item.getAttribute("data-payment-type") === type);
+            });
+            document.querySelectorAll("[data-payment-method]").forEach((item) => {
+                item.classList.toggle("is-selected", item.getAttribute("data-payment-method") === method);
+            });
+
+            paymentDeliveryOptions?.classList.toggle("hidden", type !== "entrega");
+            paymentPixPanel?.classList.toggle("hidden", type !== "pix");
+            if (paymentMethodInput) paymentMethodInput.value = method;
+
+            if (options.persist !== false) {
+                saveCheckoutPaymentPreference({ type, method });
+            }
+
+            if (type === "pix" && !pixConfigured && options.notice !== false) {
+                showUiNotice("Pix online ainda nao esta configurado.");
+            }
+        }
+
         document.querySelectorAll("[data-payment-type]").forEach((button) => {
             button.addEventListener("click", () => {
                 const paymentType = button.getAttribute("data-payment-type");
-                document.querySelectorAll("[data-payment-type]").forEach((item) => {
-                    item.classList.toggle("is-selected", item === button);
-                });
-                paymentDeliveryOptions?.classList.toggle("hidden", paymentType !== "entrega");
-                paymentPixPanel?.classList.toggle("hidden", paymentType !== "pix");
-                if (paymentType === "pix") {
-                    if (stagePayment?.dataset.pixConfigured === "true") {
-                        if (paymentMethodInput) paymentMethodInput.value = "pix";
-                    } else {
-                        if (paymentMethodInput) paymentMethodInput.value = "";
-                        showUiNotice("Pix online ainda nao esta configurado.");
-                    }
-                } else if (paymentMethodInput) {
-                    paymentMethodInput.value = "";
-                }
+                setPaymentSelection(paymentType, paymentType === "pix" ? "pix" : "");
             });
         });
 
         document.querySelectorAll("[data-payment-method]").forEach((button) => {
             button.addEventListener("click", () => {
-                document.querySelectorAll("[data-payment-method]").forEach((item) => {
-                    item.classList.toggle("is-selected", item === button);
-                });
-                if (paymentMethodInput) paymentMethodInput.value = button.getAttribute("data-payment-method") || "";
+                setPaymentSelection("entrega", button.getAttribute("data-payment-method") || "");
             });
         });
+
+        const paymentPreference = getCheckoutPaymentPreference();
+        if (paymentPreference.method === "pix" && stagePayment?.dataset.pixConfigured === "true") {
+            setPaymentSelection("pix", "pix", { persist: false, notice: false });
+        } else if (["dinheiro", "cartao_entrega"].includes(paymentPreference.method)) {
+            setPaymentSelection("entrega", paymentPreference.method, { persist: false, notice: false });
+        } else if (paymentPreference.type === "entrega") {
+            setPaymentSelection("entrega", "", { persist: false, notice: false });
+        }
 
         document.querySelector("[data-copy-pix]")?.addEventListener("click", async (event) => {
             const button = event.currentTarget;
@@ -2157,8 +2207,14 @@
         }
 
         nameInput?.addEventListener("input", persistDraftFromPage);
+        nameInput?.addEventListener("change", persistDraftFromPage);
+        nameInput?.addEventListener("blur", persistDraftFromPage);
         orderNoteInput?.addEventListener("input", persistDraftFromPage);
+        orderNoteInput?.addEventListener("change", persistDraftFromPage);
+        orderNoteInput?.addEventListener("blur", persistDraftFromPage);
         talheresToggleInput?.addEventListener("change", persistDraftFromPage);
+        window.addEventListener("pagehide", persistDraftFromPage);
+        window.addEventListener("beforeunload", persistDraftFromPage);
         goDeliveryLink.addEventListener("click", (event) => {
             const cart = getCart();
             if (!cart.length) {
@@ -2258,7 +2314,7 @@
         }
 
         async function updateStatus(pedidoId, status) {
-            const response = await fetch(`/cozinha/pedido/${pedidoId}/status/`, {
+            const response = await fetch(`/controle/pedido/${pedidoId}/status/`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",

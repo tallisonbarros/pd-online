@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -21,11 +21,33 @@ class PratoAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(Bebida)
+class BebidaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "preco", "ativo", "ordem", "criado_em")
+    list_editable = ("preco", "ativo", "ordem")
+    list_filter = ("ativo", "criado_em")
+    search_fields = ("nome", "descricao")
+    ordering = ("ordem", "nome")
+    list_per_page = 25
+
+
+@admin.register(Adicional)
+class AdicionalAdmin(admin.ModelAdmin):
+    list_display = ("nome", "preco", "ativo", "ordem", "criado_em")
+    list_editable = ("preco", "ativo", "ordem")
+    list_filter = ("ativo", "criado_em")
+    search_fields = ("nome", "descricao")
+    ordering = ("ordem", "nome")
+    list_per_page = 25
+
+
 class ItemPedidoInline(admin.TabularInline):
     model = ItemPedido
     extra = 0
     readonly_fields = (
         "prato",
+        "bebida",
+        "adicional",
         "nome_prato_snapshot",
         "preco_snapshot",
         "quantidade",
@@ -108,7 +130,7 @@ class PedidoAdmin(admin.ModelAdmin):
 @admin.register(ItemPedido)
 class ItemPedidoAdmin(admin.ModelAdmin):
     list_display = ("pedido", "nome_prato_snapshot", "quantidade", "subtotal")
-    list_select_related = ("pedido", "prato")
+    list_select_related = ("pedido", "prato", "bebida", "adicional")
     search_fields = ("nome_prato_snapshot", "pedido__nome_cliente", "pedido__numero")
 
 
@@ -125,6 +147,8 @@ class ConfiguracaoEntregaAdmin(admin.ModelAdmin):
     list_display = ("origem_endereco", "origem_latitude", "origem_longitude", "google_maps_habilitado", "atualizado_em")
     readonly_fields = ("criado_em", "atualizado_em")
     fields = (
+        "horario_abertura",
+        "horario_fechamento",
         "origem_endereco",
         "origem_latitude",
         "origem_longitude",

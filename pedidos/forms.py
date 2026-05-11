@@ -1,9 +1,26 @@
 from django import forms
 
-from .models import Bebida, Prato
+from .models import Adicional, Bebida, Prato
+
+
+DIA_CHOICES = [
+    ("seg", "Segunda"),
+    ("ter", "Terca"),
+    ("qua", "Quarta"),
+    ("qui", "Quinta"),
+    ("sex", "Sexta"),
+    ("sab", "Sabado"),
+    ("dom", "Domingo"),
+]
 
 
 class PratoForm(forms.ModelForm):
+    dias_disponiveis = forms.MultipleChoiceField(
+        choices=DIA_CHOICES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
     class Meta:
         model = Prato
         fields = ["nome", "descricao", "imagem", "preco", "ativo", "dias_disponiveis"]
@@ -16,10 +33,27 @@ class PratoForm(forms.ModelForm):
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
-            "dias_disponiveis": forms.TextInput(
-                attrs={"placeholder": "seg,ter,qua ou deixe vazio para todos os dias"}
-            ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.is_bound:
+            return
+
+        raw_days = ""
+        if self.instance and self.instance.pk:
+            raw_days = self.instance.dias_disponiveis or ""
+
+        selected = [dia.strip().lower() for dia in raw_days.split(",") if dia.strip()]
+        self.initial["dias_disponiveis"] = selected or [value for value, _label in DIA_CHOICES]
+
+    def clean_dias_disponiveis(self):
+        selected = self.cleaned_data.get("dias_disponiveis") or []
+        valid_order = [value for value, _label in DIA_CHOICES]
+        selected_set = set(selected)
+        if not selected_set or selected_set == set(valid_order):
+            return ""
+        return ",".join(value for value in valid_order if value in selected_set)
 
 
 class BebidaForm(forms.ModelForm):
@@ -35,5 +69,22 @@ class BebidaForm(forms.ModelForm):
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "6.00"}),
+            "ordem": forms.NumberInput(attrs={"min": "0", "placeholder": "10"}),
+        }
+
+
+class AdicionalForm(forms.ModelForm):
+    class Meta:
+        model = Adicional
+        fields = ["nome", "descricao", "imagem", "preco", "ativo", "ordem"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"placeholder": "Ex.: Porcao extra de arroz"}),
+            "descricao": forms.Textarea(
+                attrs={
+                    "rows": 4,
+                    "placeholder": "Descricao curta para aparecer no cardapio.",
+                }
+            ),
+            "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "5.00"}),
             "ordem": forms.NumberInput(attrs={"min": "0", "placeholder": "10"}),
         }

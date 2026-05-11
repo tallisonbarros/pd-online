@@ -4,7 +4,7 @@
 {% block title %}Cozinha | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<div class="ops-shell">
+<div class="ops-shell ops-shell--cozinha">
     {% include "pedidos/_ops_sidebar.html" with active="cozinha" %}
 
     <main class="ops-main cozinha-live" data-page="cozinha-operacao" data-api-url="{% url 'pedidos:api_cozinha_operacao' %}">

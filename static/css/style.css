@@ -624,6 +624,10 @@ textarea {
     overflow: hidden;
 }
 
+[data-page="cardapio"] {
+    padding-bottom: 140px;
+}
+
 .menu-intro {
     padding: 6px 2px 2px;
 }
@@ -660,10 +664,66 @@ textarea {
     background: linear-gradient(90deg, transparent 0%, rgba(214, 203, 194, 0.85) 12%, rgba(214, 203, 194, 0.85) 88%, transparent 100%);
 }
 
+.menu-promo-card {
+    margin-top: 18px;
+    padding: 14px;
+    display: grid;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid rgba(214, 203, 194, 0.82);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(255, 253, 250, 0.96), rgba(246, 240, 236, 0.9)),
+        #fffdfa;
+    box-shadow: 0 18px 44px rgba(34, 19, 17, 0.08);
+}
+
+.menu-promo-copy {
+    min-width: 0;
+}
+
+.menu-promo-kicker {
+    margin: 0 0 6px;
+    color: #8b6b60;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.menu-promo-copy h2 {
+    margin: 0;
+    max-width: 540px;
+    color: var(--brand-strong);
+    font-size: clamp(1rem, 3.8vw, 1.34rem);
+    line-height: 1.08;
+}
+
+.menu-promo-copy p:last-child {
+    margin: 8px 0 0;
+    max-width: 560px;
+    color: var(--text-soft);
+    font-size: 0.82rem;
+    line-height: 1.36;
+}
+
 .extras-section {
     display: grid;
     gap: 14px;
     margin-top: 10px;
+}
+
+[data-page="cardapio"] .extras-section {
+    gap: 10px;
+}
+
+[data-page="cardapio"] .extras-section + .extras-section {
+    margin-top: 30px;
+}
+
+[data-page="cardapio"] .extras-section .menu-grid {
+    margin-top: 0;
 }
 
 .extras-section-head h2 {
@@ -1096,6 +1156,10 @@ textarea {
     gap: 18px;
 }
 
+.management-grid.management-grid--cards {
+    grid-template-columns: 1fr;
+}
+
 .management-form-panel {
     align-self: start;
 }
@@ -1105,36 +1169,149 @@ textarea {
     gap: 16px;
 }
 
+.management-list--cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 224px));
+    align-items: stretch;
+    justify-content: start;
+    grid-auto-rows: 1fr;
+    gap: 12px;
+}
+
+.management-card {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    flex: 0 1 auto;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 34px rgba(34, 19, 17, 0.08);
+}
+
+.management-create-card {
+    min-height: 284px;
+    width: 100%;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    padding: 18px;
+    border: 1px dashed #d6cbc2;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 253, 250, 0.72);
+    color: #4e342e;
+    box-shadow: 0 10px 24px rgba(34, 19, 17, 0.05);
+    cursor: pointer;
+    text-align: center;
+    transition: transform var(--anim-fast) ease, border-color var(--anim-fast) ease, background-color var(--anim-fast) ease;
+}
+
+.management-create-card:hover,
+.management-create-card:focus-visible {
+    transform: translateY(-2px);
+    border-color: #4e342e;
+    background: #fffdfa;
+    outline: none;
+}
+
+.management-create-icon {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 18px;
+    background: #4e342e;
+    color: #fffdfa;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.management-create-card strong {
+    color: #221311;
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+
+.management-create-card small {
+    color: #6b544a;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
 .management-card .dish-media {
-    aspect-ratio: 1.45 / 1;
+    aspect-ratio: 1.55 / 1;
+    flex: 0 0 auto;
+}
+
+.management-card .dish-body {
+    min-height: 164px;
+    padding: 11px;
+    gap: 8px;
+}
+
+.management-card .dish-body h2 {
+    color: var(--text);
+    font-size: 0.88rem;
+    line-height: 1.18;
+}
+
+.management-card .dish-body p {
+    color: var(--text-soft);
+    font-size: 0.8rem;
+    line-height: 1.32;
+}
+
+.ops-shell--cozinha .management-card .status-badge {
+    font-size: 10px;
+    padding: 5px 8px;
+}
+
+.management-card-head > div {
+    min-width: 0;
+}
+
+.management-card-head p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
 }
 
 .management-card-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
 }
 
 .management-meta {
     display: grid;
-    gap: 6px;
+    gap: 4px;
+    margin-top: auto;
+    padding-top: 2px;
 }
 
 .management-meta p {
     margin: 0;
     color: var(--text-soft);
+    font-size: 0.8rem;
 }
 
 .management-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    justify-content: flex-start;
+    gap: 7px;
 }
 
 .management-actions form {
     margin: 0;
+}
+
+.ops-shell--cozinha .management-actions .secondary-pill.compact,
+.ops-shell--cozinha .management-actions .status-button {
+    font-size: 11px;
+    padding: 6px 9px;
 }
 
 .secondary-pill.compact {
@@ -1149,6 +1326,180 @@ textarea {
     width: 18px;
     height: 18px;
     accent-color: var(--brand);
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+.management-modal {
+    z-index: 120;
+}
+
+.management-modal-card {
+    width: min(720px, 100%);
+    overflow: visible;
+}
+
+.management-modal-card .modal-content {
+    padding: 22px;
+}
+
+.management-modal-head {
+    padding-right: 48px;
+}
+
+.weekday-check-grid > div {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+    gap: 8px;
+}
+
+.weekday-check-grid label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fffdfa;
+    color: var(--text);
+    font-weight: 700;
+}
+
+.weekday-check-grid input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--brand);
+}
+
+.image-upload-field {
+    display: grid;
+    gap: 8px;
+}
+
+.image-upload-card {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fffdfa;
+}
+
+.image-upload-preview {
+    width: 96px;
+    aspect-ratio: 1.25 / 1;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f6f0ed, #ecdfd9);
+    color: var(--text-soft);
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.image-upload-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-upload-body {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.image-upload-body strong {
+    color: var(--text);
+    font-size: 0.92rem;
+}
+
+.image-upload-body small {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-soft);
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.image-upload-actions {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.image-upload-actions input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.image-upload-button {
+    cursor: pointer;
+}
+
+.image-upload-delete {
+    border: 1px solid rgba(214, 203, 194, 0.95);
+    color: var(--brand);
+    cursor: pointer;
+}
+
+.image-upload-delete:disabled {
+    cursor: wait;
+    opacity: 0.64;
+}
+
+.catalog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 12px 0 8px;
+}
+
+.catalog-header-kicker {
+    margin: 0 0 3px;
+    color: #7c675c;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+.catalog-header h1 {
+    margin: 0;
+    color: #221311;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.05;
+}
+
+.catalog-header p:last-child {
+    margin: 5px 0 0;
+    color: #5f4b42;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.catalog-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
 }
 
 .status-badge.is-live {
@@ -1360,11 +1711,148 @@ textarea {
 }
 
 [data-page="carrinho"] {
-    padding-bottom: 112px;
+    padding-bottom: 192px;
 }
 
 [data-page="carrinho"] .checkout-page-footer {
     bottom: 12px;
+}
+
+[data-page="carrinho"] .checkout-fixed-actions {
+    position: fixed;
+    left: 50%;
+    bottom: 80px;
+    z-index: 25;
+    width: min(calc(100% - 28px), 390px);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+[data-page="carrinho"] .checkout-fixed-actions .checkout-stage-actions--capsule {
+    pointer-events: auto;
+}
+
+[data-page="checkout"] {
+    padding-bottom: 84px;
+}
+
+[data-page="checkout"] .context-header {
+    min-height: 58px;
+    padding: 4px 18px 0;
+}
+
+[data-page="checkout"] .brand-header-logo img {
+    width: 64px;
+}
+
+[data-page="checkout"] .context-header-label {
+    font-size: 0.78rem;
+}
+
+[data-page="checkout"] .checkout-stage-shell {
+    margin-top: 6px;
+    gap: 8px;
+}
+
+[data-page="checkout"] .checkout-stage-panel {
+    gap: 8px;
+}
+
+[data-page="checkout"] .panel {
+    padding: 12px;
+    border-radius: 20px;
+}
+
+[data-page="checkout"] .checkout-form,
+[data-page="checkout"] .checkout-payment-stage {
+    gap: 10px;
+}
+
+[data-page="checkout"] .panel-head {
+    gap: 8px;
+}
+
+[data-page="checkout"] .panel-head h2 {
+    font-size: 1.04rem;
+}
+
+[data-page="checkout"] .checkout-delivery-head .secondary-pill {
+    min-height: 40px;
+    padding: 8px 12px;
+}
+
+[data-page="checkout"] .checkout-address-selector {
+    display: grid;
+    gap: 8px;
+}
+
+[data-page="checkout"] .address-resolution-card {
+    gap: 5px;
+    padding: 10px 12px;
+    border-radius: 14px;
+}
+
+[data-page="checkout"] .address-resolution-kicker {
+    font-size: 0.64rem;
+}
+
+[data-page="checkout"] .address-resolution-card strong {
+    font-size: 0.9rem;
+    line-height: 1.25;
+}
+
+[data-page="checkout"] .address-resolution-card small {
+    font-size: 0.74rem;
+    line-height: 1.25;
+}
+
+[data-page="checkout"] .checkout-delivery-summary {
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: 14px;
+    font-size: 0.84rem;
+}
+
+[data-page="checkout"] .payment-choice-grid {
+    gap: 8px;
+}
+
+[data-page="checkout"] .payment-choice-card {
+    min-height: 76px;
+    padding: 11px 12px;
+    border-radius: 14px;
+}
+
+[data-page="checkout"] .payment-choice-card span {
+    font-size: 0.62rem;
+}
+
+[data-page="checkout"] .payment-choice-card strong {
+    font-size: 0.94rem;
+}
+
+[data-page="checkout"] .payment-suboptions {
+    gap: 8px;
+    margin-top: -2px;
+}
+
+[data-page="checkout"] .payment-suboptions .secondary-pill {
+    min-height: 42px;
+    padding: 9px 12px;
+}
+
+[data-page="checkout"] .payment-pix-panel {
+    margin-top: -2px;
+}
+
+[data-page="checkout"] .primary-button.wide {
+    min-height: 46px;
+    padding: 11px 14px;
+    border-radius: 16px;
+}
+
+[data-page="checkout"] .checkout-page-footer {
+    bottom: 10px;
 }
 
 [data-page="carrinho"] .checkout-stage-shell {
@@ -1555,7 +2043,7 @@ textarea {
 
 [data-page="carrinho"] .checkout-stage-actions--capsule {
     padding: 4px;
-    margin-top: 2px;
+    margin-top: 0;
 }
 
 [data-page="carrinho"] .checkout-stage-actions--capsule .primary-button,
@@ -3619,6 +4107,14 @@ fieldset.field {
     line-height: 1;
 }
 
+.ops-session-description {
+    margin: 8px 0 0;
+    max-width: 760px;
+    color: var(--text-soft);
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
 .ops-session-actions {
     display: flex;
     align-items: center;
@@ -4649,6 +5145,15 @@ fieldset.field {
         height: 18px;
     }
 
+    [data-page="carrinho"] {
+        padding-bottom: 202px;
+    }
+
+    [data-page="carrinho"] .checkout-fixed-actions {
+        bottom: 78px;
+        width: min(calc(100% - 24px), 390px);
+    }
+
     .ops-nav {
         grid-template-columns: 1fr;
     }
@@ -4774,6 +5279,23 @@ fieldset.field {
         width: min(1160px, calc(100% - 72px));
     }
 
+    [data-page="checkout"] {
+        padding-top: 4px;
+        padding-bottom: 74px;
+    }
+
+    [data-page="checkout"] .context-header {
+        min-height: 52px;
+    }
+
+    [data-page="checkout"] .brand-header-logo img {
+        width: 60px;
+    }
+
+    [data-page="checkout"] .panel {
+        padding: 14px;
+    }
+
     .layout.narrow {
         width: min(1040px, calc(100% - 72px));
     }
@@ -4845,6 +5367,17 @@ fieldset.field {
     .simple-header p {
         font-size: 1rem;
         line-height: 1.6;
+    }
+
+    .menu-promo-card {
+        width: min(680px, 100%);
+        gap: 8px;
+        padding: 16px 18px;
+        border-radius: 20px;
+    }
+
+    .menu-promo-copy p:last-child {
+        font-size: 0.9rem;
     }
 
     .dish-media {
@@ -4970,6 +5503,10 @@ fieldset.field {
 
     [data-page="cardapio"] .menu-carousel {
         padding-right: 4px;
+    }
+
+    [data-page="cardapio"] {
+        padding-bottom: 120px;
     }
 
     .kitchen-grid {
@@ -5210,6 +5747,30 @@ fieldset.field {
     font-size: 30px;
     font-weight: 800;
     line-height: 1.08;
+}
+
+.ops-shell--cozinha .ops-session-description {
+    color: #5f4b42;
+    font-size: 14px;
+}
+
+.ops-shell--cozinha .ops-session--catalog {
+    min-height: 0;
+    align-items: center;
+    padding: 18px 20px;
+    border-radius: 18px;
+}
+
+.ops-shell--cozinha .ops-session--catalog h1 {
+    max-width: 860px;
+    font-size: 26px;
+}
+
+.ops-shell--cozinha .ops-session--catalog .ops-session-description {
+    max-width: 760px;
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.35;
 }
 
 .ops-shell--cozinha .ops-user-chip,
@@ -5488,6 +6049,16 @@ fieldset.field {
 
 @media (max-width: 640px) {
     .ops-shell--cozinha .ops-main { padding: 14px; }
+
+    .catalog-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .catalog-header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
 
     .ops-shell--cozinha .ops-session,
     .ops-shell--cozinha .ops-order-header,

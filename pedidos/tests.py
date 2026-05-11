@@ -1,14 +1,15 @@
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
 from .utils import build_google_maps_route_url
 from .views import _calcular_frete_por_distancia
 
@@ -168,13 +169,13 @@ class CozinhaAccessTests(TestCase):
         )
 
     def test_dashboard_requires_staff_authentication(self):
-        response = self.client.get("/cozinha/")
+        response = self.client.get("/controle/")
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
     def test_live_orders_api_requires_staff_authentication(self):
-        response = self.client.get("/cozinha/api/pedidos/")
+        response = self.client.get("/controle/api/pedidos/")
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
@@ -182,7 +183,7 @@ class CozinhaAccessTests(TestCase):
     def test_staff_can_access_dashboard(self):
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/cozinha/")
+        response = self.client.get("/controle/")
 
         self.assertEqual(response.status_code, 200)
 
@@ -221,7 +222,7 @@ class PedidoDetalheAdminTests(TestCase):
             valor_frete=Decimal("10.00"),
             total=Decimal("35.00"),
         )
-        response = self.client.get(f"/cozinha/pedidos/{pedido.id}/")
+        response = self.client.get(f"/controle/pedidos/{pedido.id}/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
@@ -255,7 +256,7 @@ class PedidoDetalheAdminTests(TestCase):
             quantidade=1,
         )
 
-        response = self.client.get(f"/cozinha/pedidos/{pedido.id}/")
+        response = self.client.get(f"/controle/pedidos/{pedido.id}/")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Frete salvo")
@@ -281,7 +282,7 @@ class PedidoDetalheAdminTests(TestCase):
             total=Decimal("35.00"),
         )
 
-        response = self.client.get("/cozinha/pedidos/")
+        response = self.client.get("/controle/pedidos/")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pedidos para aprovacao")
@@ -305,16 +306,48 @@ class AjustesAdminTests(TestCase):
         )
 
     def test_requires_staff_authentication(self):
-        response = self.client.get("/cozinha/ajustes/")
+        response = self.client.get("/controle/ajustes/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
+
+    def test_general_tab_displays_operation_hours(self):
+        self.client.force_login(self.staff_user)
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 45)
+        config.save()
+
+        response = self.client.get("/controle/ajustes/?aba=geral")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Horario de funcionamento")
+        self.assertContains(response, 'value="10:30"')
+        self.assertContains(response, 'value="14:45"')
+
+    def test_general_settings_can_be_saved_from_ajustes(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=geral",
+            {
+                "action": "save_geral",
+                "horario_abertura": "09:00",
+                "horario_fechamento": "15:30",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("aba=geral", response.url)
+        config = ConfiguracaoEntrega.get_solo()
+        self.assertEqual(config.horario_abertura.strftime("%H:%M"), "09:00")
+        self.assertEqual(config.horario_fechamento.strftime("%H:%M"), "15:30")
 
     def test_saves_origin_and_faixa_updates(self):
         self.client.force_login(self.staff_user)
         faixa = FaixaFrete.objects.order_by("ordem").first()
 
         response = self.client.post(
-            "/cozinha/ajustes/",
+            "/controle/ajustes/",
             {
                 "action": "save_frete",
                 "origem_endereco": "Rua A, 10 - Centro, Rio Verde - GO",
@@ -348,7 +381,7 @@ class AjustesAdminTests(TestCase):
         faixa = FaixaFrete.objects.order_by("ordem").first()
 
         response = self.client.post(
-            "/cozinha/ajustes/",
+            "/controle/ajustes/",
             {
                 "action": "save_frete",
                 "origem_endereco": "Rua A, 10 - Centro, Rio Verde - GO",
@@ -385,7 +418,7 @@ class AjustesAdminTests(TestCase):
         faixas = list(FaixaFrete.objects.order_by("ordem"))
 
         response = self.client.post(
-            "/cozinha/ajustes/",
+            "/controle/ajustes/",
             {
                 "action": "test_frete",
                 "origem_endereco": "Rua B, 22 - Centro, Rio Verde - GO",
@@ -415,7 +448,7 @@ class AjustesAdminTests(TestCase):
     def test_google_tab_displays_provider_status(self):
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/cozinha/ajustes/?aba=google")
+        response = self.client.get("/controle/ajustes/?aba=google")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Google Maps")
@@ -427,7 +460,7 @@ class AjustesAdminTests(TestCase):
         self.client.force_login(self.staff_user)
 
         response = self.client.post(
-            "/cozinha/ajustes/?aba=google",
+            "/controle/ajustes/?aba=google",
             {
                 "action": "save_google",
                 "google_maps_api_key": "chave-google-123",
@@ -448,7 +481,7 @@ class AjustesAdminTests(TestCase):
         self.client.force_login(self.staff_user)
 
         response = self.client.post(
-            "/cozinha/ajustes/?aba=whatsapp",
+            "/controle/ajustes/?aba=whatsapp",
             {
                 "action": "save_whatsapp",
                 "whatsapp_numero": "+55 (64) 99999-9999",
@@ -466,7 +499,7 @@ class AjustesAdminTests(TestCase):
         config.whatsapp_numero = "5564999999999"
         config.save()
 
-        response = self.client.get("/cozinha/ajustes/?aba=whatsapp")
+        response = self.client.get("/controle/ajustes/?aba=whatsapp")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "WhatsApp oficial")
@@ -476,7 +509,7 @@ class AjustesAdminTests(TestCase):
         self.client.force_login(self.staff_user)
 
         response = self.client.post(
-            "/cozinha/ajustes/?aba=pagamento",
+            "/controle/ajustes/?aba=pagamento",
             {
                 "action": "save_pagamento",
                 "pix_chave": "pix@pratodelivery.test",
@@ -494,7 +527,7 @@ class AjustesAdminTests(TestCase):
         config.pix_chave = "pix@pratodelivery.test"
         config.save()
 
-        response = self.client.get("/cozinha/ajustes/?aba=pagamento")
+        response = self.client.get("/controle/ajustes/?aba=pagamento")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Chave Pix")
@@ -549,6 +582,151 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, "Fazer retirada")
         self.assertContains(response, "/pedido/retirada/")
         self.assertContains(response, "/checkout/")
+
+
+class CardapioOperationalDayTests(TestCase):
+    def setUp(self):
+        Prato.objects.all().delete()
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_fechamento = time(14, 0)
+        config.save()
+        self.prato_segunda = Prato.objects.create(
+            nome="Prato Segunda",
+            preco=Decimal("25.00"),
+            ativo=True,
+            dias_disponiveis="seg",
+        )
+        self.prato_terca = Prato.objects.create(
+            nome="Prato Terca",
+            preco=Decimal("26.00"),
+            ativo=True,
+            dias_disponiveis="ter",
+        )
+        self.prato_quarta = Prato.objects.create(
+            nome="Prato Quarta",
+            preco=Decimal("27.00"),
+            ativo=True,
+            dias_disponiveis="qua",
+        )
+
+    def _local_datetime(self, year, month, day, hour, minute):
+        return timezone.make_aware(datetime(year, month, day, hour, minute))
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_before_closing_shows_current_day_as_prato_do_dia(self, mock_localtime):
+        mock_localtime.return_value = self._local_datetime(2026, 5, 11, 13, 30)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span>PRATO</span>", html=True)
+        self.assertContains(response, "<span>DO DIA</span>", html=True)
+        self.assertContains(response, "Prato Segunda")
+        self.assertNotContains(response, "Prato Terca")
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_after_closing_shows_next_day_prato_label(self, mock_localtime):
+        mock_localtime.return_value = self._local_datetime(2026, 5, 11, 14, 30)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span>PRATO DE</span>", html=True)
+        self.assertContains(response, "<span>TERCA</span>", html=True)
+        self.assertContains(response, "Prato Terca")
+        self.assertNotContains(response, "Prato Segunda")
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_after_closing_skips_to_next_available_prato_day(self, mock_localtime):
+        self.prato_terca.ativo = False
+        self.prato_terca.save()
+        mock_localtime.return_value = self._local_datetime(2026, 5, 11, 14, 30)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span>PRATO DE</span>", html=True)
+        self.assertContains(response, "<span>QUARTA</span>", html=True)
+        self.assertContains(response, "Prato Quarta")
+        self.assertNotContains(response, "Prato Terca")
+
+
+class AdicionaisCatalogoTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="adicionais_staff",
+            password="12345678",
+            is_staff=True,
+        )
+
+    def test_cardapio_displays_active_adicionais_as_separate_items(self):
+        Adicional.objects.create(
+            nome="Porcao extra de arroz",
+            descricao="Serve uma pessoa",
+            preco=Decimal("5.00"),
+            ativo=True,
+            ordem=10,
+        )
+        Adicional.objects.create(
+            nome="Adicional inativo",
+            preco=Decimal("4.00"),
+            ativo=False,
+            ordem=20,
+        )
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Adicionais")
+        self.assertContains(response, "Porcao extra de arroz")
+        self.assertContains(response, '"tipo":"adicional"')
+        self.assertNotContains(response, "Adicional inativo")
+
+    def test_staff_can_create_and_toggle_adicional(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/adicionais/salvar/",
+            {
+                "nome": "Farofa extra",
+                "descricao": "Porcao individual",
+                "preco": "4.50",
+                "ordem": "15",
+                "ativo": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        adicional = Adicional.objects.get(nome="Farofa extra")
+        self.assertTrue(adicional.ativo)
+        self.assertEqual(adicional.preco, Decimal("4.50"))
+
+        response = self.client.post(f"/controle/adicionais/{adicional.id}/alternar/")
+
+        self.assertEqual(response.status_code, 302)
+        adicional.refresh_from_db()
+        self.assertFalse(adicional.ativo)
+
+    def test_staff_can_delete_catalog_image_without_page_reload(self):
+        self.client.force_login(self.staff_user)
+        adicional = Adicional.objects.create(
+            nome="Farofa extra",
+            preco=Decimal("4.50"),
+            ativo=True,
+            imagem=SimpleUploadedFile("farofa.png", b"imagem-teste", content_type="image/png"),
+        )
+
+        response = self.client.post(
+            f"/controle/adicionais/{adicional.id}/imagem/excluir/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        adicional.refresh_from_db()
+        self.assertFalse(adicional.imagem)
 
 
 class AddressApiTests(TestCase):
@@ -664,6 +842,12 @@ class CriarPedidoFreteTests(TestCase):
             ativo=True,
             ordem=10,
         )
+        self.adicional = Adicional.objects.create(
+            nome="Porcao extra de arroz",
+            preco=Decimal("5.00"),
+            ativo=True,
+            ordem=20,
+        )
         config = ConfiguracaoEntrega.get_solo()
         config.origem_endereco = "Ponto confirmado no mapa"
         config.origem_latitude = Decimal("-17.7923000")
@@ -759,6 +943,41 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(item.subtotal, Decimal("12.00"))
         self.assertEqual(pedido.total, Decimal("22.00"))
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    def test_order_creation_accepts_adicional_as_independent_item(self, _mock_route):
+        response = self.client.post(
+            "/pedido/criar/",
+            {
+                "carrinho_payload": '[{"tipo": "adicional", "item_id": %d, "quantidade": 3, "preco": "5.00"}]' % self.adicional.id,
+                "nome_cliente": "Cliente Teste",
+                "telefone": "64999999999",
+                "rua": "Rua Teste",
+                "numero": "10",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "latitude": "-17.7707268",
+                "longitude": "-50.9003217",
+                "endereco_formatado": "Rua Teste, 10, Centro, Rio Verde - GO",
+                "geocode_tipo": "house",
+                "geocode_precision": "exact",
+                "valor_frete": "0.00",
+                "distancia_km": "0.00",
+                "forma_pagamento": Pedido.FormaPagamento.CARTAO,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        item = pedido.itens.get()
+        self.assertIsNone(item.prato)
+        self.assertIsNone(item.bebida)
+        self.assertEqual(item.adicional, self.adicional)
+        self.assertEqual(item.nome_prato_snapshot, "Porcao extra de arroz")
+        self.assertEqual(item.subtotal, Decimal("15.00"))
+        self.assertEqual(pedido.total, Decimal("25.00"))
+        self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.CARTAO)
 
     @patch("pedidos.views._fetch_route_summary")
     def test_online_pix_requires_configured_key(self, mock_route):

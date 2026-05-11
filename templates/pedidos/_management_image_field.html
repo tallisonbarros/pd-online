@@ -1,0 +1,39 @@
+<div class="field image-upload-field">
+    <span>Imagem</span>
+    <div class="image-upload-card" data-image-upload>
+        <div class="image-upload-preview" data-image-upload-preview>
+            {% if current_image %}
+                <img src="{{ current_image.url }}" alt="">
+            {% else %}
+                <span>Sem imagem</span>
+            {% endif %}
+        </div>
+        <div class="image-upload-body">
+            <strong data-image-upload-title>{% if current_image %}Imagem atual{% else %}Adicionar imagem{% endif %}</strong>
+            <small data-image-upload-filename>{% if current_image %}{{ current_image.name }}{% else %}PNG, JPG ou WEBP{% endif %}</small>
+            <div class="image-upload-actions">
+                <label class="secondary-pill compact image-upload-button" for="{{ field.id_for_label }}">Escolher arquivo</label>
+                <input
+                    type="file"
+                    name="{{ field.html_name }}"
+                    id="{{ field.id_for_label }}"
+                    accept="image/*"
+                    data-image-upload-input
+                >
+                {% if current_image and delete_url %}
+                    <button
+                        type="button"
+                        class="secondary-pill compact image-upload-delete"
+                        data-image-upload-delete
+                        data-delete-url="{{ delete_url }}"
+                    >
+                        Excluir imagem
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% if field.errors %}
+        <small class="field-help is-error">{{ field.errors|striptags }}</small>
+    {% endif %}
+</div>

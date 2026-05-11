@@ -4,77 +4,17 @@
 {% block title %}Gestao de Pratos | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<div class="ops-shell">
+<div class="ops-shell ops-shell--cozinha">
     {% include "pedidos/_ops_sidebar.html" with active="pratos" pratos_badge=pratos|length %}
 
     <main class="ops-main">
-        <header class="ops-session">
-            <div>
-                <p class="ops-session-kicker">Catalogo</p>
-                <h1>Gestao de pratos</h1>
-            </div>
-            <div class="ops-session-actions">
-                <a class="ops-logout" href="{% url 'pedidos:cozinha_pedidos' %}">Ver pedidos</a>
-            </div>
-        </header>
-
-        <section class="ops-headline">
-            <p class="ops-kicker">Pratos</p>
-            <h2>Cadastre, edite e publique o cardapio</h2>
-            <p>Use a mesma base de dados do Django para manter o cardapio operacional sem depender do admin padrao.</p>
-        </section>
-
-        <section class="management-grid">
-            <div class="panel management-form-panel">
-                <div class="panel-head">
-                    <h2>{% if prato_edicao %}Editar prato{% else %}Novo prato{% endif %}</h2>
-                    {% if prato_edicao %}
-                        <a class="secondary-link" href="{% url 'pedidos:gestao_pratos' %}">Limpar</a>
-                    {% endif %}
-                </div>
-                <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_prato' %}" class="checkout-form">
-                    {% csrf_token %}
-                    {% if prato_edicao %}
-                        <input type="hidden" name="prato_id" value="{{ prato_edicao.id }}">
-                    {% endif %}
-
-                    <label class="field">
-                        <span>Nome</span>
-                        {{ form.nome }}
-                    </label>
-
-                    <label class="field">
-                        <span>Descricao</span>
-                        {{ form.descricao }}
-                    </label>
-
-                    <label class="field">
-                        <span>Imagem</span>
-                        {{ form.imagem }}
-                    </label>
-
-                    <label class="field">
-                        <span>Preco</span>
-                        {{ form.preco }}
-                    </label>
-
-                    <label class="field">
-                        <span>Dias disponiveis</span>
-                        {{ form.dias_disponiveis }}
-                    </label>
-
-                    <label class="choice-card switch-card">
-                        {{ form.ativo }}
-                        <span>Prato ativo no cardapio</span>
-                    </label>
-
-                    <button type="submit" class="primary-button wide">
-                        {% if prato_edicao %}Salvar alteracoes{% else %}Criar prato{% endif %}
-                    </button>
-                </form>
-            </div>
-
-            <div class="management-list">
+        <section class="management-grid management-grid--cards">
+            <div class="management-list management-list--cards">
+                <button type="button" class="management-create-card" data-open-management-modal="#prato-form-modal">
+                    <span class="management-create-icon" aria-hidden="true">+</span>
+                    <strong>Novo prato</strong>
+                    <small>Cadastrar item do cardapio</small>
+                </button>
                 {% for prato in pratos %}
                     <article class="dish-card management-card">
                         <div class="dish-media">
@@ -114,11 +54,71 @@
                 {% empty %}
                     <div class="empty-state">
                         <h2>Nenhum prato cadastrado.</h2>
-                        <p>Use o formulario ao lado para publicar o primeiro prato.</p>
+                        <p>Use o botao Novo prato para publicar o primeiro item do cardapio.</p>
                     </div>
                 {% endfor %}
             </div>
         </section>
+
+        <div id="prato-form-modal" class="modal-backdrop hidden management-modal" data-management-modal {% if form_modal_open %}data-auto-open="true"{% endif %} aria-hidden="true">
+            <div class="modal-card management-modal-card" role="dialog" aria-modal="true" aria-labelledby="prato-form-title">
+                <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+                <div class="modal-content">
+                    <div class="panel-head management-modal-head">
+                        <h2 id="prato-form-title">{% if prato_edicao %}Editar prato{% else %}Novo prato{% endif %}</h2>
+                        {% if prato_edicao %}
+                            <a class="secondary-link" href="{% url 'pedidos:gestao_pratos' %}">Limpar</a>
+                        {% endif %}
+                    </div>
+                    <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_prato' %}" class="checkout-form">
+                        {% csrf_token %}
+                        {% if prato_edicao %}
+                            <input type="hidden" name="prato_id" value="{{ prato_edicao.id }}">
+                        {% endif %}
+
+                        <label class="field">
+                            <span>Nome</span>
+                            {{ form.nome }}
+                        </label>
+
+                        <label class="field">
+                            <span>Descricao</span>
+                            {{ form.descricao }}
+                        </label>
+
+                        {% if prato_edicao %}
+                            {% url 'pedidos:excluir_imagem_prato' prato_edicao.id as delete_image_url %}
+                        {% endif %}
+                        {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=prato_edicao.imagem delete_url=delete_image_url %}
+
+                        <label class="field">
+                            <span>Preco</span>
+                            {{ form.preco }}
+                        </label>
+
+                        <label class="field">
+                            <span>Dias disponiveis</span>
+                            <div class="weekday-check-grid">
+                                {{ form.dias_disponiveis }}
+                            </div>
+                        </label>
+
+                        <label class="choice-card switch-card">
+                            {{ form.ativo }}
+                            <span>Prato ativo no cardapio</span>
+                        </label>
+
+                        <button type="submit" class="primary-button wide">
+                            {% if prato_edicao %}Salvar alteracoes{% else %}Criar prato{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

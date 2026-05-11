@@ -65,7 +65,7 @@ cp .env.example .env
 
 - Cardapio: `http://127.0.0.1:8000/`
 - Checkout: `http://127.0.0.1:8000/checkout/`
-- Cozinha dashboard: `http://127.0.0.1:8000/cozinha/`
+- Cozinha dashboard: `http://127.0.0.1:8000/controle/`
 - Admin Django: `http://127.0.0.1:8000/admin/`
 
 ## Limpeza manual

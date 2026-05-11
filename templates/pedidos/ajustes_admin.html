@@ -4,19 +4,20 @@
 {% block title %}Ajustes | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<div class="ops-shell">
+<div class="ops-shell ops-shell--cozinha">
     {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
 
     <main class="ops-main ajustes-page">
         <section class="ped-detail-hero ajustes-hero">
             <div>
                 <p class="ops-kicker">Ajustes operacionais</p>
-                <h1>Configuracao de frete</h1>
-                <p>Confirme a origem usada no calculo, teste destinos e ajuste as faixas de km para valor no mesmo painel.</p>
+                <h1>Configuracao do delivery</h1>
+                <p>Configure funcionamento, origem, pagamentos e canais usados no fluxo de pedidos.</p>
             </div>
         </section>
 
         <section class="ajustes-tabs" aria-label="Guias de ajustes">
+            <a class="ajustes-tab {% if ajustes_aba == 'geral' %}is-active{% endif %}" {% if ajustes_aba == 'geral' %}aria-current="page"{% endif %} href="?aba=geral">Geral</a>
             <a class="ajustes-tab {% if ajustes_aba == 'frete' %}is-active{% endif %}" {% if ajustes_aba == 'frete' %}aria-current="page"{% endif %} href="?aba=frete">Frete</a>
             <a class="ajustes-tab {% if ajustes_aba == 'google' %}is-active{% endif %}" {% if ajustes_aba == 'google' %}aria-current="page"{% endif %} href="?aba=google">Google Maps</a>
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
@@ -29,7 +30,39 @@
             </div>
         {% endif %}
 
-        {% if ajustes_aba == 'frete' %}
+        {% if ajustes_aba == 'geral' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Geral</p>
+                            <h2>Horario de funcionamento</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_geral">
+
+                        <label class="field ajustes-field">
+                            <span>Abertura</span>
+                            <input type="time" name="horario_abertura" value="{{ horario_abertura }}">
+                            <small class="field-help">Horario em que o delivery comeca a receber pedidos.</small>
+                        </label>
+
+                        <label class="field ajustes-field">
+                            <span>Fechamento</span>
+                            <input type="time" name="horario_fechamento" value="{{ horario_fechamento }}">
+                            <small class="field-help">Horario em que o delivery encerra o recebimento de pedidos.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar geral</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'frete' %}
         <form method="post" class="ajustes-grid">
             {% csrf_token %}
 

@@ -51,25 +51,6 @@
             <label class="field checkout-order-note-field">
                 <textarea id="checkout-order-note" rows="4" placeholder="Observacao geral do pedido. Ex.: sem cebola, entregar na portaria..."></textarea>
             </label>
-            <div class="checkout-stage-actions checkout-stage-actions--capsule">
-                <a href="{% url 'pedidos:checkout' %}" id="checkout-go-delivery" class="primary-button wide checkout-mode-button">
-                    <span>Solicitar entrega</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M3 7h11v9H3z"></path>
-                        <path d="M14 10h4l3 3v3h-7z"></path>
-                        <path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
-                        <path d="M18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
-                    </svg>
-                </a>
-                <button type="button" id="checkout-go-pickup" class="secondary-pill wide checkout-mode-button">
-                    <span>Fazer retirada</span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 8h12l-1 12H7z"></path>
-                        <path d="M9 8a3 3 0 0 1 6 0"></path>
-                        <path d="M9 13h6"></path>
-                    </svg>
-                </button>
-            </div>
         </section>
     </section>
     <form method="post" action="{% url 'pedidos:criar_retirada' %}" id="pickup-form" class="hidden">
@@ -79,6 +60,27 @@
         <input type="hidden" name="observacao_geral" id="pickup-order-note-payload">
         <input type="hidden" name="enviar_talheres" id="pickup-talheres-payload" value="sim">
     </form>
+    <div class="checkout-fixed-actions" aria-label="Acoes do carrinho">
+        <div class="checkout-stage-actions checkout-stage-actions--capsule">
+            <a href="{% url 'pedidos:checkout' %}" id="checkout-go-delivery" class="primary-button wide checkout-mode-button">
+                <span>Solicitar entrega</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 7h11v9H3z"></path>
+                    <path d="M14 10h4l3 3v3h-7z"></path>
+                    <path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                    <path d="M18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                </svg>
+            </a>
+            <button type="button" id="checkout-go-pickup" class="secondary-pill wide checkout-mode-button">
+                <span>Fazer retirada</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 8h12l-1 12H7z"></path>
+                    <path d="M9 8a3 3 0 0 1 6 0"></path>
+                    <path d="M9 13h6"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
     <div class="checkout-page-footer" aria-label="Acoes auxiliares do carrinho">
         <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardapio</a>
     </div>

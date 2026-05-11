@@ -4,7 +4,7 @@
 {% block title %}Pedidos | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<div class="ops-shell">
+<div class="ops-shell ops-shell--cozinha">
     {% include "pedidos/_ops_sidebar.html" with active="pedidos" pedidos_badge=pedidos_ativos|length|add:aprovacao_count %}
 
     <main class="ops-main pedidos-admin-page">

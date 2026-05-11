@@ -36,7 +36,7 @@ No Windows, o fluxo oficial e suportado e sempre via script. Evite subir com `py
 
 - Cardapio: `http://127.0.0.1:8000/`
 - Checkout: `http://127.0.0.1:8000/checkout/`
-- Cozinha dashboard: `http://127.0.0.1:8000/cozinha/`
+- Cozinha dashboard: `http://127.0.0.1:8000/controle/`
 - Admin: `http://127.0.0.1:8000/admin/`
 
 ## Variaveis de ambiente

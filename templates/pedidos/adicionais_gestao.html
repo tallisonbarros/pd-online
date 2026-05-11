@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Gestao de Adicionais | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active="adicionais" adicionais_badge=adicionais|length %}
+
+    <main class="ops-main">
+        <section class="management-grid management-grid--cards">
+            <div class="management-list management-list--cards">
+                <button type="button" class="management-create-card" data-open-management-modal="#adicional-form-modal">
+                    <span class="management-create-icon" aria-hidden="true">+</span>
+                    <strong>Novo adicional</strong>
+                    <small>Cadastrar extra do pedido</small>
+                </button>
+                {% for adicional in adicionais %}
+                    <article class="dish-card management-card">
+                        <div class="dish-media">
+                            {% if adicional.imagem %}
+                                <img src="{{ adicional.imagem.url }}" alt="{{ adicional.nome }}">
+                            {% else %}
+                                <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ adicional.nome }}">
+                            {% endif %}
+                        </div>
+                        <div class="dish-body">
+                            <div class="management-card-head">
+                                <div>
+                                    <h2>{{ adicional.nome }}</h2>
+                                    {% if adicional.descricao %}
+                                        <p>{{ adicional.descricao }}</p>
+                                    {% endif %}
+                                </div>
+                                <span class="status-badge {% if adicional.ativo %}is-live{% endif %}">
+                                    {% if adicional.ativo %}Ativo{% else %}Inativo{% endif %}
+                                </span>
+                            </div>
+                            <div class="management-meta">
+                                <p><strong>Preco:</strong> {% if adicional.preco %}R$ {{ adicional.preco|floatformat:2 }}{% else %}Nao informado{% endif %}</p>
+                                <p><strong>Ordem:</strong> {{ adicional.ordem }}</p>
+                            </div>
+                            <div class="management-actions">
+                                <a class="secondary-pill compact" href="{% url 'pedidos:adicionais_admin' %}?edit={{ adicional.id }}">Editar</a>
+                                <form method="post" action="{% url 'pedidos:alternar_adicional' adicional.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="status-button">
+                                        {% if adicional.ativo %}Desativar{% else %}Ativar{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state">
+                        <h2>Nenhum adicional cadastrado.</h2>
+                        <p>Use o botao Novo adicional para publicar o primeiro item.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <div id="adicional-form-modal" class="modal-backdrop hidden management-modal" data-management-modal {% if form_modal_open %}data-auto-open="true"{% endif %} aria-hidden="true">
+            <div class="modal-card management-modal-card" role="dialog" aria-modal="true" aria-labelledby="adicional-form-title">
+                <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+                <div class="modal-content">
+                    <div class="panel-head management-modal-head">
+                        <h2 id="adicional-form-title">{% if adicional_edicao %}Editar adicional{% else %}Novo adicional{% endif %}</h2>
+                        {% if adicional_edicao %}
+                            <a class="secondary-link" href="{% url 'pedidos:adicionais_admin' %}">Limpar</a>
+                        {% endif %}
+                    </div>
+                    <form method="post" enctype="multipart/form-data" action="{% url 'pedidos:salvar_adicional' %}" class="checkout-form">
+                        {% csrf_token %}
+                        {% if adicional_edicao %}
+                            <input type="hidden" name="adicional_id" value="{{ adicional_edicao.id }}">
+                        {% endif %}
+
+                        <label class="field">
+                            <span>Nome</span>
+                            {{ form.nome }}
+                        </label>
+
+                        <label class="field">
+                            <span>Descricao</span>
+                            {{ form.descricao }}
+                        </label>
+
+                        {% if adicional_edicao %}
+                            {% url 'pedidos:excluir_imagem_adicional' adicional_edicao.id as delete_image_url %}
+                        {% endif %}
+                        {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=adicional_edicao.imagem delete_url=delete_image_url %}
+
+                        <label class="field">
+                            <span>Preco</span>
+                            {{ form.preco }}
+                        </label>
+
+                        <label class="field">
+                            <span>Ordem</span>
+                            {{ form.ordem }}
+                        </label>
+
+                        <label class="choice-card switch-card">
+                            {{ form.ativo }}
+                            <span>Adicional ativo no cardapio</span>
+                        </label>
+
+                        <button type="submit" class="primary-button wide">
+                            {% if adicional_edicao %}Salvar alteracoes{% else %}Criar adicional{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

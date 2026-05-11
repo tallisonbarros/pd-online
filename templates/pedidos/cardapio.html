@@ -18,8 +18,8 @@
         <img class="menu-feature-shape" src="{% static 'img/menu-feature-shape-base-cardapio.svg' %}" alt="" aria-hidden="true">
         <div class="menu-feature-title">
             <h1 id="menu-feature-title">
-                <span>PRATO</span>
-                <span>DO DIA</span>
+                <span>{{ cardapio_title_line_1 }}</span>
+                <span>{{ cardapio_title_line_2 }}</span>
             </h1>
         </div>
         <div class="menu-feature-carousel-wrap">
@@ -67,7 +67,7 @@
                     </article>
                 {% empty %}
                     <div class="empty-state">
-                        <h2>Nenhum prato disponivel hoje.</h2>
+                        <h2>Nenhum prato disponivel {{ cardapio_empty_label }}.</h2>
                         <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardapio.</p>
                     </div>
                 {% endfor %}
@@ -75,12 +75,74 @@
         </div>
     </section>
 
+    <section class="menu-promo-card" aria-labelledby="menu-promo-title">
+        <div class="menu-promo-copy">
+            <p class="menu-promo-kicker">Promocao especial</p>
+            <h2 id="menu-promo-title">Compre 4 marmitas, a 5a e por nossa conta.</h2>
+            <p>Marmitas seladas, feitas no dia.</p>
+        </div>
+    </section>
+
     <section class="menu-divider" aria-hidden="true"></section>
+
+    <section class="extras-section" aria-labelledby="adicionais-title">
+        <div class="extras-section-head">
+            <h2 id="adicionais-title">Adicionais</h2>
+        </div>
+        <section class="menu-grid bebidas-grid">
+            {% for adicional in adicionais %}
+                <article
+                    class="dish-card"
+                    data-prato-card
+                    data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco":"{{ adicional.preco|default_if_none:'' }}","preco_formatado":"{% if adicional.preco %}R$ {{ adicional.preco|floatformat:2 }}{% endif %}","imagem":"{% if adicional.imagem %}{{ adicional.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                >
+                    <button type="button" class="card-hitbox" data-open-modal aria-label="Abrir {{ adicional.nome }}"></button>
+                    <div class="dish-media">
+                        <div class="dish-top-badges">
+                            <div class="dish-qty-badge" aria-label="Controle de quantidade do adicional">
+                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                                <strong data-card-qty-value>1</strong>
+                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                            </div>
+                            <div class="dish-price-badge">
+                                {% if adicional.preco %}
+                                    <strong>R$ {{ adicional.preco|floatformat:2 }}</strong>
+                                {% else %}
+                                    <span>Consulte</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if adicional.imagem %}
+                            <img src="{{ adicional.imagem.url }}" alt="{{ adicional.nome }}">
+                        {% else %}
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ adicional.nome }}">
+                        {% endif %}
+                    </div>
+                    <div class="dish-body">
+                        <div>
+                            <h2>{{ adicional.nome }}</h2>
+                            {% if adicional.descricao %}
+                                <p>{{ adicional.descricao }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
+                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
+                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
+                    </button>
+                </article>
+            {% empty %}
+                <div class="extras-empty-card">
+                    <strong>Nenhum adicional disponivel</strong>
+                    <p>Cadastre adicionais no menu da cozinha para publicar aqui.</p>
+                </div>
+            {% endfor %}
+        </section>
+    </section>
 
     <section class="extras-section" aria-labelledby="extras-title">
         <div class="extras-section-head">
             <h2 id="extras-title">Bebidas</h2>
-            <p>Adicione bebidas como itens separados do prato do dia.</p>
         </div>
         <section class="menu-grid bebidas-grid">
             {% for bebida in bebidas %}
@@ -177,5 +239,6 @@
     </div>
 </div>
 {{ pratos_json|json_script:"pratos-data" }}
+{{ adicionais_json|json_script:"adicionais-data" }}
 {{ bebidas_json|json_script:"bebidas-data" }}
 {% endblock %}
