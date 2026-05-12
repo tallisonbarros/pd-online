@@ -394,6 +394,56 @@
         status.innerHTML = `<strong>Status do teste</strong><p>${message}</p>`;
     }
 
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function googleTestErrorHint(error) {
+        const message = String(error?.message || error || "").trim();
+        if (message.includes("REQUEST_DENIED")) {
+            return "A chamada foi negada. Confira se a API esta ativada e permitida nas restricoes desta chave.";
+        }
+        if (message.includes("ApiNotActivated") || message.includes("API_NOT_ACTIVATED")) {
+            return "API nao ativada neste projeto. Ative a API indicada na Biblioteca de APIs.";
+        }
+        if (message.includes("RefererNotAllowed")) {
+            return "Dominio/referrer nao permitido nas restricoes do aplicativo.";
+        }
+        if (message.includes("OVER_QUERY_LIMIT")) {
+            return "Limite de uso atingido ou faturamento pendente.";
+        }
+        if (message.includes("InvalidKey") || message.includes("InvalidKeyMapError")) {
+            return "Chave invalida ou alterada. Confira se o valor salvo e a chave atual sao iguais.";
+        }
+        return message || "Erro desconhecido retornado pelo Google.";
+    }
+
+    function setGoogleTestReport(summary, tone, steps = []) {
+        const status = document.getElementById("google-maps-test-status");
+        if (!status) return;
+        status.classList.remove("is-success", "is-error");
+        if (tone) status.classList.add(tone);
+        const rows = steps.map((step) => `
+            <li class="ajustes-google-test-row is-${escapeHtml(step.state)}">
+                <span>${escapeHtml(step.state === "ok" ? "OK" : "ERRO")}</span>
+                <div>
+                    <strong>${escapeHtml(step.label)}</strong>
+                    <p>${escapeHtml(step.detail)}</p>
+                </div>
+            </li>
+        `).join("");
+        status.innerHTML = `
+            <strong>Status do teste</strong>
+            <p>${escapeHtml(summary)}</p>
+            ${rows ? `<ul class="ajustes-google-test-list">${rows}</ul>` : ""}
+        `;
+    }
+
     function getPlacePredictions(service, request) {
         return new Promise((resolve, reject) => {
             service.getPlacePredictions(request, (predictions, status) => {
@@ -402,7 +452,9 @@
                     return;
                 }
                 if (status !== google.maps.places.PlacesServiceStatus.OK) {
-                    reject(new Error(`Places: ${status}`));
+                    const error = new Error(`Places: ${status}`);
+                    error.googleStatus = status;
+                    reject(error);
                     return;
                 }
                 resolve({ predictions: predictions || [], status });
@@ -430,28 +482,69 @@
             }
 
             button.disabled = true;
-            setGoogleTestStatus("Carregando Google Maps e validando a chave...", "");
+            const steps = [];
+            const center = { ...defaultCenter };
+            const fail = (label, error) => {
+                steps.push({ label, state: "error", detail: googleTestErrorHint(error) });
+                mapRoot.classList.add("hidden");
+                setGoogleTestReport("Teste interrompido. Corrija a etapa com erro e tente novamente.", "is-error", steps);
+            };
+            setGoogleTestReport("Carregando Google Maps e validando servicos...", "", steps);
             try {
-                await loadGoogleMapsRuntime(apiKey, language, region, true);
-                const { Map } = await google.maps.importLibrary("maps");
-                const { Geocoder } = await google.maps.importLibrary("geocoding");
-                await google.maps.importLibrary("places");
-                const geocoder = new Geocoder();
-                const autocomplete = new google.maps.places.AutocompleteService();
-                const center = { ...defaultCenter };
-                const response = await geocoder.geocode({ location: center, language });
-                const result = response?.results?.[0];
-                if (!result) {
-                    throw new Error("O Google respondeu, mas nÃ£o retornou endereco para o ponto de teste.");
+                try {
+                    await loadGoogleMapsRuntime(apiKey, language, region, true);
+                    steps.push({ label: "Maps JavaScript API", state: "ok", detail: "Script carregado com a chave informada." });
+                    setGoogleTestReport("Maps JS carregado. Validando bibliotecas...", "", steps);
+                } catch (error) {
+                    fail("Maps JavaScript API", error);
+                    return;
                 }
 
-                const placesResult = await getPlacePredictions(autocomplete, {
-                    input: "Rua Jose Duarte de Sousa Rio Verde GO",
-                    componentRestrictions: { country: "br" },
-                    locationBias: { center, radius: 18000 },
-                    types: ["address"],
-                    language,
-                });
+                let Map = null;
+                let Geocoder = null;
+                try {
+                    ({ Map } = await google.maps.importLibrary("maps"));
+                    ({ Geocoder } = await google.maps.importLibrary("geocoding"));
+                    await google.maps.importLibrary("places");
+                    steps.push({ label: "Bibliotecas do Google", state: "ok", detail: "maps, geocoding e places carregadas." });
+                    setGoogleTestReport("Bibliotecas carregadas. Validando Geocoding...", "", steps);
+                } catch (error) {
+                    fail("Bibliotecas do Google", error);
+                    return;
+                }
+
+                const geocoder = new Geocoder();
+                let result = null;
+                try {
+                    const response = await geocoder.geocode({ location: center, language });
+                    result = response?.results?.[0] || null;
+                    if (!result) {
+                        throw new Error("Geocoding sem resultado para o ponto de teste.");
+                    }
+                    steps.push({ label: "Geocoding API", state: "ok", detail: `Ponto de teste resolvido: ${result.formatted_address}` });
+                    setGoogleTestReport("Geocoding validado. Validando Places...", "", steps);
+                } catch (error) {
+                    fail("Geocoding API", error);
+                    return;
+                }
+
+                try {
+                    const autocomplete = new google.maps.places.AutocompleteService();
+                    const placesResult = await getPlacePredictions(autocomplete, {
+                        input: "Rua Jose Duarte de Sousa Rio Verde GO",
+                        componentRestrictions: { country: "br" },
+                        locationBias: { center, radius: 18000 },
+                        types: ["address"],
+                        language,
+                    });
+                    const detail = placesResult.predictions.length
+                        ? `Autocomplete respondeu com ${placesResult.predictions.length} sugestao(oes).`
+                        : "Places respondeu, mas nao trouxe sugestoes para a rua de teste.";
+                    steps.push({ label: "Places API / Autocomplete", state: "ok", detail });
+                } catch (error) {
+                    fail("Places API / Autocomplete", error);
+                    return;
+                }
 
                 mapRoot.classList.remove("hidden");
                 if (!map) {
@@ -466,10 +559,7 @@
                     map.setCenter(center);
                     map.setZoom(15);
                 }
-                setGoogleTestStatus(`Chave valida para mapa, geocoding e busca Places. Endereco de teste resolvido: ${result.formatted_address}. Sugestoes Places: ${placesResult.predictions.length}.`, "is-success");
-            } catch (error) {
-                mapRoot.classList.add("hidden");
-                setGoogleTestStatus(error.message || "Nao foi possivel validar todos os servicos do Google Maps.", "is-error");
+                setGoogleTestReport("Tudo certo: mapa, geocoding e busca textual estao respondendo.", "is-success", steps);
             } finally {
                 button.disabled = false;
             }

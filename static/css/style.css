@@ -7707,6 +7707,50 @@ fieldset.field {
     line-height: 1.5;
 }
 
+.ajustes-google-test-list {
+    display: grid;
+    gap: 8px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ajustes-google-test-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: start;
+    border: 1px solid #eadfd8;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 10px;
+}
+
+.ajustes-google-test-row > span {
+    min-width: 42px;
+    border-radius: 999px;
+    padding: 4px 8px;
+    text-align: center;
+    color: #fffdfa;
+    background: #7f6c63;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+}
+
+.ajustes-google-test-row.is-ok > span {
+    background: #2b7a55;
+}
+
+.ajustes-google-test-row.is-error > span {
+    background: #b85634;
+}
+
+.ajustes-google-test-row strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
 .ajustes-google-map {
     min-height: 240px;
     border-radius: 20px;
