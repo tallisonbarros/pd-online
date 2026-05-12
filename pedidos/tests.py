@@ -582,7 +582,7 @@ class FrontendConfigTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CARDÁPIO")
-        self.assertContains(response, "10:30 - 14:45")
+        self.assertContains(response, "Aberto 10:30 às 14:45")
 
     def test_carrinho_displays_cart_stage(self):
         response = self.client.get("/carrinho/")
@@ -914,15 +914,28 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(pedido.complemento, "Casa 2")
         self.assertEqual(pedido.ponto_referencia, "Portao branco")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, f"/pedido/{pedido.numero}/sucesso/")
+        self.assertEqual(response.url, f"/pedido/{pedido.public_token}/sucesso/")
 
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "Pedido gerado")
+        self.assertContains(success_response, "Pedido recebido")
         self.assertContains(success_response, "Abrir WhatsApp")
-        self.assertContains(success_response, "Redirecionando para o WhatsApp em")
+        self.assertContains(success_response, "Abrindo WhatsApp")
         self.assertContains(success_response, "data-whatsapp-countdown")
         self.assertContains(success_response, "https://wa.me/5564999999999?text=")
         self.assertNotContains(success_response, "window.open")
+        self.assertContains(success_response, "/meus-pedidos/")
+
+        lookup_response = self.client.post(
+            "/api/meus-pedidos/",
+            data='{"tokens":["%s"]}' % pedido.public_token,
+            content_type="application/json",
+        )
+        self.assertEqual(lookup_response.status_code, 200)
+        self.assertEqual(lookup_response.json()["pedidos"][0]["numero"], pedido.numero)
+        self.assertEqual(
+            lookup_response.json()["pedidos"][0]["acompanhamento_url"],
+            f"/pedido/{pedido.public_token}/acompanhar/",
+        )
 
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
     def test_order_creation_accepts_bebida_as_independent_item(self, _mock_route):
@@ -1090,12 +1103,14 @@ class CriarPedidoFreteTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         pedido = Pedido.objects.get()
+        self.assertEqual(response.url, f"/pedido/{pedido.public_token}/sucesso/")
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "Finalizar no WhatsApp")
-        self.assertContains(success_response, "Redirecionando para o WhatsApp em")
+        self.assertContains(success_response, "Abrir WhatsApp")
+        self.assertContains(success_response, "Abrindo WhatsApp")
         self.assertContains(success_response, "data-whatsapp-countdown")
         self.assertContains(success_response, f"https://wa.me/556488887777?text=")
         self.assertNotContains(success_response, "window.open")
+        self.assertContains(success_response, "/meus-pedidos/")
         self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_APROVACAO)
 
     @patch("pedidos.views._fetch_route_summary")

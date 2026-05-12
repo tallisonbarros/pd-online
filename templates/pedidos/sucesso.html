@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Pedido gerado | PRATO-DELIVERY{% endblock %}
+{% block title %}Pedido recebido | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <main class="layout public-layout order-closed-page" data-page="checkout">
@@ -16,22 +16,45 @@
 
     <section class="checkout-stage-shell">
         <article class="panel checkout-form order-closed-panel">
-            <header class="panel-head checkout-delivery-head">
+            <header class="panel-head checkout-delivery-head order-closed-hero">
                 <div>
-                    <p class="address-resolution-kicker">Pedido gerado</p>
+                    <p class="address-resolution-kicker">Pedido recebido</p>
                     <h2>#{{ pedido.numero }}</h2>
+                    <p>Confirme pelo WhatsApp para o pedido entrar na operação.</p>
                 </div>
                 <span class="status-badge">{{ pedido.get_status_display }}</span>
             </header>
 
-            <p class="order-closed-copy">Seu pedido foi gerado e está aguardando confirmação. Vamos tentar abrir o WhatsApp automaticamente.</p>
             {% if whatsapp_url %}
                 <div class="whatsapp-countdown-card" data-whatsapp-redirect="{{ whatsapp_url|escape }}" aria-live="polite">
-                    <span>Redirecionando para o WhatsApp em</span>
-                    <strong><span data-whatsapp-countdown>5</span>s</strong>
-                    <small>Se não abrir, toque em Finalizar no WhatsApp.</small>
+                    <div class="whatsapp-progress-ring" style="--progress: 0%;" aria-hidden="true">
+                        <span data-whatsapp-countdown>5</span>
+                    </div>
+                    <div>
+                        <strong>Abrindo WhatsApp</strong>
+                        <small>Se não abrir automaticamente, toque no botão abaixo.</small>
+                    </div>
                 </div>
             {% endif %}
+
+            <section class="order-flow-track" aria-label="Etapas do pedido">
+                <div class="order-flow-step is-done">
+                    <span>1</span>
+                    <strong>Recebido</strong>
+                </div>
+                <div class="order-flow-step is-active">
+                    <span>2</span>
+                    <strong>Confirmar</strong>
+                </div>
+                <div class="order-flow-step">
+                    <span>3</span>
+                    <strong>Produção</strong>
+                </div>
+                <div class="order-flow-step">
+                    <span>4</span>
+                    <strong>Entrega</strong>
+                </div>
+            </section>
 
             <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
                 <span><strong>{{ pedido.itens.count }}</strong> itens</span>
@@ -78,26 +101,52 @@
 <script>
     window.addEventListener("load", function () {
         var cartKey = (window.PRATO_CONFIG && window.PRATO_CONFIG.cartKey) || "prato_delivery_cart";
+        var orderHistoryKey = (window.PRATO_CONFIG && window.PRATO_CONFIG.orderHistoryKey) || "prato_delivery_orders";
         var countdownCard = document.querySelector("[data-whatsapp-redirect]");
         var countdownNode = document.querySelector("[data-whatsapp-countdown]");
+        var progressRing = document.querySelector(".whatsapp-progress-ring");
         try {
             localStorage.removeItem(cartKey);
             localStorage.removeItem(cartKey + "_checkout_draft");
+            var orderEntry = {
+                token: "{{ pedido.public_token|escapejs }}",
+                numero: {{ pedido.numero }},
+                total: "R$ {{ pedido.total|floatformat:2|escapejs }}",
+                status: "{{ pedido.get_status_display|escapejs }}",
+                criado_em: "{{ pedido.criado_em|date:'c'|escapejs }}",
+                acompanhamento_url: "{% url 'pedidos:acompanhar_pedido' pedido.public_token %}"
+            };
+            var currentOrders = JSON.parse(localStorage.getItem(orderHistoryKey) || "[]");
+            if (!Array.isArray(currentOrders)) currentOrders = [];
+            currentOrders = currentOrders.filter(function (item) {
+                return item && item.token && item.token !== orderEntry.token;
+            });
+            currentOrders.unshift(orderEntry);
+            localStorage.setItem(orderHistoryKey, JSON.stringify(currentOrders.slice(0, 30)));
         } catch (error) {
             // Ignora falha de storage.
         }
         if (!countdownCard || !countdownNode) return;
 
-        var remaining = 5;
+        var duration = 5000;
+        var startedAt = Date.now();
         var whatsappUrl = countdownCard.getAttribute("data-whatsapp-redirect");
-        var timer = window.setInterval(function () {
-            remaining -= 1;
+        function tick() {
+            var elapsed = Date.now() - startedAt;
+            var ratio = Math.min(elapsed / duration, 1);
+            var remaining = Math.ceil((duration - elapsed) / 1000);
             countdownNode.textContent = String(Math.max(remaining, 0));
-            if (remaining > 0) return;
+            if (progressRing) {
+                progressRing.style.setProperty("--progress", String(ratio * 100) + "%");
+            }
+            if (ratio < 1) {
+                window.requestAnimationFrame(tick);
+                return;
+            }
 
-            window.clearInterval(timer);
             window.location.href = whatsappUrl;
-        }, 1000);
+        }
+        window.requestAnimationFrame(tick);
     });
 </script>
 {% endblock %}

@@ -563,6 +563,43 @@
     }
 
     function initCardapioPage() {
+        const revealItems = document.querySelectorAll("[data-page='cardapio'] .reveal-on-scroll");
+        const featureCard = document.querySelector("[data-page='cardapio'] .menu-feature-card-wrap .dish-card");
+        const featureMarquee = document.querySelector("[data-page='cardapio'] .menu-feature-marquee");
+
+        function syncFeatureMarqueeWidth() {
+            if (!featureCard || !featureMarquee) return;
+            const cardWidth = featureCard.getBoundingClientRect().width;
+            if (cardWidth > 0) {
+                featureMarquee.style.setProperty("--marquee-width", `${Math.ceil(cardWidth)}px`);
+            }
+        }
+
+        syncFeatureMarqueeWidth();
+        window.addEventListener("resize", syncFeatureMarqueeWidth);
+        if ("ResizeObserver" in window && featureCard) {
+            new ResizeObserver(syncFeatureMarqueeWidth).observe(featureCard);
+        }
+
+        if (revealItems.length) {
+            if (!("IntersectionObserver" in window)) {
+                revealItems.forEach((item) => item.classList.add("is-visible"));
+            } else {
+                const revealObserver = new IntersectionObserver((entries) => {
+                    entries.forEach((entry) => {
+                        if (!entry.isIntersecting) return;
+                        entry.target.classList.add("is-visible");
+                        revealObserver.unobserve(entry.target);
+                    });
+                }, { rootMargin: "0px 0px -8% 0px", threshold: 0.14 });
+
+                revealItems.forEach((item, index) => {
+                    item.style.setProperty("--reveal-order", String(index % 6));
+                    revealObserver.observe(item);
+                });
+            }
+        }
+
         const modal = document.getElementById("pedido-modal");
         if (!modal) return;
 
@@ -1949,6 +1986,15 @@
         let selectedShippingFee = Number.parseFloat(shippingValueInput?.value || "0") || 0;
         let activeStage = "delivery";
         let whatsappSubmitInProgress = false;
+        const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
+
+        function submitOrderInNewTab(orderForm) {
+            orderForm.target = "_blank";
+            orderForm.submit();
+            window.setTimeout(() => {
+                window.location.href = myOrdersUrl;
+            }, 160);
+        }
 
         function redirectToCardapio() {
             window.location.href = cardapioLink;
@@ -2250,7 +2296,7 @@
                         form.querySelectorAll("button, input[type='submit']").forEach((button) => {
                             button.disabled = true;
                         });
-                        form.submit();
+                        submitOrderInNewTab(form);
                     },
                 });
                 return;
@@ -2276,6 +2322,7 @@
         const pickupNameInput = document.getElementById("pickup-nome-payload");
         const pickupNoteInput = document.getElementById("pickup-order-note-payload");
         const pickupTalheresInput = document.getElementById("pickup-talheres-payload");
+        const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
         if (!itemsContainer || !itemsSubtotalElement || !goDeliveryLink) return;
 
         function readDraftFromPage() {
@@ -2380,7 +2427,11 @@
                 onConfirm() {
                     pickupSubmitInProgress = true;
                     goPickupButton.disabled = true;
+                    pickupForm.target = "_blank";
                     pickupForm.submit();
+                    window.setTimeout(() => {
+                        window.location.href = myOrdersUrl;
+                    }, 160);
                 },
             });
         });

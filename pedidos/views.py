@@ -15,6 +15,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponseBadRequest, JsonResponse
+from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_time
@@ -1501,7 +1502,7 @@ def criar_pedido(request):
 
     pedido.total = total + valor_frete
     pedido.save(update_fields=["total"])
-    return redirect("pedidos:sucesso", numero=pedido.numero)
+    return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
 @require_POST
@@ -1551,12 +1552,12 @@ def criar_retirada(request):
 
     pedido.total = total
     pedido.save(update_fields=["total"])
-    return redirect("pedidos:sucesso", numero=pedido.numero)
+    return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
 @never_cache
-def sucesso(request, numero):
-    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), numero=numero)
+def sucesso(request, public_token):
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), public_token=public_token)
     mensagem = montar_mensagem_whatsapp(pedido)
     whatsapp_url = _build_whatsapp_order_url(pedido)
     return render(
@@ -1567,6 +1568,92 @@ def sucesso(request, numero):
             "whatsapp_url": whatsapp_url,
         },
     )
+
+
+def _pedido_public_payload(pedido, include_items=False):
+    status_step = {
+        Pedido.Status.AGUARDANDO_APROVACAO: 2,
+        Pedido.Status.NOVO: 3,
+        Pedido.Status.EM_PREPARO: 3,
+        Pedido.Status.SAIU_ENTREGA: 4,
+        Pedido.Status.FINALIZADO: 4,
+        Pedido.Status.CANCELADO: 0,
+    }
+    payload = {
+        "token": pedido.public_token,
+        "numero": pedido.numero,
+        "status": pedido.status,
+        "status_label": pedido.get_status_display(),
+        "status_step": status_step.get(pedido.status, 1),
+        "criado_em": timezone.localtime(pedido.criado_em).isoformat(),
+        "horario": timezone.localtime(pedido.criado_em).strftime("%d/%m %H:%M"),
+        "itens_count": pedido.itens.count(),
+        "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        "pagamento": pedido.get_forma_pagamento_display(),
+        "acompanhamento_url": reverse("pedidos:acompanhar_pedido", args=[pedido.public_token]),
+    }
+    if include_items:
+        payload["endereco"] = pedido.endereco
+        payload["valor_frete"] = f"R$ {pedido.valor_frete:.2f}".replace(".", ",")
+        payload["itens"] = [
+            {
+                "nome": item.nome_prato_snapshot,
+                "quantidade": item.quantidade,
+                "observacao": item.observacao,
+                "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),
+            }
+            for item in pedido.itens.all()
+        ]
+    return payload
+
+
+@never_cache
+def meus_pedidos(request):
+    return render(request, "pedidos/meus_pedidos.html")
+
+
+@never_cache
+def acompanhar_pedido(request, public_token):
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), public_token=public_token)
+    whatsapp_url = _build_whatsapp_order_url(pedido)
+    return render(
+        request,
+        "pedidos/acompanhar_pedido.html",
+        {
+            "pedido": pedido,
+            "pedido_publico": _pedido_public_payload(pedido, include_items=True),
+            "whatsapp_url": whatsapp_url,
+        },
+    )
+
+
+@never_cache
+@require_POST
+def api_meus_pedidos(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return HttpResponseBadRequest("Payload invalido.")
+
+    raw_tokens = payload.get("tokens", [])
+    if not isinstance(raw_tokens, list):
+        return HttpResponseBadRequest("Lista de tokens invalida.")
+
+    tokens = []
+    seen = set()
+    for raw_token in raw_tokens:
+        if not isinstance(raw_token, str):
+            continue
+        token = raw_token.strip()
+        if not token or len(token) > 64 or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+        if len(tokens) >= 30:
+            break
+
+    pedidos = Pedido.objects.prefetch_related("itens").filter(public_token__in=tokens).order_by("-criado_em")
+    return JsonResponse({"pedidos": [_pedido_public_payload(pedido) for pedido in pedidos]})
 
 
 def _dashboard_periodo(period):

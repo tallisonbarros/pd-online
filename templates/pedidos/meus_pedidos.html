@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Meus pedidos | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout my-orders-page" data-page="carrinho">
+    <header class="context-header" aria-label="Cabeçalho da página">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">MEUS PEDIDOS</span>
+        </div>
+    </header>
+
+    <section class="checkout-stage-shell">
+        <section id="my-orders-stage" class="checkout-stage-panel">
+            <div class="panel checkout-summary-panel my-orders-panel">
+                <div class="panel-head">
+                    <h2>Pedidos deste aparelho</h2>
+                    <span class="muted"><strong id="my-orders-count">0</strong></span>
+                </div>
+
+                <section id="my-orders-list" class="my-orders-list" aria-live="polite">
+                    <div class="my-orders-empty">
+                        <strong>Nenhum pedido salvo aqui</strong>
+                        <p>Quando você finalizar um pedido, ele aparece nesta lista automaticamente.</p>
+                    </div>
+                </section>
+
+                <button type="button" class="secondary-pill wide" id="clear-my-orders">Limpar lista</button>
+            </div>
+        </section>
+    </section>
+    <div class="checkout-page-footer" aria-label="Acoes auxiliares do carrinho">
+        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+    </div>
+</main>
+
+<script>
+    window.addEventListener("load", function () {
+        var config = window.PRATO_CONFIG || {};
+        var storageKey = config.orderHistoryKey || "prato_delivery_orders";
+        var lookupUrl = config.orderLookupUrl;
+        var list = document.getElementById("my-orders-list");
+        var countNode = document.getElementById("my-orders-count");
+        var clearButton = document.getElementById("clear-my-orders");
+        var refreshTimer = null;
+        var isRefreshing = false;
+
+        function readLocalOrders() {
+            try {
+                var orders = JSON.parse(localStorage.getItem(storageKey) || "[]");
+                return Array.isArray(orders) ? orders.filter(function (item) {
+                    return item && typeof item.token === "string" && item.token;
+                }) : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function renderOrders(orders, isLoading) {
+            if (countNode) countNode.textContent = String(orders.length);
+            if (!orders.length) {
+                list.innerHTML = '<div class="my-orders-empty"><strong>Nenhum pedido salvo aqui</strong><p>Quando você finalizar um pedido, ele aparece nesta lista automaticamente.</p></div>';
+                return;
+            }
+
+            list.innerHTML = orders.map(function (order) {
+                var url = order.acompanhamento_url || "#";
+                var status = order.status_label || order.status || "Pedido salvo";
+                var meta = [order.itens_count ? order.itens_count + " itens" : "", order.pagamento || ""].filter(Boolean).join(" · ");
+                var step = order.status_step === 0 ? 0 : Number(order.status_step || 2);
+                var flow = [
+                    { index: 1, label: "Recebido" },
+                    { index: 2, label: "Confirmar" },
+                    { index: 3, label: "Produção" },
+                    { index: 4, label: "Entrega" }
+                ].map(function (item) {
+                    var state = item.index < step ? " is-done" : item.index === step ? " is-active" : "";
+                    return '<div class="order-flow-step' + state + '"><span>' + item.index + '</span><strong>' + item.label + '</strong></div>';
+                }).join("");
+                return [
+                    '<a class="my-order-card" href="' + escapeHtml(url) + '">',
+                        '<span class="my-order-status">' + escapeHtml(status) + '</span>',
+                        '<div class="my-order-main">',
+                            '<strong>' + escapeHtml(order.horario || "Pedido recente") + '</strong>',
+                            '<b>' + escapeHtml(order.total || "") + '</b>',
+                        '</div>',
+                        '<small class="my-order-meta">' + escapeHtml(meta || "Aguardando atualização") + '</small>',
+                        '<div class="order-flow-track my-order-flow" aria-label="Progresso do pedido">' + flow + '</div>',
+                        '<small class="my-order-number">Pedido #' + escapeHtml(order.numero || "") + '</small>',
+                    '</a>'
+                ].join("");
+            }).join("") + (isLoading ? '<p class="my-orders-loading">Atualizando status...</p>' : "");
+        }
+
+        function loadOrders(options) {
+            options = options || {};
+            var localOrders = readLocalOrders();
+            renderOrders(localOrders, Boolean(!options.silent && localOrders.length && lookupUrl));
+
+            if (localOrders.length && lookupUrl && !isRefreshing) {
+                isRefreshing = true;
+                fetch(lookupUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": config.csrfToken || ""
+                    },
+                    body: JSON.stringify({ tokens: localOrders.map(function (order) { return order.token; }) })
+                })
+                    .then(function (response) {
+                        if (!response.ok) throw new Error("Falha ao consultar pedidos.");
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        var remoteOrders = Array.isArray(payload.pedidos) ? payload.pedidos : [];
+                        renderOrders(remoteOrders, false);
+                        if (remoteOrders.length) {
+                            localStorage.setItem(storageKey, JSON.stringify(remoteOrders.slice(0, 30)));
+                        }
+                    })
+                    .catch(function () {
+                        renderOrders(localOrders, false);
+                    })
+                    .finally(function () {
+                        isRefreshing = false;
+                    });
+            }
+        }
+
+        loadOrders();
+
+        window.addEventListener("storage", function (event) {
+            if (event.key === storageKey) loadOrders();
+        });
+
+        refreshTimer = window.setInterval(function () {
+            loadOrders({ silent: true });
+        }, 3000);
+
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "visible") loadOrders({ silent: true });
+        });
+
+        clearButton?.addEventListener("click", function () {
+            try {
+                localStorage.removeItem(storageKey);
+            } catch (error) {
+                // Ignora falha de storage.
+            }
+            renderOrders([], false);
+        });
+    });
+</script>
+{% endblock %}

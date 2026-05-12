@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedido #{{ pedido.numero }} | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<main class="layout public-layout order-closed-page" data-page="acompanhar-pedido">
+    <header class="context-header" aria-label="Cabeçalho da página">
+        <div class="context-header-group">
+            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+            </a>
+            <span class="context-header-label">PEDIDO</span>
+        </div>
+    </header>
+
+    <section class="checkout-stage-shell">
+        <article class="panel checkout-form order-closed-panel">
+            <header class="panel-head checkout-delivery-head order-closed-hero">
+                <div>
+                    <p class="address-resolution-kicker">Acompanhamento</p>
+                    <h2>#{{ pedido.numero }}</h2>
+                </div>
+                <span class="status-badge" data-order-status-label>{{ pedido.get_status_display }}</span>
+            </header>
+
+            <section class="order-flow-track" aria-label="Etapas do pedido" data-order-flow>
+                <div class="order-flow-step {% if pedido_publico.status_step >= 1 %}is-done{% endif %}" data-flow-step="1">
+                    <span>1</span>
+                    <strong>Recebido</strong>
+                </div>
+                <div class="order-flow-step {% if pedido_publico.status_step == 2 %}is-active{% elif pedido_publico.status_step > 2 %}is-done{% endif %}" data-flow-step="2">
+                    <span>2</span>
+                    <strong>Confirmar</strong>
+                </div>
+                <div class="order-flow-step {% if pedido_publico.status_step == 3 %}is-active{% elif pedido_publico.status_step > 3 %}is-done{% endif %}" data-flow-step="3">
+                    <span>3</span>
+                    <strong>Produção</strong>
+                </div>
+                <div class="order-flow-step {% if pedido_publico.status_step == 4 %}is-active{% endif %}" data-flow-step="4">
+                    <span>4</span>
+                    <strong>Entrega</strong>
+                </div>
+            </section>
+
+            <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
+                <span><strong>{{ pedido.itens.count }}</strong> itens</span>
+                <span>Frete <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong></span>
+                <span>Pagamento <strong>{{ pedido.get_forma_pagamento_display }}</strong></span>
+                <span>Total <strong>R$ {{ pedido.total|floatformat:2 }}</strong></span>
+            </section>
+
+            <section class="address-resolution-card is-exact order-closed-address">
+                <div class="address-resolution-head">
+                    <p class="address-resolution-kicker">Destino</p>
+                </div>
+                <strong>{{ pedido.endereco }}</strong>
+                <small>
+                    {% if pedido.lote_quadra %}{{ pedido.lote_quadra }}{% endif %}
+                    {% if pedido.complemento %}{% if pedido.lote_quadra %}  {% endif %}{{ pedido.complemento }}{% endif %}
+                    {% if pedido.ponto_referencia %}{% if pedido.lote_quadra or pedido.complemento %}  {% endif %}{{ pedido.ponto_referencia }}{% endif %}
+                </small>
+            </section>
+
+            <section class="order-closed-items" aria-label="Itens do pedido">
+                {% for item in pedido.itens.all %}
+                    <div class="order-closed-item">
+                        <div>
+                            <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                            {% if item.observacao %}
+                                <small>Obs: {{ item.observacao }}</small>
+                            {% endif %}
+                        </div>
+                        <span>R$ {{ item.subtotal|floatformat:2 }}</span>
+                    </div>
+                {% endfor %}
+            </section>
+
+            <div class="success-actions order-closed-actions">
+                <a
+                    class="primary-button wide {% if pedido.status != 'aguardando_aprovacao' %}hidden{% endif %}"
+                    href="{{ whatsapp_url }}"
+                    target="_blank"
+                    rel="noopener"
+                    data-whatsapp-confirm
+                >Confirmar no WhatsApp</a>
+                <div class="follow-order-actions">
+                    <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Cardápio</a>
+                    <a class="secondary-pill wide" href="{% url 'pedidos:meus_pedidos' %}">Meus pedidos</a>
+                </div>
+            </div>
+        </article>
+    </section>
+</main>
+<script>
+    window.addEventListener("load", function () {
+        var config = window.PRATO_CONFIG || {};
+        var lookupUrl = config.orderLookupUrl;
+        var token = "{{ pedido.public_token|escapejs }}";
+        var statusLabel = document.querySelector("[data-order-status-label]");
+        var whatsappButton = document.querySelector("[data-whatsapp-confirm]");
+        var isRefreshing = false;
+
+        function syncFlow(step) {
+            document.querySelectorAll("[data-flow-step]").forEach(function (node) {
+                var nodeStep = Number(node.getAttribute("data-flow-step"));
+                node.classList.toggle("is-done", step > 0 && nodeStep < step);
+                node.classList.toggle("is-active", step > 0 && nodeStep === step);
+            });
+        }
+
+        function applyOrder(order) {
+            if (!order) return;
+            if (statusLabel) statusLabel.textContent = order.status_label || order.status || "";
+            syncFlow(order.status_step === 0 ? 0 : Number(order.status_step || 1));
+            if (whatsappButton) {
+                whatsappButton.classList.toggle("hidden", order.status !== "aguardando_aprovacao");
+            }
+        }
+
+        function refreshStatus() {
+            if (!lookupUrl || isRefreshing) return;
+            isRefreshing = true;
+            fetch(lookupUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": config.csrfToken || ""
+                },
+                body: JSON.stringify({ tokens: [token] })
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error("Falha ao consultar pedido.");
+                    return response.json();
+                })
+                .then(function (payload) {
+                    var pedidos = Array.isArray(payload.pedidos) ? payload.pedidos : [];
+                    applyOrder(pedidos[0]);
+                })
+                .catch(function () {})
+                .finally(function () {
+                    isRefreshing = false;
+                });
+        }
+
+        refreshStatus();
+        window.setInterval(refreshStatus, 3000);
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "visible") refreshStatus();
+        });
+    });
+</script>
+{% endblock %}

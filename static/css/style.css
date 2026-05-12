@@ -214,6 +214,7 @@ textarea {
 }
 
 .context-header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -267,6 +268,31 @@ textarea {
 .context-header .brand-header-logo {
     order: 1;
     flex: 0 0 auto;
+}
+
+.context-header-link {
+    order: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    margin-top: 5px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 253, 250, 0.82);
+    color: var(--brand-strong);
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: 0 10px 22px rgba(65, 45, 37, 0.08);
+}
+
+.context-header-link:hover,
+.context-header-link:focus-visible {
+    border-color: #d5b7aa;
+    outline: none;
 }
 
 .cart-dock-wrap {
@@ -615,6 +641,30 @@ textarea {
     white-space: nowrap;
 }
 
+.menu-feature-marquee {
+    margin: 1px 0 0;
+    display: block;
+    width: var(--marquee-width, 100%);
+    max-width: var(--marquee-width, 100%);
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(255, 253, 250, 0.9);
+    font-size: clamp(0.72rem, 2.2vw, 1rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+}
+
+.menu-feature-marquee span {
+    display: inline-block;
+    min-width: max-content;
+    animation: menuFeatureMarquee 4200ms linear infinite;
+}
+
 .menu-feature-card-wrap {
     order: 1;
     min-width: 0;
@@ -622,6 +672,8 @@ textarea {
     max-width: 100%;
     overflow: visible;
     justify-self: start;
+    display: grid;
+    gap: 6px;
 }
 
 .menu-carousel {
@@ -921,18 +973,20 @@ textarea {
 .payment-choice-card {
     min-height: 96px;
     padding: 16px;
-    border: 1px solid var(--line-strong);
+    border: 1px solid rgba(214, 203, 194, 0.82);
     border-radius: 18px;
-    background: #fffdfa;
-    color: var(--text);
+    background: rgba(255, 253, 250, 0.62);
+    color: rgba(34, 19, 17, 0.52);
     text-align: left;
     cursor: pointer;
+    opacity: 0.72;
+    transition: opacity var(--anim-fast) ease, border-color var(--anim-fast) ease, background-color var(--anim-fast) ease, color var(--anim-fast) ease, box-shadow var(--anim-fast) ease, transform var(--anim-fast) ease;
 }
 
 .payment-choice-card span {
     display: block;
     margin-bottom: 6px;
-    color: var(--text-soft);
+    color: rgba(92, 59, 49, 0.54);
     font-size: 0.72rem;
     font-weight: 900;
     letter-spacing: 0.16em;
@@ -945,9 +999,32 @@ textarea {
 
 .payment-choice-card.is-selected,
 .payment-suboptions .is-selected {
-    border-color: var(--brand);
-    background: #f8efeb;
+    border-color: #5a3a32;
+    background: linear-gradient(180deg, #6a473e 0%, #4e342e 100%);
     color: var(--brand-strong);
+    opacity: 1;
+    box-shadow: 0 14px 28px rgba(34, 19, 17, 0.18);
+    transform: translateY(-1px);
+}
+
+.payment-choice-card.is-selected {
+    color: #fffdfa;
+}
+
+.payment-choice-card.is-selected span,
+.payment-choice-card.is-selected strong {
+    color: #fffdfa;
+}
+
+.payment-suboptions .secondary-pill:not(.is-selected) {
+    opacity: 0.64;
+    background: rgba(255, 253, 250, 0.7);
+    color: rgba(34, 19, 17, 0.62);
+}
+
+.payment-suboptions .is-selected {
+    color: #fffdfa;
+    font-weight: 900;
 }
 
 .payment-suboptions {
@@ -1967,16 +2044,19 @@ body.modal-open {
     padding-bottom: 150px;
 }
 
-[data-page="checkout"] .context-header {
+[data-page="checkout"] .context-header,
+[data-page="carrinho"] .context-header {
     min-height: 58px;
     padding: 4px 18px 0;
 }
 
-[data-page="checkout"] .brand-header-logo img {
+[data-page="checkout"] .brand-header-logo img,
+[data-page="carrinho"] .brand-header-logo img {
     width: 64px;
 }
 
-[data-page="checkout"] .context-header-label {
+[data-page="checkout"] .context-header-label,
+[data-page="carrinho"] .context-header-label {
     font-size: 0.78rem;
 }
 
@@ -4217,6 +4297,21 @@ fieldset.field {
     line-height: 0.95;
 }
 
+.order-closed-hero {
+    padding: 14px;
+    border: 1px solid rgba(78, 52, 46, 0.12);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255, 253, 250, 0.94) 0%, rgba(248, 242, 239, 0.92) 100%);
+}
+
+.order-closed-hero p:not(.address-resolution-kicker) {
+    max-width: 24rem;
+    margin: 8px 0 0;
+    color: var(--text-soft);
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
 .order-closed-copy {
     margin: 0;
     color: var(--text-soft);
@@ -4224,26 +4319,98 @@ fieldset.field {
 }
 
 .whatsapp-countdown-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
-    gap: 4px 12px;
-    padding: 12px 14px;
+    gap: 14px;
+    padding: 14px;
     border: 1px solid rgba(47, 111, 79, 0.24);
     border-radius: 18px;
     background: rgba(47, 111, 79, 0.08);
     color: var(--text-soft);
 }
 
-.whatsapp-countdown-card strong {
+.whatsapp-progress-ring {
+    --progress: 0%;
+    flex: 0 0 auto;
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle, #fffdfa 0 58%, transparent 59%),
+        conic-gradient(var(--success) var(--progress), rgba(47, 111, 79, 0.16) 0);
     color: var(--brand-strong);
-    font-size: 1.24rem;
+    font-weight: 900;
     line-height: 1;
+    transition: background 220ms linear;
+}
+
+.whatsapp-countdown-card strong {
+    display: block;
+    color: var(--brand-strong);
+    font-size: 1rem;
+    line-height: 1.15;
 }
 
 .whatsapp-countdown-card small {
-    grid-column: 1 / -1;
+    display: block;
+    margin-top: 4px;
     color: var(--text-soft);
+    line-height: 1.35;
+}
+
+.order-flow-track {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255, 253, 250, 0.84);
+}
+
+.order-flow-step {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    padding: 8px 4px;
+    border-radius: 12px;
+    color: var(--text-soft);
+    text-align: center;
+}
+
+.order-flow-step span {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #eee5e0;
+    color: #7c675c;
+    font-size: 0.76rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.order-flow-step strong {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 0.72rem;
+    line-height: 1.1;
+}
+
+.order-flow-step.is-done span,
+.order-flow-step.is-active span {
+    background: var(--success);
+    color: #fffdfa;
+}
+
+.order-flow-step.is-active {
+    background: rgba(47, 111, 79, 0.1);
+    color: var(--brand-strong);
 }
 
 .order-closed-address small:empty {
@@ -4285,6 +4452,146 @@ fieldset.field {
 
 .order-closed-actions {
     margin-top: 2px;
+}
+
+.follow-order-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.follow-order-actions .secondary-pill {
+    justify-content: center;
+}
+
+.my-orders-panel .panel-head h2 {
+    font-size: 1.45rem;
+}
+
+.my-orders-page {
+    padding-bottom: 260px;
+}
+
+.my-orders-list {
+    display: grid;
+    gap: 10px;
+}
+
+#clear-my-orders {
+    margin-top: 18px;
+}
+
+.my-order-card {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255, 253, 250, 0.9);
+    color: var(--text);
+    text-decoration: none;
+    box-shadow: 0 12px 26px rgba(65, 45, 37, 0.08);
+}
+
+.my-order-card:hover,
+.my-order-card:focus-visible {
+    border-color: rgba(47, 111, 79, 0.36);
+    outline: none;
+}
+
+.my-order-status {
+    width: fit-content;
+    max-width: 100%;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(47, 111, 79, 0.1);
+    color: var(--brand-strong);
+    font-size: 0.74rem;
+    font-weight: 900;
+}
+
+.my-order-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.my-order-main strong {
+    color: var(--text);
+    font-size: 1.18rem;
+    line-height: 1;
+}
+
+.my-order-main b {
+    color: var(--brand-strong);
+    font-size: 1rem;
+}
+
+.my-order-card small,
+.my-orders-empty p,
+.my-orders-loading {
+    margin: 0;
+    color: var(--text-soft);
+    line-height: 1.35;
+}
+
+.my-orders-empty {
+    display: grid;
+    gap: 6px;
+    padding: 18px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 16px;
+    background: rgba(246, 240, 237, 0.58);
+    text-align: center;
+}
+
+.my-orders-empty strong {
+    color: var(--text);
+}
+
+.my-orders-loading {
+    text-align: center;
+    font-size: 0.84rem;
+    font-weight: 800;
+}
+
+.my-order-flow {
+    gap: 4px;
+    padding: 5px;
+    border-radius: 12px;
+}
+
+.my-order-flow .order-flow-step {
+    gap: 3px;
+    padding: 5px 2px;
+    border-radius: 8px;
+}
+
+.my-order-flow .order-flow-step span {
+    width: 24px;
+    height: 24px;
+    font-size: 0.72rem;
+}
+
+.my-order-flow .order-flow-step strong {
+    font-size: 0.72rem;
+}
+
+.my-order-card small {
+    font-size: 0.86rem;
+}
+
+.my-order-meta {
+    margin-top: -2px;
+    font-weight: 800;
+}
+
+.my-order-number {
+    justify-self: end;
+    color: rgba(92, 59, 49, 0.58);
+    font-size: 0.74rem;
+    font-weight: 800;
 }
 
 .kitchen-card {
@@ -5641,11 +5948,13 @@ fieldset.field {
         padding-bottom: 150px;
     }
 
-    [data-page="checkout"] .context-header {
+    [data-page="checkout"] .context-header,
+    [data-page="carrinho"] .context-header {
         min-height: 52px;
     }
 
-    [data-page="checkout"] .brand-header-logo img {
+    [data-page="checkout"] .brand-header-logo img,
+    [data-page="carrinho"] .brand-header-logo img {
         width: 60px;
     }
 
@@ -7466,7 +7775,7 @@ fieldset.field {
     padding: clamp(18px, 5.6vw, 34px) clamp(56px, 13vw, 92px) clamp(20px, 5.8vw, 36px) clamp(26px, 7vw, 46px);
     display: grid;
     grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.52fr);
-    gap: clamp(12px, 4vw, 24px);
+    gap: clamp(26px, 7vw, 54px);
     align-items: center;
     justify-content: start;
     overflow: hidden;
@@ -7484,6 +7793,8 @@ fieldset.field {
     object-position: left center;
     z-index: 0;
     pointer-events: none;
+    transform-origin: left center;
+    animation: menuFeatureShapeIn 780ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 [data-page="cardapio"] .menu-feature-title,
@@ -7499,11 +7810,15 @@ fieldset.field {
 
 [data-page="cardapio"] .menu-feature-title {
     justify-self: start;
+    width: fit-content;
+    max-width: 100%;
+    animation: menuFeatureTextIn 620ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
 }
 
 [data-page="cardapio"] .menu-feature-card-wrap {
     justify-self: start;
     width: 100%;
+    animation: menuFeatureCardIn 620ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
 }
 
 [data-page="cardapio"] .menu-feature-title h1 {
@@ -7545,6 +7860,89 @@ fieldset.field {
     min-height: 34px;
     padding: 8px 10px;
     font-size: 0.78rem;
+}
+
+[data-page="cardapio"] .context-header {
+    animation: menuHeaderIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+[data-page="cardapio"] .reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(28px);
+    transition:
+        opacity 620ms ease,
+        transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--reveal-order, 0) * 58ms);
+}
+
+[data-page="cardapio"] .reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+[data-page="cardapio"] .extras-section.reveal-on-scroll {
+    transform: translateY(22px);
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-card.reveal-on-scroll {
+    transform: translateY(30px) scale(0.96);
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-card.reveal-on-scroll.is-visible {
+    transform: translateY(0) scale(1);
+}
+
+@keyframes menuHeaderIn {
+    from {
+        opacity: 0;
+        transform: translateY(-14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes menuFeatureShapeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-42px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes menuFeatureCardIn {
+    from {
+        opacity: 0;
+        transform: translateX(-26px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes menuFeatureTextIn {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes menuFeatureMarquee {
+    from {
+        transform: translateX(-52%);
+    }
+    to {
+        transform: translateX(0);
+    }
 }
 
 @media (max-width: 520px) {

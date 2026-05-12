@@ -1,4 +1,5 @@
 from decimal import Decimal
+import secrets
 
 from django.db import models
 from django.conf import settings
@@ -92,6 +93,7 @@ class Pedido(models.Model):
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     valor_frete = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    public_token = models.CharField(max_length=64, unique=True, db_index=True, blank=True, editable=False)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -116,6 +118,8 @@ class Pedido(models.Model):
                 Pedido.objects.exclude(numero__isnull=True).order_by("-numero").values_list("numero", flat=True).first()
             )
             self.numero = (ultimo_numero or 2239) + 1
+        if not self.public_token:
+            self.public_token = secrets.token_urlsafe(24)
         super().save(*args, **kwargs)
 
 
