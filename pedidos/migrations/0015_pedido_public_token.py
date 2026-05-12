@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="pedido",
             name="public_token",
-            field=models.CharField(blank=True, db_index=True, editable=False, max_length=64, null=True),
+            field=models.CharField(blank=True, editable=False, max_length=64, null=True),
         ),
         migrations.RunPython(fill_public_tokens, migrations.RunPython.noop),
         migrations.AlterField(
