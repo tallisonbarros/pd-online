@@ -5,6 +5,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
@@ -533,6 +534,72 @@ class AjustesAdminTests(TestCase):
         self.assertContains(response, "Chave Pix")
         self.assertContains(response, "pix@pratodelivery.test")
 
+    def test_users_tab_displays_user_and_class_management(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/controle/ajustes/?aba=usuarios")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Adicionar")
+        self.assertContains(response, "Gerenciar classes")
+        self.assertContains(response, "Atendente")
+        self.assertContains(response, "Somente super")
+
+    def test_staff_cannot_create_user_from_users_tab(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=usuarios",
+            {
+                "action": "create_user",
+                "username": "novo_atendente",
+                "password": "12345678",
+                "is_active": "on",
+                "is_staff": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Somente superusuarios podem administrar usuarios e classes.")
+        self.assertFalse(get_user_model().objects.filter(username="novo_atendente").exists())
+
+    def test_superuser_can_create_user_with_atendente_class(self):
+        User = get_user_model()
+        superuser = User.objects.create_superuser(username="admin_ajustes", password="12345678")
+        group, _created = Group.objects.get_or_create(name="Atendente")
+        self.client.force_login(superuser)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=usuarios",
+            {
+                "action": "create_user",
+                "username": "novo_atendente",
+                "first_name": "Novo Atendente",
+                "email": "atendente@example.com",
+                "password": "12345678",
+                "groups": [str(group.id)],
+                "is_active": "on",
+                "is_staff": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        created = User.objects.get(username="novo_atendente")
+        self.assertTrue(created.is_staff)
+        self.assertTrue(created.groups.filter(name="Atendente").exists())
+
+    def test_superuser_can_create_custom_class(self):
+        superuser = get_user_model().objects.create_superuser(username="admin_classes", password="12345678")
+        self.client.force_login(superuser)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=usuarios",
+            {"action": "create_group", "group_name": "Gerente"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Group.objects.filter(name="Gerente").exists())
+
 
 class FrontendConfigTests(TestCase):
     @override_settings(GOOGLE_MAPS_API_KEY="abcdef1234567890")
@@ -571,6 +638,38 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, "pix@pratodelivery.test")
         self.assertContains(response, "Copiar chave Pix")
         self.assertContains(response, 'data-copy-pix="pix@pratodelivery.test"')
+
+    def test_checkout_hides_operator_address_search_for_public_customer(self):
+        response = self.client.get("/checkout/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-operator-checkout="false"')
+        self.assertNotContains(response, "Busque o endereco do cliente")
+        self.assertNotContains(response, "operator-address-query")
+
+    def test_checkout_shows_operator_address_search_for_atendente_group(self):
+        user = get_user_model().objects.create_user(username="atendente", password="senha")
+        group, _created = Group.objects.get_or_create(name="Atendente")
+        user.groups.add(group)
+        self.client.force_login(user)
+
+        response = self.client.get("/checkout/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-operator-checkout="true"')
+        self.assertContains(response, "Busque o endereco do cliente")
+        self.assertContains(response, "operator-address-query")
+        self.assertContains(response, "Ajustar no mapa")
+
+    def test_checkout_superuser_without_atendente_group_uses_public_address_flow(self):
+        user = get_user_model().objects.create_superuser(username="admin", password="senha")
+        self.client.force_login(user)
+
+        response = self.client.get("/checkout/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-operator-checkout="false"')
+        self.assertNotContains(response, "Busque o endereco do cliente")
 
     def test_cardapio_displays_opening_hours_when_configured(self):
         config = ConfiguracaoEntrega.get_solo()

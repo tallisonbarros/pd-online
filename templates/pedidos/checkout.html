@@ -4,7 +4,7 @@
 {% block title %}Checkout | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
-<main class="layout public-layout" data-page="checkout">
+<main class="layout public-layout" data-page="checkout" data-operator-checkout="{% if is_atendente %}true{% else %}false{% endif %}">
     <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
             <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
@@ -146,10 +146,23 @@
                         <div class="address-map-head">
                             <div>
                                 <p class="address-map-kicker">Etapa 1</p>
-                                <strong>Selecione o ponto da entrega no mapa</strong>
+                                <strong>{% if is_atendente %}Busque o endereco do cliente{% else %}Selecione o ponto da entrega no mapa{% endif %}</strong>
                             </div>
                             <button type="button" id="use-current-location" class="secondary-pill compact">Usar minha localização</button>
                         </div>
+                        {% if is_atendente %}
+                            <div class="operator-address-search" data-operator-address-search>
+                                <label class="field">
+                                    <div class="address-autocomplete-shell">
+                                        <input type="search" id="operator-address-query" autocomplete="off" placeholder="Digite rua, numero ou referencia">
+                                        <span id="operator-address-loading" class="address-loading hidden">Buscando...</span>
+                                        <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
+                                    </div>
+                                </label>
+                                <small class="field-help">Escolha uma opcao com bairro. Se a rua existir em mais de um bairro, selecione a opcao correta antes de informar o numero.</small>
+                                <button type="button" id="operator-adjust-map" class="secondary-pill compact">Ajustar no mapa</button>
+                            </div>
+                        {% endif %}
                         <div class="address-map-shell">
                             <div id="address-map" class="address-map-canvas" aria-label="Mapa para confirmar local da entrega"></div>
                             <div class="address-map-pin" aria-hidden="true"></div>

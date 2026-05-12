@@ -17,6 +17,7 @@
         }
     })();
     const reverseGeocodeUrl = config.reverseGeocodeUrl || "/api/address/reverse-geocode/";
+    const addressAutocompleteUrl = config.addressAutocompleteUrl || "/api/address/autocomplete/";
     const deliveryEtaUrl = config.deliveryEtaUrl || "/api/address/delivery-time/";
     const googleMapsApiKey = String(config.googleMapsApiKey || "").trim();
     const googleMapsLanguage = String(config.googleMapsLanguage || "pt-BR").trim() || "pt-BR";
@@ -1412,6 +1413,7 @@
         };
 
         const ruaInput = form.querySelector("input[name='rua']");
+        const numeroInput = form.querySelector("input[name='numero']");
         const bairroInput = form.querySelector("input[name='bairro']");
         const cidadeInput = form.querySelector("input[name='cidade']");
         const estadoInput = form.querySelector("input[name='estado']");
@@ -1440,6 +1442,13 @@
         const mapFeedback = document.getElementById("address-map-feedback");
         const useLocationButton = document.getElementById("use-current-location");
         const confirmMapCenterButton = document.getElementById("confirm-map-center");
+        const checkoutRoot = document.querySelector("[data-page='checkout']");
+        const isOperatorCheckout = checkoutRoot?.dataset.operatorCheckout === "true";
+        const operatorSearch = document.querySelector("[data-operator-address-search]");
+        const operatorAddressInput = document.getElementById("operator-address-query");
+        const operatorAddressLoading = document.getElementById("operator-address-loading");
+        const operatorAddressSuggestions = document.getElementById("operator-address-suggestions");
+        const operatorAdjustMapButton = document.getElementById("operator-adjust-map");
 
         if (
             !ruaInput ||
@@ -1479,6 +1488,13 @@
         let currentProvider = hasGoogleMapsProvider() ? "google" : "openstreetmap";
         let addressPointConfirmed = false;
         let isRequestingCurrentLocation = false;
+        let operatorSearchController = null;
+        let operatorSearchTimer = null;
+        let operatorSelectedAddress = null;
+
+        if (isOperatorCheckout && operatorSearch) {
+            mapStep.classList.add("is-operator-search-mode");
+        }
 
         function showFeedback(message, warning = false) {
             feedback.textContent = message;
@@ -1489,6 +1505,112 @@
         function showMapFeedback(message, warning = false) {
             mapFeedback.textContent = message;
             mapFeedback.classList.toggle("is-warning", warning);
+        }
+
+        function setOperatorSearchLoading(isLoading) {
+            if (!operatorAddressLoading) return;
+            operatorAddressLoading.classList.toggle("hidden", !isLoading);
+        }
+
+        function hideOperatorSuggestions() {
+            operatorAddressSuggestions?.classList.add("hidden");
+            if (operatorAddressSuggestions) operatorAddressSuggestions.innerHTML = "";
+        }
+
+        function renderOperatorSuggestions(items) {
+            if (!operatorAddressSuggestions) return;
+            if (!Array.isArray(items) || !items.length) {
+                operatorAddressSuggestions.innerHTML = '<div class="address-suggestion-empty">Nenhuma opcao encontrada.</div>';
+                operatorAddressSuggestions.classList.remove("hidden");
+                return;
+            }
+            operatorAddressSuggestions.innerHTML = items.map((item, index) => {
+                const title = item.street || item.label || "Endereco encontrado";
+                const meta = [item.district, [item.city, item.state].filter(Boolean).join(" - "), item.precision_label].filter(Boolean).join(" | ");
+                return `
+                    <button type="button" class="address-suggestion-item" data-operator-address-index="${index}">
+                        <strong>${escapeHtml(title)}</strong>
+                        <small>${escapeHtml(meta || item.label || "")}</small>
+                    </button>
+                `;
+            }).join("");
+            operatorAddressSuggestions.classList.remove("hidden");
+        }
+
+        async function fetchOperatorAddressSuggestions(query, extraParams = {}) {
+            const normalizedQuery = String(query || "").trim();
+            if (normalizedQuery.length < 3) return [];
+            if (operatorSearchController) operatorSearchController.abort();
+            operatorSearchController = new AbortController();
+            const params = new URLSearchParams({
+                q: normalizedQuery,
+                cidade: extraParams.cidade || cidadeInput.value || "Rio Verde",
+                estado: extraParams.estado || estadoInput.value || "GO",
+            });
+            if (extraParams.bairro) params.set("bairro", extraParams.bairro);
+            const response = await fetch(`${addressAutocompleteUrl}?${params.toString()}`, {
+                method: "GET",
+                headers: { Accept: "application/json" },
+                signal: operatorSearchController.signal,
+            });
+            if (!response.ok) return [];
+            const payload = await response.json();
+            return Array.isArray(payload) ? payload : [];
+        }
+
+        async function runOperatorAddressSearch(query) {
+            setOperatorSearchLoading(true);
+            try {
+                const items = await fetchOperatorAddressSuggestions(query);
+                renderOperatorSuggestions(items);
+                operatorAddressSuggestions?.querySelectorAll("[data-operator-address-index]").forEach((button) => {
+                    button.addEventListener("click", () => {
+                        const item = items[Number(button.dataset.operatorAddressIndex)];
+                        selectOperatorAddress(item);
+                    });
+                });
+            } catch (error) {
+                if (error.name !== "AbortError") {
+                    showFeedback("Nao foi possivel buscar o endereco agora.", true);
+                }
+            } finally {
+                setOperatorSearchLoading(false);
+            }
+        }
+
+        function selectOperatorAddress(item) {
+            if (!item) return;
+            operatorSelectedAddress = item;
+            operatorAddressInput.value = item.label || item.street || operatorAddressInput.value;
+            hideOperatorSuggestions();
+            applyResolvedAddress(item, { confirmed: true, updateMap: true });
+            showFeedback("Endereco selecionado. Informe o numero para salvar.", false);
+        }
+
+        async function refineOperatorAddressWithNumber() {
+            if (!isOperatorCheckout || !operatorSelectedAddress || !numeroInput) return;
+            const number = String(numeroInput.value || "").trim();
+            const street = String(ruaInput.value || operatorSelectedAddress.street || "").trim();
+            if (!number || !street) return;
+            const bairro = String(bairroInput.value || operatorSelectedAddress.district || "").trim();
+            const query = [street, number, bairro, cidadeInput.value || "Rio Verde", estadoInput.value || "GO"].filter(Boolean).join(", ");
+            try {
+                const items = await fetchOperatorAddressSuggestions(query, { bairro });
+                const best = items.find((item) => String(item.number || "").trim() === number) || items[0];
+                if (!best) return;
+                operatorSelectedAddress = {
+                    ...best,
+                    street: best.street || street,
+                    district: best.district || bairro,
+                    city: best.city || cidadeInput.value || "Rio Verde",
+                    state: best.state || estadoInput.value || "GO",
+                };
+                applyResolvedAddress(operatorSelectedAddress, { confirmed: true, updateMap: true });
+            } catch (error) {
+                if (error.name !== "AbortError") {
+                    showFeedback("Endereco mantido pela rua selecionada. Use Ajustar no mapa se precisar.", true);
+                }
+            }
         }
 
         function setCurrentLocationLoadingState(isLoading) {
@@ -1906,9 +2028,43 @@
             await syncAddressFromMapCenter({ confirmed: true });
         });
 
+        operatorAddressInput?.addEventListener("input", () => {
+            const query = operatorAddressInput.value.trim();
+            operatorSelectedAddress = null;
+            window.clearTimeout(operatorSearchTimer);
+            if (query.length < 3) {
+                hideOperatorSuggestions();
+                return;
+            }
+            operatorSearchTimer = window.setTimeout(() => runOperatorAddressSearch(query), 260);
+        });
+
+        operatorAddressInput?.addEventListener("focus", () => {
+            const query = operatorAddressInput.value.trim();
+            if (query.length >= 3 && operatorAddressSuggestions?.classList.contains("hidden")) {
+                runOperatorAddressSearch(query);
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            if (!operatorSearch?.contains(event.target)) {
+                hideOperatorSuggestions();
+            }
+        });
+
+        numeroInput?.addEventListener("change", refineOperatorAddressWithNumber);
+        numeroInput?.addEventListener("blur", refineOperatorAddressWithNumber);
+
+        operatorAdjustMapButton?.addEventListener("click", () => {
+            mapStep.classList.add("is-map-visible");
+            showMapFeedback("Ajuste o ponto no mapa e confirme.");
+            setTimeout(() => mapInstance?.invalidateSize?.(), 80);
+        });
+
         backToMapButton.addEventListener("click", () => {
             addressPointConfirmed = false;
             showDetailsStep(false);
+            mapStep.classList.add("is-map-visible");
             showMapFeedback("Ajuste o ponto no mapa e confirme novamente.");
             setTimeout(() => mapRoot.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
         });

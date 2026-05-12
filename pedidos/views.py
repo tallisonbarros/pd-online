@@ -10,6 +10,8 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
@@ -41,6 +43,7 @@ OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
 RIO_VERDE_CENTER = {"lat": -17.7923, "lon": -50.9192}
 RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,maxLat
 OSRM_ROUTE_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
+ATENDENTE_GROUP_NAME = "Atendente"
 
 RIO_VERDE_BAIRROS_OFICIAIS = [
     "Anhanguera", "Area Rural de Rio Verde", "Cesar Bastos", "Ceu Azul", "Cidade Empresarial Nova Alianca",
@@ -146,6 +149,12 @@ def serializar_adicional(adicional):
         "preco_formatado": f"R$ {adicional.preco:.2f}".replace(".", ",") if adicional.preco is not None else "",
         "imagem": adicional.imagem.url if adicional.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
     }
+
+
+def user_is_atendente(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.groups.filter(name=ATENDENTE_GROUP_NAME).exists()
 
 
 def montar_mensagem_whatsapp(pedido):
@@ -258,6 +267,7 @@ def checkout(request):
         {
             "pratos_lookup_json": itens_lookup,
             "pix_chave": config.pix_chave,
+            "is_atendente": user_is_atendente(request.user),
         },
     )
 
@@ -885,6 +895,119 @@ def _serialize_faixas_for_form(faixas=None, extra_rows=2):
             }
         )
     return rows
+
+
+def _ensure_default_user_groups():
+    Group.objects.get_or_create(name=ATENDENTE_GROUP_NAME)
+
+
+def _serialize_users_for_admin():
+    users = get_user_model().objects.prefetch_related("groups").order_by("username")
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "email": user.email,
+            "is_active": user.is_active,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
+            "groups": list(user.groups.order_by("name")),
+            "group_ids": {group.id for group in user.groups.all()},
+        }
+        for user in users
+    ]
+
+
+def _serialize_groups_for_admin():
+    return Group.objects.order_by("name")
+
+
+def _require_superuser_for_user_admin(request):
+    if not request.user.is_superuser:
+        raise PermissionError("Somente superusuarios podem administrar usuarios e classes.")
+
+
+def _save_user_groups(user, group_ids):
+    groups = Group.objects.filter(id__in=group_ids)
+    user.groups.set(groups)
+
+
+def _handle_user_admin_action(request):
+    _require_superuser_for_user_admin(request)
+    User = get_user_model()
+    action = _safe_text(request.POST.get("action"))
+
+    if action == "create_group":
+        name = _safe_text(request.POST.get("group_name"))
+        if not name:
+            raise ValueError("Informe o nome da classe.")
+        Group.objects.get_or_create(name=name)
+        return "Classe criada."
+
+    if action == "update_group":
+        group = get_object_or_404(Group, id=request.POST.get("group_id"))
+        name = _safe_text(request.POST.get("group_name"))
+        if not name:
+            raise ValueError("Informe o nome da classe.")
+        if Group.objects.exclude(id=group.id).filter(name=name).exists():
+            raise ValueError("Ja existe uma classe com esse nome.")
+        group.name = name
+        group.save()
+        return "Classe atualizada."
+
+    if action == "delete_group":
+        group = get_object_or_404(Group, id=request.POST.get("group_id"))
+        if group.user_set.exists():
+            raise ValueError("Remova os usuarios dessa classe antes de excluir.")
+        group.delete()
+        return "Classe excluida."
+
+    if action == "create_user":
+        username = _safe_text(request.POST.get("username"))
+        password = _safe_text(request.POST.get("password"))
+        if not username:
+            raise ValueError("Informe o usuario.")
+        if not password:
+            raise ValueError("Informe uma senha inicial.")
+        if User.objects.filter(username=username).exists():
+            raise ValueError("Ja existe um usuario com esse login.")
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            first_name=_safe_text(request.POST.get("first_name")),
+            email=_safe_text(request.POST.get("email")),
+        )
+        user.is_active = request.POST.get("is_active") == "on"
+        user.is_staff = request.POST.get("is_staff") == "on"
+        user.is_superuser = request.POST.get("is_superuser") == "on"
+        user.save()
+        _save_user_groups(user, request.POST.getlist("groups"))
+        return "Usuario criado."
+
+    if action == "update_user":
+        user = get_object_or_404(User, id=request.POST.get("user_id"))
+        username = _safe_text(request.POST.get("username")) or user.username
+        if User.objects.exclude(id=user.id).filter(username=username).exists():
+            raise ValueError("Ja existe outro usuario com esse login.")
+        user.username = username
+        user.first_name = _safe_text(request.POST.get("first_name"))
+        user.email = _safe_text(request.POST.get("email"))
+        user.is_active = request.POST.get("is_active") == "on"
+        user.is_staff = request.POST.get("is_staff") == "on"
+        user.is_superuser = request.POST.get("is_superuser") == "on"
+        if user.id == request.user.id:
+            user.is_active = True
+            user.is_staff = True
+            user.is_superuser = True
+        password = _safe_text(request.POST.get("password"))
+        if password:
+            user.set_password(password)
+        user.save()
+        _save_user_groups(user, request.POST.getlist("groups"))
+        return "Usuario atualizado."
+
+    raise ValueError("Acao de usuarios desconhecida.")
 
 
 def _parse_faixa_rows(post_data):
@@ -2164,9 +2287,10 @@ def pedido_detalhe_admin(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios"}:
         ajustes_aba = "geral"
 
+    _ensure_default_user_groups()
     config = ConfiguracaoEntrega.get_solo()
     origem = _saved_origin_snapshot(config)
     origem_resolution = _resolve_saved_origin_result(config) or _blank_origin_result()
@@ -2188,6 +2312,11 @@ def ajustes_admin(request):
             "save_google": "google",
             "save_whatsapp": "whatsapp",
             "save_pagamento": "pagamento",
+            "create_user": "usuarios",
+            "update_user": "usuarios",
+            "create_group": "usuarios",
+            "update_group": "usuarios",
+            "delete_group": "usuarios",
         }
         ajustes_aba = action_tabs.get(action, ajustes_aba)
         origem = {
@@ -2247,6 +2376,14 @@ def ajustes_admin(request):
             config.pix_chave = _safe_text(request.POST.get("pix_chave"))
             config.save()
             return redirect(f"{request.path}?saved=1&aba=pagamento")
+
+        if action in {"create_user", "update_user", "create_group", "update_group", "delete_group"}:
+            try:
+                _handle_user_admin_action(request)
+                return redirect(f"{request.path}?saved=1&aba=usuarios")
+            except (PermissionError, ValueError) as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
 
         if action == "test_frete":
             destino_teste = _safe_text(request.POST.get("destino_teste"))
@@ -2336,6 +2473,9 @@ def ajustes_admin(request):
             "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
             "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
+            "usuarios_admin_rows": _serialize_users_for_admin(),
+            "usuarios_classes": _serialize_groups_for_admin(),
+            "can_manage_users": request.user.is_superuser,
         },
     )
 

@@ -1115,10 +1115,10 @@ textarea {
     justify-content: center;
     white-space: nowrap;
     border-radius: 999px;
-    background: rgba(255, 253, 250, 0.96);
-    border: 1px solid rgba(214, 203, 194, 0.95);
+    background: linear-gradient(135deg, #5a3a32 0%, #4e342e 100%);
+    border: 1px solid rgba(255, 253, 250, 0.22);
     box-shadow: 0 10px 20px rgba(34, 19, 17, 0.12);
-    color: var(--brand-strong);
+    color: #fffdfa;
     font-size: 0.8rem;
     font-weight: 800;
     line-height: 1;
@@ -3178,6 +3178,30 @@ fieldset.field {
 .address-suggestion-item:hover,
 .address-suggestion-item:focus-visible {
     background: #f6f0ed;
+}
+
+.address-suggestion-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.operator-address-search {
+    display: grid;
+    gap: 10px;
+}
+
+.operator-address-search .secondary-pill {
+    justify-self: start;
+}
+
+.address-step-card.is-operator-search-mode:not(.is-map-visible) #use-current-location,
+.address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-shell,
+.address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-actions,
+.address-step-card.is-operator-search-mode:not(.is-map-visible) #address-map-feedback,
+.address-step-card.is-operator-search-mode:not(.is-map-visible) .resolved-address-inline {
+    display: none;
 }
 
 .field-help {
@@ -7657,6 +7681,81 @@ fieldset.field {
     flex-wrap: wrap;
 }
 
+.usuarios-class-field {
+    border: 0;
+    padding: 0;
+    min-inline-size: 0;
+}
+
+.usuarios-class-field legend,
+.usuarios-admin-row .field span {
+    color: #7c675c;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.usuarios-check-grid,
+.usuarios-admin-flags,
+.usuarios-admin-classes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.usuarios-admin-list,
+.usuarios-class-list {
+    display: grid;
+    gap: 12px;
+}
+
+.usuarios-admin-row {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #e4dbd5;
+    border-radius: 16px;
+    background: #fffdfa;
+}
+
+.usuarios-admin-main {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.usuarios-admin-main input,
+.usuarios-class-row input {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #ded2ca;
+    border-radius: 14px;
+    background: #fffdfa;
+    color: #2a1a17;
+    padding: 0 12px;
+    font-size: 14px;
+}
+
+.usuarios-class-create {
+    margin-bottom: 14px;
+}
+
+.usuarios-class-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.ped-btn:disabled,
+.usuarios-admin-main input:disabled,
+.usuarios-class-row input:disabled,
+.ajustes-field input:disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+}
+
 .ajustes-preview-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7750,6 +7849,10 @@ fieldset.field {
         grid-template-columns: 1fr;
     }
 
+    .usuarios-admin-main {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .ajustes-frete-head {
         display: none;
     }
@@ -7761,7 +7864,9 @@ fieldset.field {
 
 @media (max-width: 720px) {
     .ajustes-form-grid,
-    .ajustes-frete-row {
+    .ajustes-frete-row,
+    .usuarios-admin-main,
+    .usuarios-class-row {
         grid-template-columns: 1fr;
     }
 }
