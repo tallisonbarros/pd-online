@@ -166,11 +166,10 @@
         const labelField = cfg.labelFieldId ? document.getElementById(cfg.labelFieldId) : null;
         const typeField = cfg.typeFieldId ? document.getElementById(cfg.typeFieldId) : null;
         const precisionField = cfg.precisionFieldId ? document.getElementById(cfg.precisionFieldId) : null;
-        const shouldSaveOnConfirm = confirmButton.dataset.saveOnConfirm === "true";
-
         if (!mapRoot || !feedback || !streetDisplay || !districtDisplay || !confirmButton || !useLocationButton || !addressField || !latField || !lngField) {
             return;
         }
+        const shouldSaveOnConfirm = confirmButton.dataset.saveOnConfirm === "true";
 
         let mapInstance = null;
         let isProgrammaticMove = false;

@@ -1627,48 +1627,60 @@
         async function fetchOperatorAddressSuggestions(query, extraParams = {}) {
             const normalizedQuery = String(query || "").trim();
             if (normalizedQuery.length < 3) return [];
-            const { autocomplete, details } = await ensureGooglePlaces();
             const city = extraParams.cidade || cidadeInput.value || "Rio Verde";
             const state = extraParams.estado || estadoInput.value || "GO";
-            const predictions = await getPlacePredictions(autocomplete, {
-                input: normalizedQuery,
-                componentRestrictions: { country: "br" },
-                locationBias: {
-                    center: { lat: -17.7923, lng: -50.9192 },
-                    radius: 18000,
-                },
-                types: ["address"],
-                language: googleMapsLanguage,
-            });
-            const detailed = await Promise.all(
-                predictions.slice(0, 6).map(async (prediction) => {
-                    const place = await getPlaceDetails(details, prediction.place_id);
-                    const location = place?.geometry?.location;
-                    if (!place || !location) return null;
-                    return mapGoogleResult(place, location.lat(), location.lng());
-                })
-            );
-            const filtered = detailed.filter((item) => {
-                if (!item) return false;
-                const itemCity = normalizeText(item.city);
-                const itemState = normalizeText(item.state);
-                return itemCity.includes(normalizeText(city)) && (itemState === normalizeText(state) || itemState.includes("goias"));
-            });
+            let placesError = null;
 
-            if (filtered.length) return filtered;
+            try {
+                const { autocomplete, details } = await ensureGooglePlaces();
+                const predictions = await getPlacePredictions(autocomplete, {
+                    input: [normalizedQuery, city, state].filter(Boolean).join(", "),
+                    componentRestrictions: { country: "br" },
+                    locationBias: {
+                        center: { lat: -17.7923, lng: -50.9192 },
+                        radius: 18000,
+                    },
+                    types: ["address"],
+                    language: googleMapsLanguage,
+                });
+                const detailed = await Promise.all(
+                    predictions.slice(0, 6).map(async (prediction) => {
+                        const place = await getPlaceDetails(details, prediction.place_id);
+                        const location = place?.geometry?.location;
+                        if (!place || !location) return null;
+                        return mapGoogleResult(place, location.lat(), location.lng());
+                    })
+                );
+                const filtered = detailed.filter((item) => {
+                    if (!item) return false;
+                    const itemCity = normalizeText(item.city);
+                    const itemState = normalizeText(item.state);
+                    return itemCity.includes(normalizeText(city)) && (itemState === normalizeText(state) || itemState.includes("goias"));
+                });
+
+                if (filtered.length) return filtered;
+            } catch (error) {
+                placesError = error;
+            }
 
             const geocoder = await ensureGoogleGeocoder();
-            const response = await geocoder.geocode({
-                address: [normalizedQuery, city, state, "Brasil"].filter(Boolean).join(", "),
-                componentRestrictions: {
-                    country: "BR",
-                    administrativeArea: state,
-                    locality: city,
-                },
-                language: googleMapsLanguage,
-            });
+            let response = null;
+            try {
+                response = await geocoder.geocode({
+                    address: [normalizedQuery, city, state, "Brasil"].filter(Boolean).join(", "),
+                    componentRestrictions: {
+                        country: "BR",
+                        administrativeArea: state,
+                        locality: city,
+                    },
+                    language: googleMapsLanguage,
+                });
+            } catch (error) {
+                if (placesError) throw placesError;
+                throw error;
+            }
             const seen = new Set();
-            return (response?.results || [])
+            const results = (response?.results || [])
                 .map((result) => {
                     const location = result.geometry?.location;
                     if (!location) return null;
@@ -1682,6 +1694,8 @@
                     return true;
                 })
                 .slice(0, 6);
+            if (!results.length && placesError) throw placesError;
+            return results;
         }
 
         async function runOperatorAddressSearch(query) {

@@ -754,7 +754,7 @@ def _google_maps_status():
         "region": config.google_maps_region_effective if config else getattr(settings, "GOOGLE_MAPS_REGION", "BR"),
         "language_value": getattr(config, "google_maps_language", "") if config else "",
         "region_value": getattr(config, "google_maps_region", "") if config else "",
-        "required_apis": ["Maps JavaScript API", "Geocoding API"],
+        "required_apis": ["Maps JavaScript API", "Geocoding API", "Places API / Places API (New)"],
         "env_var_names": ["GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_LANGUAGE", "GOOGLE_MAPS_REGION"],
     }
 
