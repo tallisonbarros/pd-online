@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const config = window.PRATO_CONFIG || {};
     const googleMapsApiKey = String(config.googleMapsApiKey || "").trim();
     const googleMapsLanguage = String(config.googleMapsLanguage || "pt-BR").trim() || "pt-BR";
@@ -14,7 +14,7 @@
     }
 
     function loadGoogleMapsRuntime(apiKey = googleMapsApiKey, language = googleMapsLanguage, region = googleMapsRegion, forceReload = false) {
-        if (!apiKey) return Promise.reject(new Error("Google Maps não configurado."));
+        if (!apiKey) return Promise.reject(new Error("Google Maps nÃ£o configurado."));
 
         if (!forceReload && window.google?.maps?.importLibrary && googleMapsLoadedKey === apiKey) {
             return Promise.resolve(window.google.maps);
@@ -62,6 +62,7 @@
                 callback: callbackName,
                 language,
                 region,
+                libraries: "places",
                 v: "weekly",
             });
             const script = document.createElement("script");
@@ -245,7 +246,7 @@
             if (commit) {
                 writeHidden(data);
                 confirmedCenter = { lat: Number(center.lat), lng: Number(center.lng) };
-                setFeedback("Ponto confirmado para este cálculo.", false);
+                setFeedback("Ponto confirmado para este cÃ¡lculo.", false);
                 return;
             }
             if (!hasCenterChanged(center)) {
@@ -258,11 +259,11 @@
 
         async function centerOnLocation() {
             if (!navigator.geolocation) {
-                setFeedback("Seu navegador não permite usar localização nesta tela.", true);
+                setFeedback("Seu navegador nÃ£o permite usar localizaÃ§Ã£o nesta tela.", true);
                 return;
             }
             useLocationButton.disabled = true;
-            setFeedback("Buscando sua localização atual...", false);
+            setFeedback("Buscando sua localizaÃ§Ã£o atual...", false);
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const nextCenter = {
@@ -280,7 +281,7 @@
                 },
                 () => {
                     useLocationButton.disabled = false;
-                    setFeedback("Não foi possível acessar sua localização atual.", true);
+                    setFeedback("NÃ£o foi possÃ­vel acessar sua localizaÃ§Ã£o atual.", true);
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
@@ -393,6 +394,22 @@
         status.innerHTML = `<strong>Status do teste</strong><p>${message}</p>`;
     }
 
+    function getPlacePredictions(service, request) {
+        return new Promise((resolve, reject) => {
+            service.getPlacePredictions(request, (predictions, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                    resolve({ predictions: [], status });
+                    return;
+                }
+                if (status !== google.maps.places.PlacesServiceStatus.OK) {
+                    reject(new Error(`Places: ${status}`));
+                    return;
+                }
+                resolve({ predictions: predictions || [], status });
+            });
+        });
+    }
+
     async function initGoogleMapsTester() {
         const button = document.getElementById("google-maps-test-button");
         const apiKeyInput = document.getElementById("google-maps-api-key");
@@ -418,13 +435,23 @@
                 await loadGoogleMapsRuntime(apiKey, language, region, true);
                 const { Map } = await google.maps.importLibrary("maps");
                 const { Geocoder } = await google.maps.importLibrary("geocoding");
+                await google.maps.importLibrary("places");
                 const geocoder = new Geocoder();
+                const autocomplete = new google.maps.places.AutocompleteService();
                 const center = { ...defaultCenter };
                 const response = await geocoder.geocode({ location: center, language });
                 const result = response?.results?.[0];
                 if (!result) {
-                    throw new Error("O Google respondeu, mas não retornou endereco para o ponto de teste.");
+                    throw new Error("O Google respondeu, mas nÃ£o retornou endereco para o ponto de teste.");
                 }
+
+                const placesResult = await getPlacePredictions(autocomplete, {
+                    input: "Rua Jose Duarte de Sousa Rio Verde GO",
+                    componentRestrictions: { country: "br" },
+                    locationBias: { center, radius: 18000 },
+                    types: ["address"],
+                    language,
+                });
 
                 mapRoot.classList.remove("hidden");
                 if (!map) {
@@ -439,10 +466,10 @@
                     map.setCenter(center);
                     map.setZoom(15);
                 }
-                setGoogleTestStatus(`Chave válida. Endereço de teste resolvido: ${result.formatted_address}`, "is-success");
+                setGoogleTestStatus(`Chave valida para mapa, geocoding e busca Places. Endereco de teste resolvido: ${result.formatted_address}. Sugestoes Places: ${placesResult.predictions.length}.`, "is-success");
             } catch (error) {
                 mapRoot.classList.add("hidden");
-                setGoogleTestStatus(error.message || "Não foi possível validar a chave do Google Maps.", "is-error");
+                setGoogleTestStatus(error.message || "Nao foi possivel validar todos os servicos do Google Maps.", "is-error");
             } finally {
                 button.disabled = false;
             }
@@ -451,3 +478,4 @@
 
     initGoogleMapsTester();
 })();
+

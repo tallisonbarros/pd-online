@@ -40,6 +40,7 @@
 
             const existingScript = document.querySelector("script[data-google-maps-js]");
             if (existingScript) {
+                existingScript.addEventListener("load", () => resolve(window.google.maps), { once: true });
                 existingScript.addEventListener("error", () => reject(new Error("Falha ao carregar Google Maps.")));
                 return;
             }
@@ -51,6 +52,7 @@
                 callback: "__pratoGoogleMapsReady",
                 language: googleMapsLanguage,
                 region: googleMapsRegion,
+                libraries: "places",
                 v: "weekly",
             });
             script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
@@ -1155,12 +1157,14 @@
             clearNumeroAttention();
             openModal();
             showEditorPanel();
-            addressController?.refreshMap?.();
-            if (mode === "create") {
-                addressController?.startCurrentLocation?.();
-            } else {
-                profileForm.querySelector("[name='numero']")?.focus();
-            }
+            addressController?.ensureMapReady?.().then(() => {
+                addressController?.refreshMap?.();
+                if (mode === "create") {
+                    addressController?.startCurrentLocation?.();
+                } else {
+                    profileForm.querySelector("[name='numero']")?.focus();
+                }
+            });
         }
 
         function openSelectedProfileEditor() {
@@ -1273,7 +1277,8 @@
                 })
                 .join("");
 
-            profiles.forEach((profile) => fetchProfileEta(profile));
+            const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
+            if (selectedProfile) fetchProfileEta(selectedProfile);
         }
 
         createButton.addEventListener("click", () => {
@@ -1572,6 +1577,17 @@
             });
         }
 
+        function googleSearchErrorMessage(error) {
+            const message = String(error?.message || error || "").trim();
+            if (message.includes("REQUEST_DENIED") || message.includes("ApiNotActivated") || message.includes("RefererNotAllowed")) {
+                return "Busca textual indisponivel: habilite a Places API na mesma chave do Google Maps.";
+            }
+            if (message.includes("OVER_QUERY_LIMIT")) {
+                return "Busca textual indisponivel: limite de uso da Places API atingido.";
+            }
+            return `Busca textual do Google Maps indisponivel${message ? ` (${message})` : ""}.`;
+        }
+
         function getPlaceDetails(service, placeId) {
             return new Promise((resolve) => {
                 service.getDetails(
@@ -1665,7 +1681,7 @@
                     });
                 });
             } catch (error) {
-                showFeedback("Busca do Google Maps indisponivel. Verifique a chave nas configuracoes.", true);
+                showFeedback(googleSearchErrorMessage(error), true);
             } finally {
                 if (requestId === operatorSearchRequestId) setOperatorSearchLoading(false);
             }
@@ -2023,11 +2039,13 @@
             );
         }
 
-        useLocationButton.addEventListener("click", () => {
+        useLocationButton.addEventListener("click", async () => {
+            await ensureMapReady();
             requestCurrentLocation();
         });
 
         confirmMapCenterButton.addEventListener("click", async () => {
+            await ensureMapReady();
             await syncAddressFromMapCenter({ confirmed: true });
         });
 
@@ -2058,13 +2076,15 @@
         numeroInput?.addEventListener("change", refineOperatorAddressWithNumber);
         numeroInput?.addEventListener("blur", refineOperatorAddressWithNumber);
 
-        operatorAdjustMapButton?.addEventListener("click", () => {
+        operatorAdjustMapButton?.addEventListener("click", async () => {
+            await ensureMapReady();
             mapStep.classList.add("is-map-visible");
             showMapFeedback("Ajuste o ponto no mapa e confirme.");
             setTimeout(() => mapInstance?.invalidateSize?.(), 80);
         });
 
-        backToMapButton.addEventListener("click", () => {
+        backToMapButton.addEventListener("click", async () => {
+            await ensureMapReady();
             addressPointConfirmed = false;
             showDetailsStep(false);
             mapStep.classList.add("is-map-visible");
@@ -2077,15 +2097,22 @@
             syncCoordsWarning();
         });
 
-        const mapReadyPromise = initializeMap().then(() => {
-            if (latitudeInput.value && longitudeInput.value) {
-                setMapCenter(latitudeInput.value, longitudeInput.value, 18);
-                setPreviewMapCenter(latitudeInput.value, longitudeInput.value, 17);
-                showMapFeedback("Local carregado a partir das coordenadas salvas.");
-                addressPointConfirmed = false;
-                showDetailsStep(false);
+        let mapReadyPromise = null;
+
+        function ensureMapReady() {
+            if (!mapReadyPromise) {
+                mapReadyPromise = initializeMap().then(() => {
+                    if (latitudeInput.value && longitudeInput.value) {
+                        setMapCenter(latitudeInput.value, longitudeInput.value, 18);
+                        setPreviewMapCenter(latitudeInput.value, longitudeInput.value, 17);
+                        showMapFeedback("Local carregado a partir das coordenadas salvas.");
+                        addressPointConfirmed = false;
+                        showDetailsStep(false);
+                    }
+                });
             }
-        });
+            return mapReadyPromise;
+        }
 
         updateResolvedDisplay(null);
         renderResolutionState(null);
@@ -2094,12 +2121,13 @@
         return {
             applyResolvedAddress,
             clearResolvedAddress,
+            ensureMapReady,
             refreshMap() {
                 if (!mapInstance) return;
                 setTimeout(() => mapInstance.invalidateSize(), 60);
             },
             async startCurrentLocation() {
-                await mapReadyPromise;
+                await ensureMapReady();
                 requestCurrentLocation();
             },
         };
