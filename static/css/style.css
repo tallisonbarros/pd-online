@@ -8222,3 +8222,156 @@ fieldset.field {
     min-width: 16px;
     font-size: 0.74rem;
 }
+
+[data-page="cardapio"] .dish-qty-badge--footer {
+    width: 118px;
+    min-height: 42px;
+    margin: auto auto 10px;
+    padding: 6px;
+    align-self: center;
+    justify-content: center;
+    gap: 11px;
+    border: 1px solid rgba(255, 253, 250, 0.22);
+    border-radius: 999px;
+    background:
+        linear-gradient(180deg, rgba(255, 253, 250, 0.12), rgba(255, 253, 250, 0) 45%),
+        linear-gradient(135deg, #65443a 0%, #4e342e 54%, #321f1a 100%);
+    box-shadow: 0 14px 26px rgba(34, 19, 17, 0.2), inset 0 1px 0 rgba(255, 253, 250, 0.2);
+    transition:
+        width 340ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        min-height 340ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        padding 340ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        gap 340ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        border-radius 340ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        box-shadow 240ms ease,
+        transform 240ms ease;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer button,
+[data-page="cardapio"] .dish-qty-badge--footer strong {
+    transition:
+        width 280ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        min-width 280ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        opacity 180ms ease,
+        transform 280ms cubic-bezier(0.18, 0.9, 0.22, 1),
+        background-color 180ms ease,
+        color 180ms ease;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer button {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    background: rgba(255, 253, 250, 0.94);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 8px 16px rgba(34, 19, 17, 0.14);
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer strong {
+    min-width: 22px;
+    font-size: 0.94rem;
+    transform-origin: center;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-empty {
+    width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    gap: 0;
+    border-radius: 999px;
+    box-shadow: 0 12px 24px rgba(34, 19, 17, 0.18), inset 0 1px 0 rgba(255, 253, 250, 0.22);
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-empty button[data-card-qty-change="-1"],
+[data-page="cardapio"] .dish-qty-badge--footer.is-empty strong {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    transform: scale(0.42);
+    pointer-events: none;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-empty button[data-card-qty-change="1"] {
+    width: 30px;
+    height: 30px;
+    transform: scale(1);
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-morphing {
+    animation: qtyMorphGlow 520ms cubic-bezier(0.18, 0.9, 0.22, 1) both;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-morphing strong {
+    animation: qtyRevealPremium 420ms cubic-bezier(0.18, 0.9, 0.22, 1) 70ms both;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.is-morphing button[data-card-qty-change="-1"] {
+    animation: qtySideReveal 360ms cubic-bezier(0.18, 0.9, 0.22, 1) 60ms both;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer {
+    width: 106px;
+    min-height: 36px;
+    margin-bottom: 8px;
+    padding: 5px;
+    gap: 9px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer button {
+    width: 24px;
+    height: 24px;
+    font-size: 0.78rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer strong {
+    min-width: 18px;
+    font-size: 0.78rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer.is-empty {
+    width: 38px;
+    min-height: 38px;
+    padding: 5px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer.is-empty button[data-card-qty-change="1"] {
+    width: 26px;
+    height: 26px;
+}
+
+@keyframes qtyMorphGlow {
+    0% {
+        transform: scale(0.96);
+        box-shadow: 0 10px 20px rgba(34, 19, 17, 0.16), 0 0 0 0 rgba(255, 253, 250, 0);
+    }
+    44% {
+        transform: translateY(-1px) scale(1.035);
+        box-shadow: 0 18px 30px rgba(34, 19, 17, 0.24), 0 0 0 7px rgba(255, 253, 250, 0.16);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes qtyRevealPremium {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.74);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes qtySideReveal {
+    0% {
+        opacity: 0;
+        transform: translateX(10px) scale(0.62);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}

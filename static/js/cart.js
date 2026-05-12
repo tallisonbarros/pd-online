@@ -626,7 +626,24 @@
                 const qtyValue = card.querySelector("[data-card-qty-value]");
                 if (!qtyValue) return;
                 const dish = JSON.parse(card.dataset.prato || "{}");
-                qtyValue.textContent = String(getCartQuantityForDish(dish));
+                const badge = qtyValue.closest(".dish-qty-badge");
+                const quantity = getCartQuantityForDish(dish);
+                const wasEmpty = badge?.classList.contains("is-empty");
+                const decrementButton = badge?.querySelector("[data-card-qty-change='-1']");
+                qtyValue.textContent = String(quantity);
+                badge?.classList.toggle("is-empty", quantity <= 0);
+                decrementButton?.setAttribute("tabindex", quantity <= 0 ? "-1" : "0");
+                decrementButton?.setAttribute("aria-hidden", quantity <= 0 ? "true" : "false");
+                if (badge?.dataset.qtyReady === "true" && wasEmpty && quantity > 0) {
+                    if (badge._morphTimer) clearTimeout(badge._morphTimer);
+                    badge.classList.remove("is-morphing");
+                    void badge.offsetWidth;
+                    badge.classList.add("is-morphing");
+                    badge._morphTimer = window.setTimeout(() => {
+                        badge.classList.remove("is-morphing");
+                    }, 520);
+                }
+                if (badge) badge.dataset.qtyReady = "true";
             });
         }
 
