@@ -1002,6 +1002,7 @@ textarea {
     flex: 0 0 220px;
     width: 220px;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .dish-media {
@@ -1057,6 +1058,7 @@ textarea {
     background: rgba(255, 253, 250, 0.96);
     border: 1px solid rgba(214, 203, 194, 0.95);
     box-shadow: 0 10px 20px rgba(34, 19, 17, 0.12);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .dish-qty-badge button {
@@ -1070,6 +1072,14 @@ textarea {
     font-weight: 800;
     line-height: 1;
     cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+}
+
+.dish-qty-badge button:focus-visible {
+    outline: 2px solid rgba(255, 253, 250, 0.7);
+    outline-offset: 2px;
 }
 
 .dish-qty-badge strong {
@@ -1179,6 +1189,7 @@ textarea {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     background: linear-gradient(90deg, #5a3a32 0%, #4e342e 100%);
     box-shadow: none;
+    overflow: hidden;
 }
 
 .dish-qty-badge--footer button {
