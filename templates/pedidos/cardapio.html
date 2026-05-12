@@ -39,11 +39,6 @@
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
-                            <div class="dish-qty-badge" aria-label="Controle de quantidade do prato">
-                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                                <strong data-card-qty-value>0</strong>
-                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
-                            </div>
                             <div class="dish-price-badge">
                                 {% if prato.preco %}
                                     <strong>R$ {{ prato.preco|floatformat:2 }}</strong>
@@ -66,10 +61,11 @@
                             {% endif %}
                         </div>
                     </div>
-                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
-                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
-                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
-                    </button>
+                    <div class="dish-qty-badge dish-qty-badge--footer" aria-label="Controle de quantidade do prato">
+                        <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                        <strong data-card-qty-value>0</strong>
+                        <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                    </div>
                 </article>
                 {% else %}
                 <div class="empty-state">
@@ -104,11 +100,6 @@
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
-                            <div class="dish-qty-badge" aria-label="Controle de quantidade do adicional">
-                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                                <strong data-card-qty-value>0</strong>
-                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
-                            </div>
                             <div class="dish-price-badge">
                                 {% if adicional.preco %}
                                     <strong>R$ {{ adicional.preco|floatformat:2 }}</strong>
@@ -131,10 +122,11 @@
                             {% endif %}
                         </div>
                     </div>
-                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
-                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
-                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
-                    </button>
+                    <div class="dish-qty-badge dish-qty-badge--footer" aria-label="Controle de quantidade do adicional">
+                        <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                        <strong data-card-qty-value>0</strong>
+                        <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                    </div>
                 </article>
             {% empty %}
                 <div class="extras-empty-card">
@@ -158,11 +150,6 @@
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
-                            <div class="dish-qty-badge" aria-label="Controle de quantidade da bebida">
-                                <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                                <strong data-card-qty-value>0</strong>
-                                <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
-                            </div>
                             <div class="dish-price-badge">
                                 {% if bebida.preco %}
                                     <strong>R$ {{ bebida.preco|floatformat:2 }}</strong>
@@ -185,10 +172,11 @@
                             {% endif %}
                         </div>
                     </div>
-                    <button type="button" class="primary-button dish-add-button dish-add-button--footer" data-card-add-cart>
-                        <span class="dish-add-button-label dish-add-button-label--default">Adicionar</span>
-                        <span class="dish-add-button-label dish-add-button-label--success">Adicionado</span>
-                    </button>
+                    <div class="dish-qty-badge dish-qty-badge--footer" aria-label="Controle de quantidade da bebida">
+                        <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                        <strong data-card-qty-value>0</strong>
+                        <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                    </div>
                 </article>
             {% empty %}
                 <div class="extras-empty-card">

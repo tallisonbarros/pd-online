@@ -658,6 +658,45 @@
             return true;
         }
 
+        function animateQuantityNumber(trigger, delta, changed = true) {
+            const badge = trigger?.closest(".dish-qty-badge");
+            const value = badge?.querySelector("[data-card-qty-value]");
+            if (!badge || !value) return;
+
+            const directionClass = delta > 0 ? "is-qty-increasing" : "is-qty-decreasing";
+            const idleClass = changed ? "" : "is-qty-unchanged";
+
+            if (value._qtyAnimationTimer) {
+                clearTimeout(value._qtyAnimationTimer);
+            }
+
+            value.classList.remove("is-qty-increasing", "is-qty-decreasing", "is-qty-unchanged");
+            badge.classList.remove("is-qty-active");
+            void value.offsetWidth;
+            badge.classList.add("is-qty-active");
+            value.classList.add(directionClass);
+            if (idleClass) value.classList.add(idleClass);
+
+            value._qtyAnimationTimer = window.setTimeout(() => {
+                value.classList.remove("is-qty-increasing", "is-qty-decreasing", "is-qty-unchanged");
+                badge.classList.remove("is-qty-active");
+            }, 360);
+        }
+
+        function animateInlineQuantityNumber(value, delta) {
+            if (!value) return;
+            const directionClass = delta > 0 ? "is-qty-increasing" : "is-qty-decreasing";
+            if (value._qtyAnimationTimer) {
+                clearTimeout(value._qtyAnimationTimer);
+            }
+            value.classList.remove("is-qty-increasing", "is-qty-decreasing");
+            void value.offsetWidth;
+            value.classList.add(directionClass);
+            value._qtyAnimationTimer = window.setTimeout(() => {
+                value.classList.remove("is-qty-increasing", "is-qty-decreasing");
+            }, 360);
+        }
+
         function animateAddFeedback(button, quantityAdded) {
             if (button) {
                 if (button._confirmTimer) {
@@ -727,13 +766,16 @@
         });
 
         document.querySelector("[data-qty-minus]")?.addEventListener("click", function () {
+            const previousQuantity = quantity;
             quantity = Math.max(1, quantity - 1);
             quantityDisplay.textContent = String(quantity);
+            animateInlineQuantityNumber(quantityDisplay, quantity < previousQuantity ? -1 : 0);
         });
 
         document.querySelector("[data-qty-plus]")?.addEventListener("click", function () {
             quantity += 1;
             quantityDisplay.textContent = String(quantity);
+            animateInlineQuantityNumber(quantityDisplay, 1);
         });
 
         addButton.addEventListener("click", function () {
@@ -759,12 +801,11 @@
 
         document.querySelectorAll("[data-prato-card]").forEach((card) => {
             const qtyValue = card.querySelector("[data-card-qty-value]");
-            const addCardButton = card.querySelector("[data-card-add-cart]");
             const dish = JSON.parse(card.dataset.prato || "{}");
-            if (!qtyValue || !addCardButton || !dish.id) return;
+            if (!qtyValue || !dish.id) return;
 
             card.addEventListener("click", (event) => {
-                if (event.target.closest("button, a, input, textarea, select, [data-card-qty-change], [data-card-add-cart]")) return;
+                if (event.target.closest("button, a, input, textarea, select, [data-card-qty-change]")) return;
                 openModal(dish);
             });
 
@@ -773,15 +814,11 @@
                     event.preventDefault();
                     const delta = Number(button.getAttribute("data-card-qty-change"));
                     const changed = incrementCardCartItem(dish, delta);
+                    animateQuantityNumber(button, delta, changed);
                     if (changed && delta > 0) animateAddFeedback(button, delta);
                 });
             });
 
-            addCardButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                incrementCardCartItem(dish, 1);
-                animateAddFeedback(addCardButton, 1);
-            });
         });
 
         syncCardQuantityBadges();

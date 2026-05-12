@@ -1166,6 +1166,102 @@ textarea {
     padding: 10px 14px;
 }
 
+.dish-qty-badge--footer {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    min-height: 40px;
+    margin-top: auto;
+    padding: 7px 12px;
+    justify-content: center;
+    gap: 14px;
+    border: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    background: linear-gradient(90deg, #5a3a32 0%, #4e342e 100%);
+    box-shadow: none;
+}
+
+.dish-qty-badge--footer button {
+    width: 26px;
+    height: 26px;
+    background: rgba(255, 253, 250, 0.96);
+    color: var(--brand-strong);
+    font-size: 0.9rem;
+}
+
+.dish-qty-badge--footer strong {
+    min-width: 20px;
+    color: #fffdfa;
+    font-size: 0.9rem;
+}
+
+.dish-qty-badge strong,
+.qty-control strong {
+    display: inline-block;
+    will-change: transform, opacity;
+}
+
+.dish-qty-badge.is-qty-active {
+    box-shadow: inset 0 0 0 1px rgba(255, 253, 250, 0.16);
+}
+
+.dish-qty-badge strong.is-qty-increasing,
+.qty-control strong.is-qty-increasing {
+    animation: qtyNumberIncrease 320ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.dish-qty-badge strong.is-qty-decreasing,
+.qty-control strong.is-qty-decreasing {
+    animation: qtyNumberDecrease 320ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.dish-qty-badge strong.is-qty-unchanged {
+    animation-name: qtyNumberNudge;
+}
+
+@keyframes qtyNumberIncrease {
+    0% {
+        opacity: 0.58;
+        transform: translateY(7px) scale(0.82);
+    }
+    58% {
+        opacity: 1;
+        transform: translateY(-3px) scale(1.18);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes qtyNumberDecrease {
+    0% {
+        opacity: 0.58;
+        transform: translateY(-7px) scale(0.82);
+    }
+    58% {
+        opacity: 1;
+        transform: translateY(3px) scale(1.14);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes qtyNumberNudge {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    32% {
+        transform: translateX(-3px);
+    }
+    64% {
+        transform: translateX(3px);
+    }
+}
+
 .dish-add-button::before,
 .dish-add-button::after {
     content: "";
@@ -7471,4 +7567,61 @@ fieldset.field {
     [data-page="cardapio"] .menu-feature-title h1 {
         font-size: 0.96rem;
     }
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer {
+    min-height: 40px;
+    padding: 7px 12px;
+    gap: 14px;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer button {
+    width: 26px;
+    height: 26px;
+    font-size: 0.9rem;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer strong {
+    min-width: 20px;
+    font-size: 0.9rem;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer button[data-card-qty-change="1"] {
+    animation: featurePlusPulse 2800ms ease-in-out infinite;
+}
+
+[data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer button[data-card-qty-change="1"]:active,
+[data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer.is-qty-active button[data-card-qty-change="1"] {
+    animation: none;
+}
+
+@keyframes featurePlusPulse {
+    0%,
+    72%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 253, 250, 0);
+        transform: translateY(0) scale(1);
+    }
+    84% {
+        box-shadow: 0 0 0 7px rgba(255, 253, 250, 0.14);
+        transform: translateY(-1px) scale(1.06);
+    }
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer {
+    min-height: 30px;
+    padding: 5px 8px;
+    gap: 9px;
+    border-radius: 0 0 14px 14px;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer button {
+    width: 20px;
+    height: 20px;
+    font-size: 0.72rem;
+}
+
+[data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer strong {
+    min-width: 16px;
+    font-size: 0.74rem;
 }
