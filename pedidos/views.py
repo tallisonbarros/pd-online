@@ -37,8 +37,6 @@ WEEKDAY_LABELS = {
     "sab": "SABADO",
     "dom": "DOMINGO",
 }
-PHOTON_BASE_URL = "https://photon.komoot.io/api/"
-PHOTON_REVERSE_URL = "https://photon.komoot.io/reverse"
 OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
 RIO_VERDE_CENTER = {"lat": -17.7923, "lon": -50.9192}
 RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,maxLat
@@ -324,57 +322,6 @@ DELIVERY_ETA_SHORT_TRIP_PENALTY_MINUTES = _setting_int("DELIVERY_ETA_SHORT_TRIP_
 DELIVERY_FRETE_PADRAO = Decimal("0.00")
 
 
-def _photon_attempts(query, limit="8"):
-    base_params = {
-        "q": query,
-        "countrycode": "BR",
-        "limit": str(limit),
-        "lat": str(RIO_VERDE_CENTER["lat"]),
-        "lon": str(RIO_VERDE_CENTER["lon"]),
-        "zoom": "12",
-        "location_bias_scale": "0.2",
-        "bbox": RIO_VERDE_BBOX,
-    }
-    return [
-        {**base_params, "lang": "pt"},
-        base_params,
-        {"q": query, "countrycode": "BR", "limit": str(limit), "lat": str(RIO_VERDE_CENTER["lat"]), "lon": str(RIO_VERDE_CENTER["lon"])},
-        {"q": query, "limit": str(limit), "lat": str(RIO_VERDE_CENTER["lat"]), "lon": str(RIO_VERDE_CENTER["lon"])},
-    ]
-
-
-def _fetch_photon_features(query, limit="8"):
-    if not query:
-        return []
-
-    payload = None
-    for params in _photon_attempts(query, limit=limit):
-        request_url = f"{PHOTON_BASE_URL}?{urlencode(params)}"
-        external_request = Request(request_url, headers={"User-Agent": "PRATO-DELIVERY/1.0"})
-        try:
-            with urlopen(external_request, timeout=5) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            break
-        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
-            continue
-
-    if not payload:
-        return []
-    return payload.get("features", [])
-
-
-_RIO_VERDE_BAIRROS_CACHE = {"updated_at": None, "data": []}
-_RIO_VERDE_BAIRROS_POLYGONS_CACHE = {"updated_at": None, "data": {}}
-
-
-def _normalize_key(text):
-    value = _safe_text(text).lower()
-    if not value:
-        return ""
-    value = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in value if not unicodedata.combining(ch))
-
-
 def _load_bairros_coords_manual():
     path = Path(__file__).resolve().parent / "data" / "bairros_coords_manual.json"
     if not path.exists():
@@ -605,51 +552,6 @@ def _load_generated_bairros_polygons_geojson():
     return payload
 
 
-def _resolve_address_result(address_text):
-    features = _fetch_photon_features(address_text, limit="1")
-    if not features:
-        return None
-    normalized = _normalize_autocomplete_item(features[0])
-    lat = _safe_float(normalized.get("lat"))
-    lng = _safe_float(normalized.get("lng"))
-    if lat is None or lng is None:
-        return None
-    normalized["lat"] = lat
-    normalized["lng"] = lng
-    return normalized
-
-
-def _reverse_geocode_result(latitude, longitude):
-    lat = _safe_float(latitude)
-    lng = _safe_float(longitude)
-    if lat is None or lng is None:
-        return None
-
-    reverse_url = f"{PHOTON_REVERSE_URL}?{urlencode({'lat': lat, 'lon': lng, 'lang': 'pt'})}"
-    external_request = Request(reverse_url, headers={"User-Agent": "PRATO-DELIVERY/1.0"})
-    try:
-        with urlopen(external_request, timeout=5) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        return None
-
-    features = payload.get("features") or []
-    if not features:
-        return None
-
-    normalized = _normalize_autocomplete_item(features[0])
-    normalized["lat"] = lat
-    normalized["lng"] = lng
-    return normalized
-
-
-def _resolve_address_coordinates(address_text):
-    resolved = _resolve_address_result(address_text)
-    if not resolved:
-        return None, None
-    return resolved["lat"], resolved["lng"]
-
-
 def _saved_origin_snapshot(config=None):
     config = config or ConfiguracaoEntrega.objects.order_by("pk").first()
     return {
@@ -845,7 +747,7 @@ def _google_maps_status():
     enabled = bool(api_key)
     return {
         "enabled": enabled,
-        "provider_label": "Google Maps" if enabled else "OpenStreetMap / Photon",
+        "provider_label": "Google Maps" if enabled else "Google Maps nao configurado",
         "api_key_masked": _masked_api_key(api_key),
         "api_key_value": getattr(config, "google_maps_api_key", "") if config else "",
         "language": config.google_maps_language_effective if config else getattr(settings, "GOOGLE_MAPS_LANGUAGE", "pt-BR"),
@@ -1165,10 +1067,7 @@ def _destination_result_from_values(values):
             "source": "request",
         }
 
-    destination_query = _build_destination_query_from_values(values)
-    if len(destination_query) < 5:
-        return None
-    return _resolve_address_result(destination_query)
+    return None
 
 
 def _destination_result_from_request(request):
@@ -1200,169 +1099,6 @@ def _address_precision_label(precision):
         "pending": "A confirmar",
     }
     return mapping.get(precision, "A confirmar")
-
-
-def _normalize_autocomplete_item(feature):
-    properties = feature.get("properties") or {}
-    geometry = feature.get("geometry") or {}
-    coordinates = geometry.get("coordinates") or []
-
-    lng = coordinates[0] if len(coordinates) > 1 else None
-    lat = coordinates[1] if len(coordinates) > 1 else None
-
-    street = _safe_text(properties.get("street") or properties.get("name"))
-    number = _safe_text(properties.get("housenumber"))
-    district = _safe_text(
-        properties.get("district")
-        or properties.get("suburb")
-        or properties.get("neighbourhood")
-        or properties.get("locality")
-    )
-    city = _safe_text(properties.get("city") or properties.get("town") or properties.get("village") or properties.get("county"))
-    state = _safe_text(properties.get("state"))
-    country = _safe_text(properties.get("country"))
-    countrycode = _safe_text(properties.get("countrycode")).upper()
-    name = _safe_text(properties.get("name"))
-
-    street_label = ", ".join([part for part in [street or name, number] if part])
-    place_bits = [bit for bit in [district, city] if bit]
-    place_label = ", ".join(place_bits)
-    if state:
-        place_label = f"{place_label} - {state}" if place_label else state
-    label = ", ".join([part for part in [street_label, place_label] if part]) or name
-    precision = _address_precision({"type": _safe_text(properties.get("type")), "number": number})
-
-    return {
-        "label": label,
-        "name": name,
-        "type": _safe_text(properties.get("type")),
-        "street": street,
-        "number": number,
-        "district": district,
-        "city": city,
-        "state": state,
-        "country": country,
-        "countrycode": countrycode,
-        "lat": lat,
-        "lng": lng,
-        "source": "photon",
-        "precision": precision,
-        "precision_label": _address_precision_label(precision),
-    }
-
-
-def _autocomplete_priority(item):
-    country_ok = item["countrycode"] == "BR" or item["country"].lower() == "brasil"
-    state_norm = item["state"].lower()
-    state_ok = "goias" in state_norm or "goias" in state_norm or state_norm == "go"
-    city_ok = item["city"].lower() == "rio verde"
-    if country_ok and state_ok and city_ok:
-        return 0
-    if country_ok and state_ok:
-        return 1
-    if country_ok:
-        return 2
-    return 3
-
-
-def _autocomplete_priority_with_hints(item, bairro_hint="", city_hint="", state_hint=""):
-    country_ok = item["countrycode"] == "BR" or item["country"].lower() == "brasil"
-    state_norm = item["state"].lower()
-    city_norm = item["city"].lower()
-    district_norm = _normalize_key(item.get("district"))
-    bairro_norm = _normalize_key(bairro_hint)
-    city_target = _normalize_key(city_hint or "Rio Verde")
-    state_target = _normalize_key(state_hint or "GO")
-    state_ok = "goias" in state_norm or state_norm == "go"
-    city_ok = city_norm == "rio verde"
-    state_match = _normalize_key(item.get("state")) in {state_target, "goias", "go"}
-    city_match = _normalize_key(item.get("city")) == city_target
-    bairro_match = bool(bairro_norm) and bairro_norm in district_norm
-    exact_number = bool(_safe_text(item.get("number")))
-    return (
-        0 if country_ok else 1,
-        0 if state_match or state_ok else 1,
-        0 if city_match or city_ok else 1,
-        0 if bairro_match else 1,
-        0 if exact_number else 1,
-    )
-
-
-@require_GET
-def api_address_autocomplete(request):
-    query = _safe_text(request.GET.get("q"))
-    if len(query) < 3:
-        return JsonResponse([], safe=False)
-    bairro_hint = _safe_text(request.GET.get("bairro"))
-    city_hint = _safe_text(request.GET.get("cidade")) or "Rio Verde"
-    state_hint = _safe_text(request.GET.get("estado")) or "GO"
-
-    features = _fetch_photon_features(query, limit="8")
-    normalized = [_normalize_autocomplete_item(feature) for feature in features]
-
-    results = []
-    seen = set()
-    for item in sorted(normalized, key=lambda item: _autocomplete_priority_with_hints(item, bairro_hint, city_hint, state_hint)):
-        if not item["label"]:
-            continue
-        signature = (item["label"].lower(), item["lat"], item["lng"])
-        if signature in seen:
-            continue
-        seen.add(signature)
-        if item["countrycode"] not in {"BR", ""}:
-            continue
-        results.append(
-            {
-                "label": item["label"],
-                "street": item["street"],
-                "number": item["number"],
-                "district": item["district"],
-                "city": item["city"],
-                "state": item["state"],
-                "country": item["country"] or "Brasil",
-                "lat": item["lat"],
-                "lng": item["lng"],
-                "type": item["type"],
-                "precision": item["precision"],
-                "precision_label": item["precision_label"],
-                "source": item["source"],
-            }
-        )
-        if len(results) >= 8:
-            break
-
-    return JsonResponse(results, safe=False)
-
-
-@require_GET
-def api_address_reverse_geocode(request):
-    latitude = _safe_float(request.GET.get("lat"))
-    longitude = _safe_float(request.GET.get("lng"))
-    if latitude is None or longitude is None:
-        return JsonResponse({"ok": False}, status=400)
-
-    result = _reverse_geocode_result(latitude, longitude)
-    if not result:
-        return JsonResponse({"ok": False, "label": "", "lat": latitude, "lng": longitude})
-
-    return JsonResponse(
-        {
-            "ok": True,
-            "label": result["label"],
-            "street": result["street"],
-            "number": result["number"],
-            "district": result["district"],
-            "city": result["city"],
-            "state": result["state"],
-            "country": result["country"] or "Brasil",
-            "lat": result["lat"],
-            "lng": result["lng"],
-            "type": result["type"],
-            "precision": result["precision"],
-            "precision_label": result["precision_label"],
-            "source": "reverse",
-        }
-    )
 
 
 @require_GET
@@ -2774,3 +2510,4 @@ def api_pedidos_cozinha(request):
             }
         )
     return JsonResponse({"pedidos": data, "status_choices": list(Pedido.Status.choices)})
+

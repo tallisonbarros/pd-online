@@ -316,7 +316,7 @@
                                 {% if google_maps_status.enabled %}
                                     O checkout usa Google Maps para mapa e reverse geocode quando a chave esta configurada.
                                 {% else %}
-                                    Sem chave configurada, o checkout cai no fallback atual com OpenStreetMap / Photon.
+                                    Sem chave configurada, a busca e o mapa de entrega ficam indisponiveis ate o Google Maps ser configurado.
                                 {% endif %}
                             </small>
                         </div>
@@ -369,7 +369,7 @@
                                 placeholder="Cole aqui a chave browser do Google Maps"
                                 autocomplete="off"
                             >
-                            <small class="field-help">Essa chave passa a ser a fonte principal do checkout, substituindo o fallback atual quando estiver preenchida.</small>
+                            <small class="field-help">Essa chave e a fonte unica de mapa, busca e conferÃªncia de endereÃ§o do checkout.</small>
                         </label>
 
                         <label class="field ajustes-field">
@@ -441,7 +441,7 @@
                         </div>
                         <div>
                             <dt>Comportamento sem chave</dt>
-                            <dd>O checkout continua funcional, mas volta para o fallback atual com OpenStreetMap / Photon.</dd>
+                            <dd>Sem chave do Google, o app nÃ£o consulta outra base de endereÃ§os.</dd>
                         </div>
                     </div>
                 </article>

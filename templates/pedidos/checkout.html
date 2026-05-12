@@ -81,6 +81,7 @@
                             <strong>Online Pix</strong>
                         </button>
                     </div>
+                    <small id="checkout-payment-feedback" class="field-help payment-feedback hidden">Escolha uma forma de pagamento para finalizar.</small>
 
                     <div id="payment-delivery-options" class="payment-suboptions hidden">
                         <button type="button" class="secondary-pill wide" data-payment-method="dinheiro">Dinheiro</button>
@@ -107,14 +108,14 @@
                         {% endif %}
                     </div>
 
-                    <button type="submit" class="primary-button wide">Finalizar no WhatsApp</button>
+                    <button type="submit" class="primary-button wide checkout-submit-button" id="checkout-submit-button">Finalizar no WhatsApp</button>
                 </section>
             </form>
         </section>
     </section>
     <div class="checkout-page-footer" aria-label="Acoes auxiliares do checkout">
-        <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill checkout-footer-action">Voltar ao carrinho</a>
-        <a class="secondary-pill checkout-footer-action checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+        <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill checkout-footer-action">Carrinho</a>
+        <a class="secondary-pill checkout-footer-action checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Cardápio</a>
     </div>
 </main>
 
@@ -200,8 +201,9 @@
                         </div>
 
                         <label class="field">
-                            <input type="text" id="profile-numero" name="numero" inputmode="numeric" required placeholder="Número (ex.: 120)">
+                            <input type="text" id="profile-numero" name="numero" inputmode="numeric" required placeholder="Número (ex.: 120)" aria-describedby="profile-numero-feedback">
                         </label>
+                        <small id="profile-numero-feedback" class="field-help field-error hidden">Informe o número para salvar.</small>
 
                         <label class="field">
                             <input type="text" id="profile-lote-quadra" name="lote_quadra" placeholder="Lote / quadra (ex.: Qd. 12 Lt. 04)">

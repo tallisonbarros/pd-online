@@ -405,16 +405,7 @@ class AjustesAdminTests(TestCase):
         self.assertIsNone(config.origem_longitude)
 
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 5870.0))
-    @patch(
-        "pedidos.views._resolve_address_result",
-        return_value={
-            "label": "Rua Teste, Centro, Rio Verde - GO",
-            "lat": -17.77,
-            "lng": -50.90,
-            "type": "street",
-        },
-    )
-    def test_preview_uses_current_form_values(self, _mock_resolve, _mock_route):
+    def test_preview_uses_current_form_values(self, _mock_route):
         self.client.force_login(self.staff_user)
         faixas = list(FaixaFrete.objects.order_by("ordem"))
 
@@ -426,6 +417,11 @@ class AjustesAdminTests(TestCase):
                 "origem_latitude": "-17.8010000",
                 "origem_longitude": "-50.9110000",
                 "destino_teste": "Rua Teste, 50 - Centro, Rio Verde - GO",
+                "destino_teste_lat": "-17.7700000",
+                "destino_teste_lng": "-50.9000000",
+                "destino_teste_label": "Rua Teste, Centro, Rio Verde - GO",
+                "destino_teste_tipo": "street_address",
+                "destino_teste_precision": "exact",
                 "faixa_row_key": [f"existing-{faixas[0].id}", f"existing-{faixas[1].id}"],
                 "faixa_id": [str(faixas[0].id), str(faixas[1].id)],
                 "faixa_tipo": [FaixaFrete.Tipo.ATE, FaixaFrete.Tipo.ATE],
@@ -843,95 +839,15 @@ class AdicionaisCatalogoTests(TestCase):
 
 
 class AddressApiTests(TestCase):
-    @patch(
-        "pedidos.views._fetch_photon_features",
-        return_value=[
-            {
-                "properties": {
-                    "street": "Rua Teste",
-                    "housenumber": "10",
-                    "district": "Centro",
-                    "city": "Rio Verde",
-                    "state": "GO",
-                    "country": "Brasil",
-                    "countrycode": "br",
-                    "type": "house",
-                },
-                "geometry": {"coordinates": [-50.91, -17.79]},
-            }
-        ],
-    )
-    def test_autocomplete_returns_precision_metadata(self, _mock_fetch):
+    def test_autocomplete_endpoint_was_removed_from_public_api(self):
         response = self.client.get("/api/address/autocomplete/?q=Rua%20Teste%2010")
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload[0]["precision"], "exact")
-        self.assertEqual(payload[0]["precision_label"], "Endereço confirmado")
-        self.assertEqual(payload[0]["type"], "house")
+        self.assertEqual(response.status_code, 404)
 
-    @patch(
-        "pedidos.views._fetch_photon_features",
-        return_value=[
-            {
-                "properties": {
-                    "street": "Rua Jose Duarte de Sousa",
-                    "district": "Residencial Monte Siao",
-                    "city": "Rio Verde",
-                    "state": "GO",
-                    "country": "Brasil",
-                    "countrycode": "br",
-                    "type": "street",
-                },
-                "geometry": {"coordinates": [-50.90, -17.77]},
-            },
-            {
-                "properties": {
-                    "street": "Rua Jose Duarte de Sousa",
-                    "district": "Maranata",
-                    "city": "Rio Verde",
-                    "state": "GO",
-                    "country": "Brasil",
-                    "countrycode": "br",
-                    "type": "street",
-                },
-                "geometry": {"coordinates": [-50.901, -17.771]},
-            },
-        ],
-    )
-    def test_autocomplete_prioritizes_matching_bairro_hint(self, _mock_fetch):
-        response = self.client.get("/api/address/autocomplete/?q=jose+duarte&bairro=Maranata&cidade=Rio+Verde&estado=GO")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload[0]["district"], "Maranata")
-
-    @patch(
-        "pedidos.views._reverse_geocode_result",
-        return_value={
-            "label": "Rua Teste, Centro, Rio Verde - GO",
-            "street": "Rua Teste",
-            "number": "",
-            "district": "Centro",
-            "city": "Rio Verde",
-            "state": "GO",
-            "country": "Brasil",
-            "lat": -17.79,
-            "lng": -50.91,
-            "type": "street",
-            "precision": "approximate",
-            "precision_label": "Endereço aproximado",
-        },
-    )
-    def test_reverse_geocode_returns_expected_payload(self, _mock_reverse):
+    def test_reverse_geocode_endpoint_was_removed_from_public_api(self):
         response = self.client.get("/api/address/reverse-geocode/?lat=-17.79&lng=-50.91")
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["street"], "Rua Teste")
-        self.assertEqual(payload["district"], "Centro")
-        self.assertEqual(payload["source"], "reverse")
+        self.assertEqual(response.status_code, 404)
 
     def test_delivery_time_requires_saved_origin(self):
         response = self.client.get("/api/address/delivery-time/?lat=-17.77&lng=-50.90")
@@ -940,7 +856,6 @@ class AddressApiTests(TestCase):
         payload = response.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "origin_not_configured")
-
 
 class CriarPedidoFreteTests(TestCase):
     def setUp(self):
@@ -1307,3 +1222,4 @@ class CriarPedidoFreteTests(TestCase):
         self.assertContains(response, "Configure e salve a origem", status_code=400)
         mock_route.assert_not_called()
         self.assertFalse(Pedido.objects.exists())
+

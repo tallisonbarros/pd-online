@@ -16,13 +16,10 @@
             return {};
         }
     })();
-    const reverseGeocodeUrl = config.reverseGeocodeUrl || "/api/address/reverse-geocode/";
-    const addressAutocompleteUrl = config.addressAutocompleteUrl || "/api/address/autocomplete/";
     const deliveryEtaUrl = config.deliveryEtaUrl || "/api/address/delivery-time/";
     const googleMapsApiKey = String(config.googleMapsApiKey || "").trim();
     const googleMapsLanguage = String(config.googleMapsLanguage || "pt-BR").trim() || "pt-BR";
     const googleMapsRegion = String(config.googleMapsRegion || "BR").trim() || "BR";
-    let leafletAssetsPromise = null;
     let googleMapsAssetsPromise = null;
 
     function hasGoogleMapsProvider() {
@@ -65,38 +62,6 @@
         });
 
         return googleMapsAssetsPromise;
-    }
-
-    function loadLeafletAssets() {
-        if (window.L) return Promise.resolve(window.L);
-        if (leafletAssetsPromise) return leafletAssetsPromise;
-
-        leafletAssetsPromise = new Promise((resolve, reject) => {
-            if (!document.querySelector("link[data-leaflet-css]")) {
-                const css = document.createElement("link");
-                css.rel = "stylesheet";
-                css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-                css.setAttribute("data-leaflet-css", "true");
-                document.head.appendChild(css);
-            }
-
-            const existingScript = document.querySelector("script[data-leaflet-js]");
-            if (existingScript) {
-                existingScript.addEventListener("load", () => resolve(window.L));
-                existingScript.addEventListener("error", reject);
-                return;
-            }
-
-            const script = document.createElement("script");
-            script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-            script.async = true;
-            script.setAttribute("data-leaflet-js", "true");
-            script.onload = () => resolve(window.L);
-            script.onerror = () => reject(new Error("Falha ao carregar o mapa."));
-            document.body.appendChild(script);
-        });
-
-        return leafletAssetsPromise;
     }
 
     function parsePrice(value) {
@@ -916,6 +881,8 @@
         if (!openButton || !editorModal || !selectorPanel || !editorPanel || !profileForm) return;
         const list = listNode || { innerHTML: "", addEventListener() {} };
         const createButton = createButtonNode || { addEventListener() {} };
+        const numeroField = profileForm.querySelector("[name='numero']");
+        const numeroFeedback = document.getElementById("profile-numero-feedback");
 
         const editorCloseButtons = editorModal.querySelectorAll("[data-profile-editor-close]");
         const readEditor = (name) => String(profileForm.querySelector(`[name='${name}']`)?.value || "").trim();
@@ -1185,6 +1152,7 @@
         function openEditor(mode, profile) {
             editingProfileId = mode === "edit" ? String(profile?.id || "") : "";
             fillEditor(profile || null);
+            clearNumeroAttention();
             openModal();
             showEditorPanel();
             addressController?.refreshMap?.();
@@ -1225,6 +1193,19 @@
                 geocode_tipo: readEditor("geocode_tipo"),
                 geocode_precision: readEditor("geocode_precision"),
             };
+        }
+
+        function clearNumeroAttention() {
+            numeroField?.classList.remove("field-needs-attention");
+            numeroFeedback?.classList.add("hidden");
+            numeroField?.removeAttribute("aria-invalid");
+        }
+
+        function showNumeroAttention() {
+            numeroField?.classList.add("field-needs-attention");
+            numeroField?.setAttribute("aria-invalid", "true");
+            numeroFeedback?.classList.remove("hidden");
+            numeroField?.focus();
         }
 
         function renderProfiles() {
@@ -1357,7 +1338,13 @@
 
         profileForm.addEventListener("submit", (event) => {
             event.preventDefault();
-            const saved = upsertCheckoutProfile(readProfileFromEditor());
+            const profile = readProfileFromEditor();
+            if (!profile.numero) {
+                showNumeroAttention();
+                return;
+            }
+            clearNumeroAttention();
+            const saved = upsertCheckoutProfile(profile);
             if (!saved) {
                 showUiNotice("Confirme um ponto no mapa e informe o número para salvar o endereço.");
                 return;
@@ -1368,6 +1355,8 @@
             closeEditor();
             closeModal();
         });
+
+        numeroField?.addEventListener("input", clearNumeroAttention);
 
         editorCloseButtons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -1479,16 +1468,15 @@
             return noopApi;
         }
 
-        let reverseController = null;
         let shouldShowCoordsWarning = false;
         let mapInstance = null;
         let previewMapInstance = null;
         let isProgrammaticMapMove = false;
         let googleGeocoder = null;
-        let currentProvider = hasGoogleMapsProvider() ? "google" : "openstreetmap";
+        let currentProvider = hasGoogleMapsProvider() ? "google" : "";
         let addressPointConfirmed = false;
         let isRequestingCurrentLocation = false;
-        let operatorSearchController = null;
+        let operatorSearchRequestId = 0;
         let operatorSearchTimer = null;
         let operatorSelectedAddress = null;
 
@@ -1537,31 +1525,56 @@
             operatorAddressSuggestions.classList.remove("hidden");
         }
 
+        async function ensureGoogleGeocoder() {
+            if (!hasGoogleMapsProvider()) {
+                throw new Error("Google Maps nao configurado.");
+            }
+            await loadGoogleMapsAssets();
+            const { Geocoder } = await google.maps.importLibrary("geocoding");
+            if (!googleGeocoder) googleGeocoder = new Geocoder();
+            currentProvider = "google";
+            return googleGeocoder;
+        }
+
         async function fetchOperatorAddressSuggestions(query, extraParams = {}) {
             const normalizedQuery = String(query || "").trim();
             if (normalizedQuery.length < 3) return [];
-            if (operatorSearchController) operatorSearchController.abort();
-            operatorSearchController = new AbortController();
-            const params = new URLSearchParams({
-                q: normalizedQuery,
-                cidade: extraParams.cidade || cidadeInput.value || "Rio Verde",
-                estado: extraParams.estado || estadoInput.value || "GO",
+            const geocoder = await ensureGoogleGeocoder();
+            const city = extraParams.cidade || cidadeInput.value || "Rio Verde";
+            const state = extraParams.estado || estadoInput.value || "GO";
+            const queryWithContext = [normalizedQuery, city, state, "Brasil"].filter(Boolean).join(", ");
+            const response = await geocoder.geocode({
+                address: queryWithContext,
+                componentRestrictions: {
+                    country: "BR",
+                    administrativeArea: state,
+                    locality: city,
+                },
+                language: googleMapsLanguage,
             });
-            if (extraParams.bairro) params.set("bairro", extraParams.bairro);
-            const response = await fetch(`${addressAutocompleteUrl}?${params.toString()}`, {
-                method: "GET",
-                headers: { Accept: "application/json" },
-                signal: operatorSearchController.signal,
-            });
-            if (!response.ok) return [];
-            const payload = await response.json();
-            return Array.isArray(payload) ? payload : [];
+            const seen = new Set();
+            return (response?.results || [])
+                .map((result) => {
+                    const location = result.geometry?.location;
+                    if (!location) return null;
+                    return mapGoogleResult(result, location.lat(), location.lng());
+                })
+                .filter(Boolean)
+                .filter((item) => {
+                    const signature = `${item.label}|${item.lat}|${item.lng}`;
+                    if (seen.has(signature)) return false;
+                    seen.add(signature);
+                    return true;
+                })
+                .slice(0, 6);
         }
 
         async function runOperatorAddressSearch(query) {
+            const requestId = ++operatorSearchRequestId;
             setOperatorSearchLoading(true);
             try {
                 const items = await fetchOperatorAddressSuggestions(query);
+                if (requestId !== operatorSearchRequestId) return;
                 renderOperatorSuggestions(items);
                 operatorAddressSuggestions?.querySelectorAll("[data-operator-address-index]").forEach((button) => {
                     button.addEventListener("click", () => {
@@ -1570,11 +1583,9 @@
                     });
                 });
             } catch (error) {
-                if (error.name !== "AbortError") {
-                    showFeedback("Nao foi possivel buscar o endereco agora.", true);
-                }
+                showFeedback("Busca do Google Maps indisponivel. Verifique a chave nas configuracoes.", true);
             } finally {
-                setOperatorSearchLoading(false);
+                if (requestId === operatorSearchRequestId) setOperatorSearchLoading(false);
             }
         }
 
@@ -1607,9 +1618,7 @@
                 };
                 applyResolvedAddress(operatorSelectedAddress, { confirmed: true, updateMap: true });
             } catch (error) {
-                if (error.name !== "AbortError") {
-                    showFeedback("Endereco mantido pela rua selecionada. Use Ajustar no mapa se precisar.", true);
-                }
+                showFeedback("Endereco mantido pela rua selecionada. Use Ajustar no mapa se precisar.", true);
             }
         }
 
@@ -1763,6 +1772,7 @@
                 "Rio Verde";
             const state = getGoogleComponent(components, "administrative_area_level_1", "short_name") || "GO";
             const primaryType = Array.isArray(result.types) && result.types.length ? result.types[0] : "google";
+            const precision = resolveGooglePrecision(result.types);
 
             return {
                 label: result.formatted_address || street || "Ponto confirmado no mapa",
@@ -1773,13 +1783,14 @@
                 lat: Number(lat),
                 lng: Number(lng),
                 type: primaryType,
-                precision: resolveGooglePrecision(result.types),
+                precision,
+                precision_label: resolutionTone(precision).label,
             };
         }
 
         async function reverseGeocodeWithGoogle(lat, lng) {
-            if (!googleGeocoder) return null;
             try {
+                await ensureGoogleGeocoder();
                 const response = await googleGeocoder.geocode({
                     location: { lat: Number(lat), lng: Number(lng) },
                     language: googleMapsLanguage,
@@ -1791,31 +1802,9 @@
             }
         }
 
-        async function reverseGeocodeWithFallback(lat, lng) {
-            if (reverseController) reverseController.abort();
-            reverseController = new AbortController();
-            try {
-                const response = await fetch(`${reverseGeocodeUrl}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
-                    method: "GET",
-                    headers: { Accept: "application/json" },
-                    signal: reverseController.signal,
-                });
-                if (!response.ok) return null;
-                const payload = await response.json();
-                return payload?.ok ? payload : null;
-            } catch (error) {
-                if (error.name === "AbortError") return null;
-                return null;
-            }
-        }
-
         async function reverseGeocodeCenter(lat, lng) {
             showMapFeedback("Atualizando endereco pelo centro do mapa...");
-            if (currentProvider === "google") {
-                const googleResult = await reverseGeocodeWithGoogle(lat, lng);
-                if (googleResult) return googleResult;
-            }
-            return reverseGeocodeWithFallback(lat, lng);
+            return reverseGeocodeWithGoogle(lat, lng);
         }
 
         async function syncAddressFromMapCenter(options = {}) {
@@ -1861,129 +1850,63 @@
         }
 
         async function initializeMap() {
-            if (hasGoogleMapsProvider()) {
-                try {
-                    await loadGoogleMapsAssets();
-                    const { Map } = await google.maps.importLibrary("maps");
-                    const { Geocoder } = await google.maps.importLibrary("geocoding");
-
-                    const googleMap = new Map(mapRoot, {
-                        center: { lat: -17.7923, lng: -50.9192 },
-                        zoom: 14,
-                        mapTypeControl: false,
-                        streetViewControl: false,
-                        fullscreenControl: false,
-                        clickableIcons: false,
-                    });
-                    googleGeocoder = new Geocoder();
-                    currentProvider = "google";
-
-                    mapInstance = {
-                        provider: "google",
-                        setCenter(lat, lng, zoom = 18) {
-                            googleMap.setCenter({ lat: Number(lat), lng: Number(lng) });
-                            googleMap.setZoom(zoom);
-                        },
-                        getCenter() {
-                            const center = googleMap.getCenter();
-                            return {
-                                lat: center ? center.lat() : -17.7923,
-                                lng: center ? center.lng() : -50.9192,
-                            };
-                        },
-                        invalidateSize() {
-                            const center = googleMap.getCenter();
-                            google.maps.event.trigger(googleMap, "resize");
-                            if (center) googleMap.setCenter(center);
-                        },
-                    };
-
-                    previewMapInstance = {
-                        provider: "google",
-                        map: new Map(previewMapRoot, {
-                            center: { lat: -17.7923, lng: -50.9192 },
-                            zoom: 15,
-                            disableDefaultUI: true,
-                            gestureHandling: "none",
-                            clickableIcons: false,
-                            keyboardShortcuts: false,
-                        }),
-                        setCenter(lat, lng, zoom = 17) {
-                            this.map.setCenter({ lat: Number(lat), lng: Number(lng) });
-                            this.map.setZoom(zoom);
-                        },
-                    };
-
-                    googleMap.addListener("idle", async () => {
-                        if (isProgrammaticMapMove) {
-                            isProgrammaticMapMove = false;
-                            return;
-                        }
-                        await syncAddressFromMapCenter({ confirmed: false });
-                    });
-
-                    showMapFeedback("Google Maps pronto. Mova o mapa até o pin central ficar no local exato da entrega.");
-                    return;
-                } catch (error) {
-                    currentProvider = "openstreetmap";
-                    showMapFeedback("Google Maps indisponível no momento. Usando mapa alternativo.", true);
-                }
+            if (!hasGoogleMapsProvider()) {
+                showMapFeedback("Google Maps nao configurado. Cadastre a chave em Ajustes > Google Maps.", true);
+                return;
             }
 
             try {
-                const L = await loadLeafletAssets();
-                if (!L || mapInstance) return;
+                await loadGoogleMapsAssets();
+                const { Map } = await google.maps.importLibrary("maps");
+                await ensureGoogleGeocoder();
 
-                const leafletMap = L.map(mapRoot, {
-                    center: [-17.7923, -50.9192],
+                const googleMap = new Map(mapRoot, {
+                    center: { lat: -17.7923, lng: -50.9192 },
                     zoom: 14,
-                    zoomControl: true,
-                    attributionControl: true,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    fullscreenControl: false,
+                    clickableIcons: false,
                 });
-                L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                    maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap",
-                }).addTo(leafletMap);
+                currentProvider = "google";
 
                 mapInstance = {
-                    provider: "openstreetmap",
+                    provider: "google",
                     setCenter(lat, lng, zoom = 18) {
-                        leafletMap.setView([Number(lat), Number(lng)], zoom, { animate: false });
+                        googleMap.setCenter({ lat: Number(lat), lng: Number(lng) });
+                        googleMap.setZoom(zoom);
                     },
                     getCenter() {
-                        const center = leafletMap.getCenter();
-                        return { lat: center.lat, lng: center.lng };
+                        const center = googleMap.getCenter();
+                        return {
+                            lat: center ? center.lat() : -17.7923,
+                            lng: center ? center.lng() : -50.9192,
+                        };
                     },
                     invalidateSize() {
-                        leafletMap.invalidateSize();
+                        const center = googleMap.getCenter();
+                        google.maps.event.trigger(googleMap, "resize");
+                        if (center) googleMap.setCenter(center);
                     },
                 };
 
-                const leafletPreviewMap = L.map(previewMapRoot, {
-                    center: [-17.7923, -50.9192],
-                    zoom: 15,
-                    zoomControl: false,
-                    attributionControl: false,
-                    dragging: false,
-                    touchZoom: false,
-                    doubleClickZoom: false,
-                    scrollWheelZoom: false,
-                    boxZoom: false,
-                    keyboard: false,
-                });
-                L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                    maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap",
-                }).addTo(leafletPreviewMap);
                 previewMapInstance = {
-                    provider: "openstreetmap",
-                    map: leafletPreviewMap,
+                    provider: "google",
+                    map: new Map(previewMapRoot, {
+                        center: { lat: -17.7923, lng: -50.9192 },
+                        zoom: 15,
+                        disableDefaultUI: true,
+                        gestureHandling: "none",
+                        clickableIcons: false,
+                        keyboardShortcuts: false,
+                    }),
                     setCenter(lat, lng, zoom = 17) {
-                        leafletPreviewMap.setView([Number(lat), Number(lng)], zoom, { animate: false });
+                        this.map.setCenter({ lat: Number(lat), lng: Number(lng) });
+                        this.map.setZoom(zoom);
                     },
                 };
 
-                leafletMap.on("moveend", async () => {
+                googleMap.addListener("idle", async () => {
                     if (isProgrammaticMapMove) {
                         isProgrammaticMapMove = false;
                         return;
@@ -1991,13 +1914,11 @@
                     await syncAddressFromMapCenter({ confirmed: false });
                 });
 
-                setTimeout(() => mapInstance.invalidateSize(), 60);
-                showMapFeedback("Mova o mapa até o pin central ficar no local exato da entrega.");
+                showMapFeedback("Google Maps pronto. Mova o mapa ate o pin central ficar no local exato da entrega.");
             } catch (error) {
-                showMapFeedback("Não foi possível carregar o mapa neste momento.", true);
+                showMapFeedback("Nao foi possivel carregar o Google Maps. Verifique a chave em Ajustes.", true);
             }
         }
-
         function requestCurrentLocation() {
             if (isRequestingCurrentLocation) return;
             if (!navigator.geolocation) {
@@ -2128,6 +2049,8 @@
         const stagePayment = document.getElementById("checkout-stage-payment");
         const paymentDeliveryOptions = document.getElementById("payment-delivery-options");
         const paymentPixPanel = document.getElementById("payment-pix-panel");
+        const paymentFeedback = document.getElementById("checkout-payment-feedback");
+        const submitButton = document.getElementById("checkout-submit-button");
         const checkoutNameInput = document.getElementById("checkout-nome");
         const checkoutAddressSummary = document.getElementById("checkout-address-summary");
         const savedProfileOpenButton = document.getElementById("saved-profile-open");
@@ -2178,6 +2101,8 @@
             checkoutAddressSummary?.classList.remove("field-needs-attention");
             savedProfileOpenButton?.classList.remove("field-needs-attention");
             stagePayment?.classList.remove("field-needs-attention");
+            stagePayment?.classList.remove("is-payment-missing", "is-payment-method-missing");
+            paymentFeedback?.classList.add("hidden");
         }
 
         function highlightMissingDeliveryField() {
@@ -2194,10 +2119,31 @@
         }
 
         function highlightMissingPaymentField() {
-            stagePayment?.classList.add("field-needs-attention");
+            stagePayment?.classList.remove("field-needs-attention");
+            stagePayment?.classList.add("is-payment-missing");
+            const selectedType = stagePayment?.querySelector("[data-payment-type].is-selected")?.getAttribute("data-payment-type") || "";
+            const needsDeliveryMethod = selectedType === "entrega";
+            stagePayment?.classList.toggle("is-payment-method-missing", needsDeliveryMethod);
+            if (paymentFeedback) {
+                paymentFeedback.textContent = needsDeliveryMethod
+                    ? "Escolha Dinheiro ou Cartao para pagamento na entrega."
+                    : "Escolha uma forma de pagamento para finalizar.";
+                paymentFeedback.classList.remove("hidden");
+            }
             stagePayment?.scrollIntoView({ behavior: "smooth", block: "center" });
-            const target = stagePayment?.querySelector("[data-payment-type]");
+            const target = needsDeliveryMethod
+                ? stagePayment?.querySelector("[data-payment-method]")
+                : stagePayment?.querySelector("[data-payment-type]");
             window.setTimeout(() => target?.focus?.(), 160);
+        }
+
+        function syncCheckoutSubmitReadiness() {
+            const ready = Boolean(
+                getCart().length &&
+                hasCheckoutDeliveryData(form) &&
+                String(paymentMethodInput?.value || "").trim()
+            );
+            submitButton?.classList.toggle("is-ready", ready);
         }
 
         function setActiveStage(stage) {
@@ -2288,6 +2234,7 @@
                 shippingReviewPaymentElement.textContent = Number.isFinite(selectedShippingFee) && selectedShippingFee > 0 ? money(selectedShippingFee) : "--";
             }
             syncStageAvailability(cart.length);
+            syncCheckoutSubmitReadiness();
 
             itemsContainer?.querySelectorAll("[data-qty-change]").forEach((button) => {
                 button.addEventListener("click", function () {
@@ -2343,9 +2290,18 @@
             paymentDeliveryOptions?.classList.toggle("hidden", type !== "entrega");
             paymentPixPanel?.classList.toggle("hidden", type !== "pix");
             if (paymentMethodInput) paymentMethodInput.value = method;
+            stagePayment?.classList.remove("field-needs-attention", "is-payment-missing", "is-payment-method-missing");
+            paymentFeedback?.classList.add("hidden");
             if (method) {
-                stagePayment?.classList.remove("field-needs-attention");
+                syncCheckoutSubmitReadiness();
+            } else if (type === "entrega") {
+                stagePayment?.classList.add("is-payment-missing", "is-payment-method-missing");
+                if (paymentFeedback) {
+                    paymentFeedback.textContent = "Escolha Dinheiro ou Cartao para pagamento na entrega.";
+                    paymentFeedback.classList.remove("hidden");
+                }
             }
+            syncCheckoutSubmitReadiness();
 
             if (options.persist !== false) {
                 saveCheckoutPaymentPreference({ type, method });
@@ -2429,7 +2385,6 @@
                 event.preventDefault();
                 setActiveStage("delivery");
                 highlightMissingPaymentField();
-                showUiNotice("Selecione uma forma de pagamento para continuar.");
                 return;
             }
             payloadInput.value = JSON.stringify(cart);
@@ -2697,3 +2652,4 @@
         initCheckoutPage();
         initCozinhaPage();
 })();
+

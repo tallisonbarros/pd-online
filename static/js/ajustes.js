@@ -1,6 +1,5 @@
 (function () {
     const config = window.PRATO_CONFIG || {};
-    const reverseGeocodeUrl = String(config.reverseGeocodeUrl || "/api/address/reverse-geocode/").trim();
     const googleMapsApiKey = String(config.googleMapsApiKey || "").trim();
     const googleMapsLanguage = String(config.googleMapsLanguage || "pt-BR").trim() || "pt-BR";
     const googleMapsRegion = String(config.googleMapsRegion || "BR").trim() || "BR";
@@ -8,7 +7,7 @@
 
     let googleMapsLoadPromise = null;
     let googleMapsLoadedKey = "";
-    let leafletAssetsPromise = null;
+    let googleGeocoder = null;
 
     function hasGoogleMapsProvider() {
         return Boolean(googleMapsApiKey);
@@ -77,49 +76,69 @@
         return googleMapsLoadPromise;
     }
 
-    function loadLeafletAssets() {
-        if (window.L) return Promise.resolve(window.L);
-        if (leafletAssetsPromise) return leafletAssetsPromise;
+    function getGoogleComponent(components, type, field = "long_name") {
+        const match = Array.isArray(components)
+            ? components.find((component) => Array.isArray(component.types) && component.types.includes(type))
+            : null;
+        return String(match?.[field] || "").trim();
+    }
 
-        leafletAssetsPromise = new Promise((resolve, reject) => {
-            if (!document.querySelector("link[data-leaflet-css]")) {
-                const css = document.createElement("link");
-                css.rel = "stylesheet";
-                css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-                css.setAttribute("data-leaflet-css", "true");
-                document.head.appendChild(css);
-            }
+    function resolveGooglePrecision(types) {
+        const normalized = Array.isArray(types) ? types : [];
+        if (normalized.includes("street_address") || normalized.includes("premise") || normalized.includes("subpremise")) {
+            return "exact";
+        }
+        if (normalized.includes("route") || normalized.includes("intersection") || normalized.includes("plus_code")) {
+            return "approximate";
+        }
+        return "manual";
+    }
 
-            const existingScript = document.querySelector("script[data-leaflet-js]");
-            if (existingScript) {
-                existingScript.addEventListener("load", () => resolve(window.L), { once: true });
-                existingScript.addEventListener("error", () => reject(new Error("Falha ao carregar o mapa.")), { once: true });
-                return;
-            }
+    function mapGoogleResult(result, lat, lng) {
+        if (!result) return null;
+        const components = result.address_components || [];
+        const street = getGoogleComponent(components, "route") || result.formatted_address || "";
+        const district =
+            getGoogleComponent(components, "sublocality_level_1") ||
+            getGoogleComponent(components, "sublocality") ||
+            getGoogleComponent(components, "neighborhood") ||
+            getGoogleComponent(components, "administrative_area_level_3");
+        const city =
+            getGoogleComponent(components, "locality") ||
+            getGoogleComponent(components, "administrative_area_level_2") ||
+            "Rio Verde";
+        const state = getGoogleComponent(components, "administrative_area_level_1", "short_name") || "GO";
+        const primaryType = Array.isArray(result.types) && result.types.length ? result.types[0] : "google";
+        return {
+            label: result.formatted_address || street || "Ponto confirmado no mapa",
+            street,
+            district,
+            city,
+            state,
+            lat: Number(lat),
+            lng: Number(lng),
+            type: primaryType,
+            precision: resolveGooglePrecision(result.types),
+            source: "google",
+        };
+    }
 
-            const script = document.createElement("script");
-            script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-            script.async = true;
-            script.setAttribute("data-leaflet-js", "true");
-            script.onload = () => resolve(window.L);
-            script.onerror = () => reject(new Error("Falha ao carregar o mapa."));
-            document.body.appendChild(script);
-        });
-
-        return leafletAssetsPromise;
+    async function ensureGoogleGeocoder() {
+        await loadGoogleMapsRuntime();
+        const { Geocoder } = await google.maps.importLibrary("geocoding");
+        if (!googleGeocoder) googleGeocoder = new Geocoder();
+        return googleGeocoder;
     }
 
     async function reverseGeocode(lat, lng) {
-        if (!reverseGeocodeUrl) return null;
         try {
-            const response = await fetch(`${reverseGeocodeUrl}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
-                method: "GET",
-                headers: { Accept: "application/json" },
+            const geocoder = await ensureGoogleGeocoder();
+            const response = await geocoder.geocode({
+                location: { lat: Number(lat), lng: Number(lng) },
+                language: googleMapsLanguage,
             });
-            if (!response.ok) return null;
-            const payload = await response.json();
-            if (!payload?.ok) return null;
-            return payload;
+            const result = response?.results?.[0];
+            return result ? mapGoogleResult(result, lat, lng) : null;
         } catch (error) {
             return null;
         }
@@ -208,12 +227,8 @@
 
         function getCenter() {
             if (!mapInstance) return { ...defaultCenter };
-            if (mapInstance.__provider === "google") {
-                const center = mapInstance.getCenter();
-                return { lat: center.lat(), lng: center.lng() };
-            }
             const center = mapInstance.getCenter();
-            return { lat: center.lat, lng: center.lng };
+            return { lat: center.lat(), lng: center.lng() };
         }
 
         function hasCenterChanged(nextCenter) {
@@ -255,12 +270,8 @@
                         lng: position.coords.longitude,
                     };
                     isProgrammaticMove = true;
-                    if (mapInstance.__provider === "google") {
-                        mapInstance.setCenter(nextCenter);
-                        mapInstance.setZoom(Math.max(mapInstance.getZoom() || 16, 17));
-                    } else {
-                        mapInstance.setView(nextCenter, Math.max(mapInstance.getZoom() || 16, 17));
-                    }
+                    mapInstance.setCenter(nextCenter);
+                    mapInstance.setZoom(Math.max(mapInstance.getZoom() || 16, 17));
                     window.setTimeout(() => {
                         isProgrammaticMove = false;
                     }, 220);
@@ -293,22 +304,6 @@
             });
         }
 
-        async function initLeafletMap(center) {
-            const L = await loadLeafletAssets();
-            mapInstance = L.map(mapRoot, {
-                zoomControl: true,
-                attributionControl: true,
-            }).setView(center, 16);
-            mapInstance.__provider = "leaflet";
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                attribution: "&copy; OpenStreetMap",
-            }).addTo(mapInstance);
-            mapInstance.on("moveend", async () => {
-                if (isProgrammaticMove) return;
-                await syncPreview({ commit: false });
-            });
-        }
-
         async function initMap() {
             const lat = Number(latField.value || "");
             const lng = Number(lngField.value || "");
@@ -316,14 +311,16 @@
                 ? { lat, lng }
                 : { ...defaultCenter };
 
-            if (hasGoogleMapsProvider()) {
-                try {
-                    await initGoogleMap(initialCenter);
-                } catch (error) {
-                    await initLeafletMap(initialCenter);
-                }
-            } else {
-                await initLeafletMap(initialCenter);
+            if (!hasGoogleMapsProvider()) {
+                setFeedback("Google Maps nao configurado. Cadastre a chave em Ajustes > Google Maps.", true);
+                return;
+            }
+
+            try {
+                await initGoogleMap(initialCenter);
+            } catch (error) {
+                setFeedback("Nao foi possivel carregar o Google Maps. Verifique a chave em Ajustes.", true);
+                return;
             }
 
             if (latField.value && lngField.value) {

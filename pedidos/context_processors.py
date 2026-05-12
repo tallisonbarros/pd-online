@@ -14,7 +14,7 @@ def frontend_config(request):
     google_maps_region = (
         config.google_maps_region_effective if config else getattr(settings, "GOOGLE_MAPS_REGION", "BR")
     )
-    checkout_map_provider = "google" if google_maps_api_key else "openstreetmap"
+    checkout_map_provider = "google" if google_maps_api_key else "google_unconfigured"
 
     return {
         "PRATO_FRONTEND_CONFIG": {

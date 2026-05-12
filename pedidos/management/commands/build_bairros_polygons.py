@@ -8,10 +8,8 @@ from urllib.request import Request, urlopen
 
 from django.core.management.base import BaseCommand
 
-from pedidos.views import PHOTON_BASE_URL
-
-
 CITY_PAGE = "https://cepbrasil.org/goias/rio-verde/"
+PHOTON_BASE_URL = "https://photon.komoot.io/api/"
 USER_AGENT = "PRATO-DELIVERY/1.0"
 
 

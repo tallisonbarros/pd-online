@@ -943,13 +943,27 @@ textarea {
 }
 
 .checkout-payment-stage.field-needs-attention {
-    background: rgba(255, 246, 239, 0.86);
-    box-shadow: 0 0 0 3px rgba(155, 63, 47, 0.16), 0 14px 30px rgba(34, 19, 17, 0.08);
-    animation: paymentAttentionPulse 520ms var(--ease-out) both;
+    background: transparent;
+    box-shadow: none;
 }
 
-.checkout-payment-stage.field-needs-attention .payment-choice-card:not(.is-selected) {
-    border-color: rgba(155, 63, 47, 0.42);
+.checkout-payment-stage.is-payment-missing:not(.is-payment-method-missing) .payment-choice-card,
+.checkout-payment-stage.is-payment-method-missing .payment-suboptions .secondary-pill:not(.is-selected) {
+    border-color: rgba(155, 63, 47, 0.58);
+    background: rgba(255, 246, 239, 0.92);
+    box-shadow: 0 0 0 3px rgba(155, 63, 47, 0.12);
+    animation: paymentAttentionPulse 520ms var(--ease-out) both;
+    opacity: 1;
+}
+
+.checkout-payment-stage.is-payment-method-missing .payment-choice-card.is-selected {
+    box-shadow: 0 14px 28px rgba(34, 19, 17, 0.18), 0 0 0 3px rgba(155, 63, 47, 0.1);
+}
+
+.payment-feedback {
+    margin-top: -4px;
+    color: #9b3f2f;
+    font-weight: 800;
 }
 
 @keyframes paymentAttentionPulse {
@@ -2165,6 +2179,9 @@ body.modal-open {
 
 [data-page="checkout"] .checkout-page-footer {
     bottom: 10px;
+    width: min(calc(100% - 28px), 390px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 [data-page="carrinho"] .checkout-stage-shell {
@@ -2375,12 +2392,29 @@ body.modal-open {
 .checkout-footer-back {
     width: 100%;
     justify-content: center;
-    padding: 12px 18px;
+    min-height: 46px;
+    padding: 10px 16px;
     border-radius: 999px;
     background: rgba(255, 253, 250, 0.94);
     box-shadow: 0 14px 34px rgba(34, 19, 17, 0.12);
     backdrop-filter: blur(10px);
     pointer-events: auto;
+}
+
+.checkout-submit-button.is-ready {
+    animation: checkoutSubmitReady 2200ms ease-in-out infinite;
+}
+
+@keyframes checkoutSubmitReady {
+    0%,
+    100% {
+        transform: translateY(0);
+        box-shadow: 0 16px 32px rgba(34, 19, 17, 0.14);
+    }
+    50% {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 38px rgba(34, 19, 17, 0.2), 0 0 0 5px rgba(90, 58, 50, 0.08);
+    }
 }
 
 .checkout-stack {
@@ -3108,6 +3142,11 @@ fieldset.field {
 .saved-profile-create.field-needs-attention {
     border-color: #9b3f2f;
     box-shadow: 0 0 0 3px rgba(155, 63, 47, 0.16);
+}
+
+.field-error {
+    color: #9b3f2f;
+    font-weight: 800;
 }
 
 .field textarea {
