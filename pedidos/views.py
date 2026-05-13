@@ -677,7 +677,7 @@ def _to_decimal(value):
     try:
         if value is None:
             return None
-        return Decimal(str(value))
+        return Decimal(str(value).strip().replace(",", "."))
     except (InvalidOperation, TypeError, ValueError):
         return None
 

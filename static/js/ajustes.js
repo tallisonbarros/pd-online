@@ -160,6 +160,7 @@
         const districtDisplay = document.getElementById(cfg.districtId);
         const confirmButton = document.getElementById(cfg.confirmButtonId);
         const useLocationButton = document.getElementById(cfg.useLocationButtonId);
+        const editButton = cfg.editButtonId ? document.getElementById(cfg.editButtonId) : null;
         const addressField = document.getElementById(cfg.addressFieldId);
         const latField = document.getElementById(cfg.latFieldId);
         const lngField = document.getElementById(cfg.lngFieldId);
@@ -175,10 +176,26 @@
         let isProgrammaticMove = false;
         let previewData = null;
         let confirmedCenter = null;
+        let isLocked = Boolean(cfg.lockWhenSaved && latField.value && lngField.value);
 
         function setFeedback(message, warning = false) {
             feedback.textContent = message;
             feedback.classList.toggle("is-warning", Boolean(warning));
+        }
+
+        function syncLockedUi() {
+            mapRoot.closest(".address-map-shell")?.classList.toggle("is-origin-locked", isLocked);
+            useLocationButton.classList.toggle("hidden", isLocked);
+            confirmButton.classList.toggle("hidden", isLocked);
+            if (editButton) editButton.classList.toggle("hidden", !isLocked);
+            if (!mapInstance) return;
+            mapInstance.setOptions({
+                draggable: !isLocked,
+                gestureHandling: isLocked ? "none" : "greedy",
+                keyboardShortcuts: !isLocked,
+                scrollwheel: !isLocked,
+                disableDoubleClickZoom: isLocked,
+            });
         }
 
         function writeHidden(data) {
@@ -239,6 +256,10 @@
         }
 
         async function syncPreview({ commit = false } = {}) {
+            if (isLocked && !commit) {
+                setFeedback("Origem Oficial salva. Clique em Alterar origem oficial para mudar este ponto.", false);
+                return;
+            }
             const center = getCenter();
             const data = await reverseFromCenter(center);
             renderPreview(data);
@@ -295,16 +316,22 @@
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
-                gestureHandling: "greedy",
+                gestureHandling: isLocked ? "none" : "greedy",
+                draggable: !isLocked,
+                keyboardShortcuts: !isLocked,
+                scrollwheel: !isLocked,
+                disableDoubleClickZoom: isLocked,
             });
             mapInstance.__provider = "google";
             mapInstance.addListener("idle", async () => {
-                if (isProgrammaticMove) return;
+                if (isProgrammaticMove || isLocked) return;
                 await syncPreview({ commit: false });
             });
+            syncLockedUi();
         }
 
         async function initMap() {
+            syncLockedUi();
             const lat = Number(latField.value || "");
             const lng = Number(lngField.value || "");
             const initialCenter = Number.isFinite(lat) && Number.isFinite(lng)
@@ -325,10 +352,20 @@
 
             if (latField.value && lngField.value) {
                 await syncPreview({ commit: true });
-                } else {
+                if (isLocked) {
+                    setFeedback("Origem Oficial salva e fixada neste ponto.", false);
+                    syncLockedUi();
+                }
+            } else {
                 await syncPreview({ commit: false });
             }
         }
+
+        editButton?.addEventListener("click", () => {
+            isLocked = false;
+            syncLockedUi();
+            setFeedback("Modo de edição ativo. Mova o mapa e confirme a nova Origem Oficial.", false);
+        });
 
         confirmButton.addEventListener("click", async () => {
             confirmButton.disabled = true;
@@ -355,16 +392,18 @@
         initMap();
     }
 
-    initPinResolver({
-        mapId: "ajustes-origem-map",
-        feedbackId: "ajustes-origem-feedback",
-        streetId: "ajustes-origem-street",
-        districtId: "ajustes-origem-district",
-        confirmButtonId: "ajustes-origem-confirm",
-        useLocationButtonId: "ajustes-origem-use-location",
-        addressFieldId: "ajustes-origem-endereco",
-        latFieldId: "ajustes-origem-lat",
-        lngFieldId: "ajustes-origem-lng",
+        initPinResolver({
+            mapId: "ajustes-origem-map",
+            feedbackId: "ajustes-origem-feedback",
+            streetId: "ajustes-origem-street",
+            districtId: "ajustes-origem-district",
+            confirmButtonId: "ajustes-origem-confirm",
+            useLocationButtonId: "ajustes-origem-use-location",
+            editButtonId: "ajustes-origem-edit",
+            lockWhenSaved: true,
+            addressFieldId: "ajustes-origem-endereco",
+            latFieldId: "ajustes-origem-lat",
+            lngFieldId: "ajustes-origem-lng",
         labelFieldId: "ajustes-origem-label-input",
         typeFieldId: "ajustes-origem-tipo-input",
         precisionFieldId: "ajustes-origem-precision-input",

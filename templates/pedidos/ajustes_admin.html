@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load l10n %}
 
 {% block title %}Ajustes | PRATO-DELIVERY{% endblock %}
 
@@ -78,8 +79,8 @@
 
                 <div class="ajustes-map-stack">
                     <input type="hidden" name="origem_endereco" id="ajustes-origem-endereco" value="{{ origem.endereco }}">
-                    <input type="hidden" name="origem_latitude" id="ajustes-origem-lat" value="{{ origem.latitude|default:'' }}">
-                    <input type="hidden" name="origem_longitude" id="ajustes-origem-lng" value="{{ origem.longitude|default:'' }}">
+                    <input type="hidden" name="origem_latitude" id="ajustes-origem-lat" value="{{ origem.latitude|unlocalize|default:'' }}">
+                    <input type="hidden" name="origem_longitude" id="ajustes-origem-lng" value="{{ origem.longitude|unlocalize|default:'' }}">
                     <input type="hidden" id="ajustes-origem-label-input" value="{{ origem_resolution.label }}">
                     <input type="hidden" id="ajustes-origem-tipo-input" value="{{ origem_resolution.type }}">
                     <input type="hidden" id="ajustes-origem-precision-input" value="{{ origem_resolution.precision }}">
@@ -90,6 +91,7 @@
                     </div>
 
                     <div class="ajustes-map-actions">
+                        <button type="button" id="ajustes-origem-edit" class="secondary-pill compact">Alterar origem oficial</button>
                         <button type="button" id="ajustes-origem-use-location" class="secondary-pill compact">Usar minha localização</button>
                         <button type="button" id="ajustes-origem-confirm" class="primary-button" data-save-on-confirm="true">Confirmar origem</button>
                     </div>
@@ -119,8 +121,8 @@
 
                 <div class="ajustes-map-stack">
                     <input type="hidden" name="destino_teste" id="ajustes-destino-teste" value="{% if preview %}{{ preview.destino_digitado }}{% endif %}">
-                    <input type="hidden" name="destino_teste_lat" id="ajustes-destino-lat" value="{% if preview %}{{ preview.destino_lat }}{% endif %}">
-                    <input type="hidden" name="destino_teste_lng" id="ajustes-destino-lng" value="{% if preview %}{{ preview.destino_lng }}{% endif %}">
+                    <input type="hidden" name="destino_teste_lat" id="ajustes-destino-lat" value="{% if preview %}{{ preview.destino_lat|unlocalize }}{% endif %}">
+                    <input type="hidden" name="destino_teste_lng" id="ajustes-destino-lng" value="{% if preview %}{{ preview.destino_lng|unlocalize }}{% endif %}">
                     <input type="hidden" name="destino_teste_label" id="ajustes-destino-label-input" value="{% if preview %}{{ preview.destino_label }}{% endif %}">
                     <input type="hidden" name="destino_teste_tipo" id="ajustes-destino-tipo-input" value="{% if preview %}{{ preview.destino_tipo }}{% endif %}">
                     <input type="hidden" name="destino_teste_precision" id="ajustes-destino-precision-input" value="{% if preview %}{{ preview.destino_precision }}{% endif %}">
@@ -191,6 +193,7 @@
                         <p class="ops-kicker">Faixas</p>
                         <h2>Conversao de km para real</h2>
                     </div>
+                    <button type="submit" class="ped-btn ped-btn-primary ajustes-frete-save" name="action" value="save_frete">Salvar</button>
                 </header>
 
                 <div class="ajustes-frete-table">

@@ -7972,6 +7972,15 @@ fieldset.field {
     height: 300px;
 }
 
+.ajustes-map-shell.is-origin-locked {
+    border-color: rgba(47, 111, 79, 0.34);
+    box-shadow: 0 0 0 4px rgba(47, 111, 79, 0.06);
+}
+
+.ajustes-map-shell.is-origin-locked .address-map-pin {
+    filter: drop-shadow(0 8px 14px rgba(47, 111, 79, 0.24));
+}
+
 .ajustes-map-actions {
     display: flex;
     gap: 10px;
@@ -8254,6 +8263,10 @@ fieldset.field {
     gap: 8px;
 }
 
+.ajustes-frete-save {
+    justify-self: end;
+}
+
 .ajustes-frete-head,
 .ajustes-frete-row {
     display: grid;
@@ -8323,6 +8336,11 @@ fieldset.field {
     .usuarios-admin-main,
     .usuarios-class-row {
         grid-template-columns: 1fr;
+    }
+
+    .ajustes-frete-save {
+        width: 100%;
+        justify-self: stretch;
     }
 }
 
