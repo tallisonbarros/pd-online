@@ -1539,11 +1539,12 @@
             }
             operatorAddressSuggestions.innerHTML = items.map((item, index) => {
                 const title = item.street || item.label || "Endereco encontrado";
-                const meta = [item.district, [item.city, item.state].filter(Boolean).join(" - "), item.precision_label].filter(Boolean).join(" | ");
+                const cityState = [item.city, item.state].filter(Boolean).join(" - ");
+                const district = item.district || "Setor nao identificado";
                 return `
                     <button type="button" class="address-suggestion-item" data-operator-address-index="${index}">
                         <strong>${escapeHtml(title)}</strong>
-                        <small>${escapeHtml(meta || item.label || "")}</small>
+                        <small>${escapeHtml([district, cityState].filter(Boolean).join(" | ") || item.label || "")}</small>
                     </button>
                 `;
             }).join("");
@@ -1624,12 +1625,70 @@
             });
         }
 
+        function operatorSuggestionScore(item, query) {
+            const normalizedQuery = normalizeText(query);
+            const normalizedTitle = normalizeText(item?.street || item?.label || "");
+            const normalizedLabel = normalizeText(item?.label || "");
+            const tokens = normalizedQuery.split(/\s+/).filter((token) => token.length >= 3);
+            let score = 0;
+
+            if (normalizedTitle === normalizedQuery) score += 120;
+            if (normalizedTitle.includes(normalizedQuery)) score += 90;
+            if (normalizedLabel.includes(normalizedQuery)) score += 45;
+            if (tokens.length && tokens.every((token) => normalizedTitle.includes(token))) score += 70;
+            tokens.forEach((token) => {
+                if (normalizedTitle.includes(token)) score += 18;
+                else if (normalizedLabel.includes(token)) score += 8;
+            });
+            if (item?.district) score += 18;
+            if (normalizeText(item?.city).includes("rio verde")) score += 12;
+            if (normalizeText(item?.state) === "go") score += 6;
+            if (item?.source_method === "geocode") score += 18;
+            if (item?.precision === "exact") score += 12;
+            if (item?.precision === "approximate") score += 4;
+            return score;
+        }
+
+        async function enrichSuggestionDistricts(items) {
+            const limited = items.slice(0, 8);
+            return Promise.all(
+                limited.map(async (item) => {
+                    if (!item?.lat || !item?.lng || item?.district) return item;
+                    const resolved = await reverseGeocodeWithGoogle(item.lat, item.lng);
+                    if (!resolved?.district) return item;
+                    return {
+                        ...item,
+                        district: resolved.district,
+                        city: item.city || resolved.city,
+                        state: item.state || resolved.state,
+                    };
+                })
+            );
+        }
+
+        function uniqueOperatorSuggestions(items) {
+            const seen = new Set();
+            return items.filter((item) => {
+                if (!item) return false;
+                const signature = [
+                    normalizeText(item.street || item.label),
+                    normalizeText(item.district),
+                    Number(item.lat || 0).toFixed(5),
+                    Number(item.lng || 0).toFixed(5),
+                ].join("|");
+                if (seen.has(signature)) return false;
+                seen.add(signature);
+                return true;
+            });
+        }
+
         async function fetchOperatorAddressSuggestions(query, extraParams = {}) {
             const normalizedQuery = String(query || "").trim();
             if (normalizedQuery.length < 3) return [];
             const city = extraParams.cidade || cidadeInput.value || "Rio Verde";
             const state = extraParams.estado || estadoInput.value || "GO";
             let placesError = null;
+            let candidates = [];
 
             try {
                 const { autocomplete, details } = await ensureGooglePlaces();
@@ -1658,7 +1717,7 @@
                     return itemCity.includes(normalizeText(city)) && (itemState === normalizeText(state) || itemState.includes("goias"));
                 });
 
-                if (filtered.length) return filtered;
+                candidates = candidates.concat(filtered.map((item) => ({ ...item, source_method: "places" })));
             } catch (error) {
                 placesError = error;
             }
@@ -1679,20 +1738,18 @@
                 if (placesError) throw placesError;
                 throw error;
             }
-            const seen = new Set();
-            const results = (response?.results || [])
+            const geocodeResults = (response?.results || [])
                 .map((result) => {
                     const location = result.geometry?.location;
                     if (!location) return null;
-                    return mapGoogleResult(result, location.lat(), location.lng());
+                    const mapped = mapGoogleResult(result, location.lat(), location.lng());
+                    return mapped ? { ...mapped, source_method: "geocode" } : null;
                 })
-                .filter(Boolean)
-                .filter((item) => {
-                    const signature = `${item.label}|${item.lat}|${item.lng}`;
-                    if (seen.has(signature)) return false;
-                    seen.add(signature);
-                    return true;
-                })
+                .filter(Boolean);
+            candidates = candidates.concat(geocodeResults);
+            const enriched = await enrichSuggestionDistricts(uniqueOperatorSuggestions(candidates));
+            const results = enriched
+                .sort((a, b) => operatorSuggestionScore(b, normalizedQuery) - operatorSuggestionScore(a, normalizedQuery))
                 .slice(0, 6);
             if (!results.length && placesError) throw placesError;
             return results;
