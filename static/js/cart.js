@@ -1458,9 +1458,11 @@
         const operatorSearch = document.querySelector("[data-operator-address-search]");
         const operatorAddressInput = document.getElementById("operator-address-query");
         const operatorDistrictInput = document.getElementById("operator-district-query");
+        const operatorAddressOptionsButton = document.getElementById("operator-address-options");
         const operatorAddressLoading = document.getElementById("operator-address-loading");
         const operatorAddressSuggestions = document.getElementById("operator-address-suggestions");
         const operatorAdjustMapButton = document.getElementById("operator-adjust-map");
+        const operatorUseTypedAddressButton = document.getElementById("operator-use-typed-address");
 
         if (
             !ruaInput ||
@@ -1815,6 +1817,78 @@
             }
         }
 
+        async function showOperatorStreetOptions() {
+            const district = String(operatorDistrictInput?.value || "").trim();
+            const query = String(operatorAddressInput?.value || "").trim();
+            if (!district) {
+                showFeedback("Escolha um setor para listar ruas relacionadas.", true);
+                operatorDistrictInput?.focus();
+                return;
+            }
+            showFeedback("", false);
+            await runOperatorAddressSearch(query || "Rua");
+            operatorAddressInput?.focus();
+        }
+
+        async function useTypedOperatorAddress() {
+            const typedStreet = String(operatorAddressInput?.value || "").trim();
+            const typedDistrict = String(operatorDistrictInput?.value || "").trim();
+            if (typedStreet.length < 2) {
+                showFeedback("Digite o nome da rua ou referencia antes de continuar.", true);
+                operatorAddressInput?.focus();
+                return;
+            }
+            await ensureMapReady();
+            hideOperatorSuggestions();
+            let centerItem = null;
+            const geocodeAddress = async (address) => {
+                const geocoder = await ensureGoogleGeocoder();
+                const response = await geocoder.geocode({
+                    address,
+                    componentRestrictions: {
+                        country: "BR",
+                        administrativeArea: estadoInput.value || "GO",
+                        locality: cidadeInput.value || "Rio Verde",
+                    },
+                    language: googleMapsLanguage,
+                });
+                const result = response?.results?.[0];
+                const location = result?.geometry?.location;
+                return location ? mapGoogleResult(result, location.lat(), location.lng()) : null;
+            };
+            try {
+                const locationQuery = typedDistrict
+                    ? [typedDistrict, cidadeInput.value || "Rio Verde", estadoInput.value || "GO", "Brasil"].filter(Boolean).join(", ")
+                    : [typedStreet, cidadeInput.value || "Rio Verde", estadoInput.value || "GO", "Brasil"].filter(Boolean).join(", ");
+                centerItem = await geocodeAddress(locationQuery);
+            } catch (error) {
+                centerItem = null;
+            }
+            const payload = {
+                ...(centerItem || {}),
+                label: typedStreet,
+                street: typedStreet,
+                district: typedDistrict || centerItem?.district || "",
+                city: cidadeInput.value || centerItem?.city || "Rio Verde",
+                state: estadoInput.value || centerItem?.state || "GO",
+                lat: centerItem?.lat || -17.7923,
+                lng: centerItem?.lng || -50.9192,
+                type: centerItem?.type || "manual",
+                precision: centerItem?.precision || "manual",
+            };
+            operatorSelectedAddress = payload;
+            if (typedDistrict) {
+                applyResolvedAddress(payload, { confirmed: true, updateMap: true });
+                showFeedback("Texto do atendente mantido com a localizacao do setor. Informe o numero para salvar.", false);
+                return;
+            }
+            applyResolvedAddress(payload, { confirmed: false, updateMap: true });
+            mapStep.classList.add("is-map-visible");
+            showMapFeedback("Texto mantido. Posicione o pin no local correto e confirme.");
+            setTimeout(() => mapInstance?.invalidateSize?.(), 80);
+            showFeedback("Texto do atendente mantido. Confirme o pin no mapa para continuar.", true);
+        }
+
         async function enrichOperatorAddressFromCoordinates(item) {
             if (!item?.lat || !item?.lng || hasKnownDistrict(item)) return item;
             const resolved = await reverseGeocodeWithGoogle(item.lat, item.lng);
@@ -1835,13 +1909,22 @@
             operatorSelectedAddress = item;
             operatorAddressInput.value = item.label || item.street || operatorAddressInput.value;
             hideOperatorSuggestions();
-            applyResolvedAddress(item, { confirmed: true, updateMap: true });
             const enriched = await enrichOperatorAddressFromCoordinates(item);
-            if (enriched !== item) {
-                operatorSelectedAddress = enriched;
-                applyResolvedAddress(enriched, { confirmed: true, updateMap: false });
+            operatorSelectedAddress = enriched;
+            if (hasKnownDistrict(enriched)) {
+                applyResolvedAddress(enriched, { confirmed: true, updateMap: true });
+                showFeedback("Endereco selecionado. Informe o numero para salvar.", false);
+                return;
             }
-            showFeedback("Endereco selecionado. Informe o numero para salvar.", false);
+            await ensureMapReady();
+            applyResolvedAddress(enriched, { confirmed: false, updateMap: true });
+            mapStep.classList.add("is-map-visible");
+            showMapFeedback("Rua encontrada. Confirme o pin no mapa para preencher o setor.");
+            setTimeout(async () => {
+                mapInstance?.invalidateSize?.();
+                await syncAddressFromMapCenter({ confirmed: false });
+            }, 120);
+            showFeedback("Confirme o ponto no mapa para completar o setor antes de salvar.", true);
         }
 
         async function refineOperatorAddressWithNumber() {
@@ -2041,8 +2124,14 @@
                     location: { lat: Number(lat), lng: Number(lng) },
                     language: googleMapsLanguage,
                 });
-                const result = response?.results?.[0];
-                return result ? mapGoogleResult(result, lat, lng) : null;
+                const mappedResults = (response?.results || [])
+                    .map((result) => mapGoogleResult(result, lat, lng))
+                    .filter(Boolean);
+                const result =
+                    mappedResults.find((item) => hasKnownDistrict(item) && item.precision === "exact") ||
+                    mappedResults.find((item) => hasKnownDistrict(item)) ||
+                    mappedResults[0];
+                return result || null;
             } catch (error) {
                 return null;
             }
@@ -2216,10 +2305,28 @@
         });
 
         operatorDistrictInput?.addEventListener("input", () => {
-            const query = operatorAddressInput?.value.trim() || "";
             window.clearTimeout(operatorSearchTimer);
-            if (query.length < 3) return;
-            operatorSearchTimer = window.setTimeout(() => runOperatorAddressSearch(query), 220);
+            hideOperatorSuggestions();
+        });
+
+        operatorDistrictInput?.addEventListener("focus", () => {
+            window.clearTimeout(operatorSearchTimer);
+            hideOperatorSuggestions();
+        });
+
+        operatorAddressOptionsButton?.addEventListener("click", async () => {
+            await showOperatorStreetOptions();
+        });
+
+        operatorUseTypedAddressButton?.addEventListener("click", async () => {
+            await useTypedOperatorAddress();
+        });
+
+        operatorAddressInput?.addEventListener("keydown", async (event) => {
+            if (event.key !== "Enter") return;
+            if (!isOperatorCheckout) return;
+            event.preventDefault();
+            await useTypedOperatorAddress();
         });
 
         document.addEventListener("click", (event) => {

@@ -3166,11 +3166,38 @@ fieldset.field {
 .address-loading {
     position: absolute;
     top: 50%;
-    right: 12px;
+    right: 42px;
     transform: translateY(-50%);
     font-size: 0.8rem;
     color: var(--text-muted);
     pointer-events: none;
+}
+
+.address-options-button {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    transform: translateY(-50%);
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #386aa3;
+    cursor: pointer;
+    font-size: 1.12rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.address-options-button:hover,
+.address-options-button:focus-visible {
+    background: #f2ebe7;
+    outline: none;
+}
+
+.operator-address-search #operator-address-query {
+    padding-right: 48px;
 }
 
 .address-suggestions {

@@ -165,10 +165,12 @@
                                     <div class="address-autocomplete-shell">
                                         <input type="search" id="operator-address-query" autocomplete="off" placeholder="Digite rua, numero ou referencia">
                                         <span id="operator-address-loading" class="address-loading hidden">Buscando...</span>
+                                        <button type="button" id="operator-address-options" class="address-options-button" aria-label="Mostrar ruas do setor">⌄</button>
                                         <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
                                     </div>
                                 </label>
                                 <small class="field-help">Use o setor apenas quando ajudar a filtrar ruas repetidas. Se a sugestao vier incompleta, ajuste pelo mapa.</small>
+                                <button type="button" id="operator-use-typed-address" class="secondary-pill compact">Usar texto digitado</button>
                                 <button type="button" id="operator-adjust-map" class="secondary-pill compact">Ajustar no mapa</button>
                             </div>
                         {% endif %}
