@@ -21,14 +21,6 @@
         </div>
     </header>
 
-    {% with prato=pratos.0 %}
-        {% if prato %}
-        <p class="menu-feature-marquee" aria-label="Peça agora">
-            <span>Peça agora&nbsp;&nbsp;Peça agora&nbsp;&nbsp;Peça agora&nbsp;&nbsp;</span>
-        </p>
-        {% endif %}
-    {% endwith %}
-
     <section class="menu-feature-band" aria-labelledby="menu-feature-title">
         <img class="menu-feature-shape" src="{% static 'img/Barra.svg' %}" onerror="this.onerror=null;this.src='{% static 'img/menu-feature-shape-base-cardapio.svg' %}'" alt="" aria-hidden="true">
         <div class="menu-feature-title">
@@ -87,7 +79,15 @@
         <div class="menu-promo-copy">
             <p class="menu-promo-kicker">Promoção especial</p>
             <h2 id="menu-promo-title">Compre 4 marmitas, a 5ª é por nossa conta.</h2>
-            <p>Marmitas seladas, feitas no dia.</p>
+            <div class="meal-promo-progress" data-meal-promo-progress aria-label="Progresso da promoção">
+                <div class="meal-promo-progress-head">
+                    <span data-meal-promo-count>0/4 marmitas</span>
+                    <strong data-meal-promo-message>Faltam 4 para liberar 1 grátis</strong>
+                </div>
+                <div class="meal-promo-track" aria-hidden="true">
+                    <span data-meal-promo-fill></span>
+                </div>
+            </div>
         </div>
     </section>
 

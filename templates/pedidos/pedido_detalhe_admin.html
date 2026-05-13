@@ -135,6 +135,15 @@
                     {% empty %}
                         <li class="is-empty">Nenhum item encontrado neste pedido.</li>
                     {% endfor %}
+                    {% if pedido.promocao_desconto %}
+                        <li class="ped-detail-discount">
+                            <div>
+                                <strong>{{ pedido.promocao_descricao|default:"Promoção especial" }}</strong>
+                                <small>Promoção automática aplicada ao pedido</small>
+                            </div>
+                            <span>- R$ {{ pedido.promocao_desconto|floatformat:2 }}</span>
+                        </li>
+                    {% endif %}
                     {% if pedido.cupom_desconto %}
                         <li class="ped-detail-discount">
                             <div>
@@ -187,7 +196,7 @@
                         <dd class="{% if frete_confere %}is-ok{% else %}is-warn{% endif %}">R$ {{ diferenca_frete|floatformat:2 }}</dd>
                     </div>
                     <div>
-                        <dt>Total recalculado com subtotal + frete salvo</dt>
+                        <dt>Total recalculado com subtotal + frete - descontos</dt>
                         <dd>R$ {{ total_recalculado|floatformat:2 }}</dd>
                     </div>
                     <div>

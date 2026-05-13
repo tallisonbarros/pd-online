@@ -14,6 +14,11 @@
         </div>
     </header>
 
+    <nav class="checkout-nav-links" aria-label="Acoes auxiliares do caixa">
+        <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="cart-back-link">Carrinho</a>
+        <a href="{% url 'pedidos:cardapio' %}" class="cart-back-link" data-checkout-cardapio-link>Cardápio</a>
+    </nav>
+
     <section class="checkout-stage-shell">
         <section id="checkout-stage-delivery" class="checkout-stage-panel">
             <form method="post" action="{% url 'pedidos:criar_pedido' %}" class="panel checkout-form" id="checkout-form">
@@ -67,10 +72,17 @@
                     </div>
 
                     <section class="checkout-delivery-summary" aria-label="Resumo do pagamento">
-                        <span><strong data-cart-count>0</strong> itens</span>
-                        <span>Frete <strong id="checkout-shipping-review-payment">--</strong></span>
-                        <span id="checkout-coupon-review" class="hidden">Cupom <strong id="checkout-coupon-review-value">- R$ 0,00</strong></span>
-                        <span>Total <strong id="checkout-total-review-payment">R$ 0,00</strong></span>
+                        <span class="checkout-summary-row">Subtotal <strong id="checkout-items-subtotal-review">R$ 0,00</strong></span>
+                        <span id="checkout-meal-promo-review" class="checkout-summary-row hidden">
+                            Promoção <strong id="checkout-meal-promo-review-value">- R$ 0,00</strong>
+                        </span>
+                        <span id="checkout-coupon-review" class="checkout-summary-row hidden">
+                            Cupom <strong id="checkout-coupon-review-value">- R$ 0,00</strong>
+                        </span>
+                        <span class="checkout-summary-row">Frete <strong id="checkout-shipping-review-payment">--</strong></span>
+                        <span class="checkout-summary-row checkout-summary-total">
+                            Total final <strong id="checkout-total-review-payment">R$ 0,00</strong>
+                        </span>
                     </section>
 
                     <div class="payment-choice-grid">
@@ -110,14 +122,12 @@
                         {% endif %}
                     </div>
 
-                    <button type="submit" class="primary-button wide checkout-submit-button" id="checkout-submit-button">Finalizar no WhatsApp</button>
                 </section>
             </form>
         </section>
     </section>
-    <div class="checkout-page-footer" aria-label="Acoes auxiliares do checkout">
-        <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="secondary-pill checkout-footer-action">Carrinho</a>
-        <a class="secondary-pill checkout-footer-action checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Cardápio</a>
+    <div class="checkout-page-footer" aria-label="Finalizar pedido">
+        <button type="submit" form="checkout-form" class="primary-button wide checkout-submit-button" id="checkout-submit-button">Finalizar no WhatsApp</button>
     </div>
 </main>
 

@@ -76,7 +76,7 @@ class PedidoAdmin(admin.ModelAdmin):
     list_editable = ("status",)
     list_filter = ("status", "forma_pagamento", "enviar_talheres", "criado_em")
     search_fields = ("numero", "nome_cliente", "telefone", "rua", "numero_endereco", "bairro", "cidade", "endereco")
-    readonly_fields = ("numero", "total", "criado_em", "rota_google_maps")
+    readonly_fields = ("numero", "total", "criado_em", "rota_google_maps", "total_sem_desconto")
     list_per_page = 25
     inlines = [ItemPedidoInline]
     fieldsets = (
@@ -111,6 +111,11 @@ class PedidoAdmin(admin.ModelAdmin):
                     "status",
                     "distancia_km",
                     "valor_frete",
+                    "total_sem_desconto",
+                    "promocao_descricao",
+                    "promocao_desconto",
+                    "cupom_codigo",
+                    "cupom_desconto",
                     "total",
                     "numero",
                     "criado_em",

@@ -97,6 +97,8 @@ class Pedido(models.Model):
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     valor_frete = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     total_sem_desconto = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    promocao_descricao = models.CharField(max_length=120, blank=True)
+    promocao_desconto = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     cupom = models.ForeignKey("Cupom", on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos")
     cupom_codigo = models.CharField(max_length=40, blank=True)
     cupom_desconto = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))

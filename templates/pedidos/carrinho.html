@@ -16,12 +16,23 @@
 
     <section class="checkout-stage-shell">
         <section id="checkout-stage-items" class="checkout-stage-panel">
+            <a class="cart-back-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
             <div class="panel checkout-summary-panel">
                 <div class="panel-head">
                     <h2>Itens escolhidos</h2>
                     <span class="muted"><strong data-cart-count>0</strong></span>
                 </div>
                 <div id="checkout-items" class="checkout-items"></div>
+                <div class="cart-promo-progress" data-cart-meal-promo-progress aria-label="Progresso da promoção">
+                    <div class="meal-promo-progress-head">
+                        <span data-cart-meal-promo-count>0/4 marmitas</span>
+                        <strong data-cart-meal-promo-message>Faltam 4 para liberar 1 grátis</strong>
+                    </div>
+                    <div class="meal-promo-track" aria-hidden="true">
+                        <span data-cart-meal-promo-fill></span>
+                    </div>
+                    <small data-cart-meal-promo-next></small>
+                </div>
                 <div class="cart-coupon-inline" aria-label="Cupom de desconto">
                     <input type="text" id="cart-coupon-code" placeholder="Cupom">
                     <button type="button" id="cart-coupon-apply">OK</button>
@@ -31,6 +42,10 @@
                 <div class="cart-discount-line hidden" id="cart-coupon-discount-row">
                     <span>Cupom</span>
                     <strong id="cart-coupon-discount-value">- R$ 0,00</strong>
+                </div>
+                <div class="cart-discount-line hidden" id="cart-meal-promo-row">
+                    <span id="cart-meal-promo-label">Promoção especial</span>
+                    <strong id="cart-meal-promo-value">- R$ 0,00</strong>
                 </div>
                 <div class="checkout-total">
                     <span>Subtotal</span>
@@ -59,7 +74,7 @@
                 </div>
             </fieldset>
             <label class="field checkout-order-note-field">
-                <textarea id="checkout-order-note" rows="4" placeholder="Observação geral do pedido. Ex.: sem cebola, entregar na portaria..."></textarea>
+                <textarea id="checkout-order-note" rows="4" placeholder="Observação geral do pedido"></textarea>
             </label>
         </section>
     </section>
@@ -91,9 +106,6 @@
                 </svg>
             </button>
         </div>
-    </div>
-    <div class="checkout-page-footer" aria-label="Acoes auxiliares do carrinho">
-        <a class="secondary-pill checkout-footer-back" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
     </div>
 </main>
 

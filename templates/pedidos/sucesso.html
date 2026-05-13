@@ -59,6 +59,9 @@
             <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
                 <span><strong>{{ pedido.itens.count }}</strong> itens</span>
                 <span>Frete <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong></span>
+                {% if pedido.promocao_desconto %}
+                    <span>{{ pedido.promocao_descricao|default:"Promoção" }} <strong>- R$ {{ pedido.promocao_desconto|floatformat:2 }}</strong></span>
+                {% endif %}
                 {% if pedido.cupom_desconto %}
                     <span>Cupom <strong>- R$ {{ pedido.cupom_desconto|floatformat:2 }}</strong></span>
                 {% endif %}

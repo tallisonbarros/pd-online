@@ -197,6 +197,9 @@ def montar_mensagem_whatsapp(pedido):
         if pix_chave:
             linhas.append(f"*Chave Pix:* {pix_chave}")
     linhas.extend(["", f"*Frete:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
+    if pedido.promocao_desconto and pedido.promocao_desconto > 0:
+        descricao = pedido.promocao_descricao or "Promoção especial"
+        linhas.append(f"*{descricao}:* - R$ {pedido.promocao_desconto:.2f}".replace(".", ","))
     if pedido.cupom_desconto and pedido.cupom_desconto > 0:
         linhas.append(f"*Desconto:* - R$ {pedido.cupom_desconto:.2f}".replace(".", ","))
     linhas.append(f"*Total:* R$ {pedido.total:.2f}".replace(".", ","))
@@ -1249,6 +1252,20 @@ def _create_order_items_from_payload(pedido, itens_payload):
     return total
 
 
+def _calcular_promocao_marmitas(pedido):
+    itens_prato = [item for item in pedido.itens.all() if item.prato_id]
+    quantidade_pratos = sum(max(item.quantidade, 0) for item in itens_prato)
+    marmitas_gratis = quantidade_pratos // 5
+    if marmitas_gratis <= 0:
+        return {"descricao": "", "discount": Decimal("0.00")}
+    precos = [item.preco_snapshot for item in itens_prato if item.preco_snapshot and item.preco_snapshot > 0]
+    if not precos:
+        return {"descricao": "", "discount": Decimal("0.00")}
+    desconto = (min(precos) * marmitas_gratis).quantize(Decimal("0.01"))
+    descricao = "5ª marmita grátis" if marmitas_gratis == 1 else f"{marmitas_gratis} marmitas grátis"
+    return {"descricao": descricao, "discount": desconto}
+
+
 def _money_decimal(value):
     try:
         return Decimal(str(value or "0").replace(",", ".")).quantize(Decimal("0.01"))
@@ -1437,17 +1454,22 @@ def criar_pedido(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    cupom_result = validar_cupom(cupom_codigo, total, valor_frete) if cupom_codigo else None
+    promocao_result = _calcular_promocao_marmitas(pedido)
+    promocao_desconto = min(promocao_result["discount"], total)
+    subtotal_com_promocao = max(total - promocao_desconto, Decimal("0.00"))
+    cupom_result = validar_cupom(cupom_codigo, subtotal_com_promocao, valor_frete) if cupom_codigo else None
     if cupom_codigo and not cupom_result["ok"]:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(cupom_result["message"])
-    desconto = cupom_result["discount"] if cupom_result else Decimal("0.00")
+    desconto = min(cupom_result["discount"], subtotal_com_promocao) if cupom_result else Decimal("0.00")
     pedido.total_sem_desconto = total + valor_frete
+    pedido.promocao_descricao = promocao_result["descricao"]
+    pedido.promocao_desconto = promocao_desconto
     pedido.cupom = cupom_result["coupon"] if cupom_result else None
     pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
     pedido.cupom_desconto = desconto
-    pedido.total = total + valor_frete - desconto
-    pedido.save(update_fields=["total_sem_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
+    pedido.total = total + valor_frete - promocao_desconto - desconto
+    pedido.save(update_fields=["total_sem_desconto", "promocao_descricao", "promocao_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1497,17 +1519,22 @@ def criar_retirada(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    cupom_result = validar_cupom(cupom_codigo, total, Decimal("0.00")) if cupom_codigo else None
+    promocao_result = _calcular_promocao_marmitas(pedido)
+    promocao_desconto = min(promocao_result["discount"], total)
+    subtotal_com_promocao = max(total - promocao_desconto, Decimal("0.00"))
+    cupom_result = validar_cupom(cupom_codigo, subtotal_com_promocao, Decimal("0.00")) if cupom_codigo else None
     if cupom_codigo and not cupom_result["ok"]:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(cupom_result["message"])
-    desconto = cupom_result["discount"] if cupom_result else Decimal("0.00")
+    desconto = min(cupom_result["discount"], subtotal_com_promocao) if cupom_result else Decimal("0.00")
     pedido.total_sem_desconto = total
+    pedido.promocao_descricao = promocao_result["descricao"]
+    pedido.promocao_desconto = promocao_desconto
     pedido.cupom = cupom_result["coupon"] if cupom_result else None
     pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
     pedido.cupom_desconto = desconto
-    pedido.total = total - desconto
-    pedido.save(update_fields=["total_sem_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
+    pedido.total = total - promocao_desconto - desconto
+    pedido.save(update_fields=["total_sem_desconto", "promocao_descricao", "promocao_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1545,6 +1572,8 @@ def _pedido_public_payload(pedido, include_items=False):
         "horario": timezone.localtime(pedido.criado_em).strftime("%d/%m %H:%M"),
         "itens_count": pedido.itens.count(),
         "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        "promocao_desconto": f"R$ {pedido.promocao_desconto:.2f}".replace(".", ",") if pedido.promocao_desconto else "",
+        "promocao_descricao": pedido.promocao_descricao,
         "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ",") if pedido.cupom_desconto else "",
         "cupom_codigo": pedido.cupom_codigo,
         "pagamento": pedido.get_forma_pagamento_display(),
@@ -2097,7 +2126,7 @@ def pedido_detalhe_admin(request, pedido_id):
     pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
     itens_subtotal = pedido.itens.aggregate(total=Sum("subtotal")).get("total") or Decimal("0.00")
     frete_esperado, faixa_frete_atual = _calcular_frete_por_distancia(pedido.distancia_km)
-    total_recalculado = itens_subtotal + pedido.valor_frete
+    total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
     diferenca_frete = pedido.valor_frete - frete_esperado
 
     return render(

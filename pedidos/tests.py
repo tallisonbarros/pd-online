@@ -1101,6 +1101,27 @@ class CriarPedidoFreteTests(TestCase):
         self.assertFalse(pedido.enviar_talheres)
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
 
+    def test_pickup_order_applies_fifth_meal_promotion(self):
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 5, "preco": "24.90"}]' % self.prato.id,
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.total_sem_desconto, Decimal("124.50"))
+        self.assertEqual(pedido.promocao_descricao, "5ª marmita grátis")
+        self.assertEqual(pedido.promocao_desconto, Decimal("24.90"))
+        self.assertEqual(pedido.total, Decimal("99.60"))
+        success_response = self.client.get(response.url)
+        self.assertContains(success_response, "5ª marmita grátis")
+        self.assertContains(success_response, "- R$ 24,90")
+
     @override_settings(RESTAURANT_WHATSAPP="556488887777")
     def test_pickup_order_creation_uses_whatsapp_env_fallback(self):
         ConfiguracaoEntrega.objects.update(whatsapp_numero="")
