@@ -1706,9 +1706,9 @@
                 if (requestId !== operatorSearchRequestId) return;
                 renderOperatorSuggestions(items);
                 operatorAddressSuggestions?.querySelectorAll("[data-operator-address-index]").forEach((button) => {
-                    button.addEventListener("click", () => {
+                    button.addEventListener("click", async () => {
                         const item = items[Number(button.dataset.operatorAddressIndex)];
-                        selectOperatorAddress(item);
+                        await selectOperatorAddress(item);
                     });
                 });
             } catch (error) {
@@ -1718,12 +1718,32 @@
             }
         }
 
-        function selectOperatorAddress(item) {
+        async function enrichOperatorAddressFromCoordinates(item) {
+            if (!item?.lat || !item?.lng || item?.district) return item;
+            const resolved = await reverseGeocodeWithGoogle(item.lat, item.lng);
+            if (!resolved?.district) return item;
+            return {
+                ...item,
+                district: resolved.district,
+                city: item.city || resolved.city,
+                state: item.state || resolved.state,
+                type: item.type || resolved.type,
+                precision: item.precision || resolved.precision,
+                precision_label: item.precision_label || resolved.precision_label,
+            };
+        }
+
+        async function selectOperatorAddress(item) {
             if (!item) return;
             operatorSelectedAddress = item;
             operatorAddressInput.value = item.label || item.street || operatorAddressInput.value;
             hideOperatorSuggestions();
             applyResolvedAddress(item, { confirmed: true, updateMap: true });
+            const enriched = await enrichOperatorAddressFromCoordinates(item);
+            if (enriched !== item) {
+                operatorSelectedAddress = enriched;
+                applyResolvedAddress(enriched, { confirmed: true, updateMap: false });
+            }
             showFeedback("Endereco selecionado. Informe o numero para salvar.", false);
         }
 
