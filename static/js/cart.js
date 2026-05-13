@@ -652,9 +652,10 @@
             saveCart(cart);
         }
 
-        function buildCardCartItem(dish, quantityToAdd = 1) {
+        function buildCardCartItem(dish, quantityToAdd = 1, variationOverride = "") {
             const dishType = dish.tipo || "prato";
             const variations = parseDishVariations(dish);
+            const variation = normalizeVariationName(variationOverride || (variations.length === 1 ? variations[0] : ""));
             return {
                 tipo: dishType,
                 item_id: dish.id,
@@ -664,7 +665,7 @@
                 nome: dish.nome,
                 preco: parsePrice(dish.preco),
                 quantidade: Math.max(1, Number(quantityToAdd || 1)),
-                variacao: variations.length === 1 ? variations[0] : "",
+                variacao: variation,
                 observacao: "",
                 imagem: dish.imagem || placeholderImage,
             };
@@ -677,12 +678,51 @@
                 .reduce((total, item) => total + Number(item.quantidade || 0), 0);
         }
 
+        function getCartQuantityForDishVariation(dish, variation) {
+            const target = cartItemKey({ ...normalizeCatalogCartFields(dish), variacao: variation });
+            return getCart()
+                .filter((item) => cartItemKey(item) === target)
+                .reduce((total, item) => total + Number(item.quantidade || 0), 0);
+        }
+
+        function ensureVariationQuickControls(card, dish) {
+            const variations = parseDishVariations(dish);
+            const genericBadge = card.querySelector(".dish-qty-badge--footer:not(.dish-variation-qty)");
+            let controls = card.querySelector("[data-variation-quick-controls]");
+            if (!variations.length) {
+                genericBadge?.classList.remove("hidden");
+                controls?.remove();
+                return;
+            }
+            genericBadge?.classList.add("hidden");
+            if (!controls) {
+                controls = document.createElement("div");
+                controls.className = "dish-variation-quick-controls";
+                controls.setAttribute("data-variation-quick-controls", "");
+                genericBadge?.insertAdjacentElement("afterend", controls);
+            }
+            controls.innerHTML = variations
+                .map((variation) => `
+                    <div class="dish-variation-quick-row" data-card-variation-row="${escapeHtml(variation)}">
+                        <strong class="dish-variation-quick-title">${escapeHtml(variation)}</strong>
+                        <div class="dish-qty-badge dish-qty-badge--footer dish-variation-qty is-empty">
+                            <button type="button" data-card-variation-qty-change="-1" data-card-variation="${escapeHtml(variation)}" aria-label="Diminuir ${escapeHtml(variation)}">-</button>
+                            <strong class="dish-variation-empty-label">${escapeHtml(variation)}</strong>
+                            <strong data-card-variation-qty-value>0</strong>
+                            <button type="button" data-card-variation-qty-change="1" data-card-variation="${escapeHtml(variation)}" aria-label="Adicionar ${escapeHtml(variation)}">+</button>
+                        </div>
+                    </div>
+                `)
+                .join("");
+        }
+
         function syncCardQuantityBadges() {
             document.querySelectorAll("[data-prato-card]").forEach((card) => {
                 const qtyValue = card.querySelector("[data-card-qty-value]");
                 if (!qtyValue) return;
                 const dish = JSON.parse(card.dataset.prato || "{}");
                 const badge = qtyValue.closest(".dish-qty-badge");
+                ensureVariationQuickControls(card, dish);
                 const quantity = getCartQuantityForDish(dish);
                 const wasEmpty = badge?.classList.contains("is-empty");
                 const decrementButton = badge?.querySelector("[data-card-qty-change='-1']");
@@ -700,7 +740,50 @@
                     }, 520);
                 }
                 if (badge) badge.dataset.qtyReady = "true";
+                card.querySelectorAll("[data-card-variation-row]").forEach((row) => {
+                    const variation = normalizeVariationName(row.getAttribute("data-card-variation-row"));
+                    const variationBadge = row.querySelector(".dish-variation-qty");
+                    const variationQtyValue = row.querySelector("[data-card-variation-qty-value]");
+                    const variationDecrementButton = row.querySelector("[data-card-variation-qty-change='-1']");
+                    const variationQuantity = getCartQuantityForDishVariation(dish, variation);
+                    if (variationQtyValue) variationQtyValue.textContent = String(variationQuantity);
+                    row.classList.toggle("has-quantity", variationQuantity > 0);
+                    variationBadge?.classList.toggle("is-empty", variationQuantity <= 0);
+                    variationDecrementButton?.setAttribute("tabindex", variationQuantity <= 0 ? "-1" : "0");
+                    variationDecrementButton?.setAttribute("aria-hidden", variationQuantity <= 0 ? "true" : "false");
+                });
             });
+        }
+
+        function incrementCardVariationCartItem(dish, variation, delta) {
+            const targetKey = cartItemKey({ ...normalizeCatalogCartFields(dish), variacao: variation });
+            const cart = getCart();
+            if (delta > 0) {
+                addDishToCart(buildCardCartItem(dish, delta, variation));
+                syncCardQuantityBadges();
+                return true;
+            }
+
+            const simpleIndex = cart.findIndex((item) => cartItemKey(item) === targetKey && !item.observacao);
+            let fallbackIndex = -1;
+            for (let index = cart.length - 1; index >= 0; index -= 1) {
+                if (cartItemKey(cart[index]) === targetKey) {
+                    fallbackIndex = index;
+                    break;
+                }
+            }
+            const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
+            if (index < 0) return false;
+
+            const nextQuantity = Number(cart[index].quantidade || 0) - 1;
+            if (nextQuantity > 0) {
+                cart[index].quantidade = nextQuantity;
+            } else {
+                cart.splice(index, 1);
+            }
+            saveCart(cart);
+            syncCardQuantityBadges();
+            return true;
         }
 
         function incrementCardCartItem(dish, delta) {
@@ -909,7 +992,7 @@
             if (!qtyValue || !dish.id) return;
 
             card.addEventListener("click", (event) => {
-                if (event.target.closest("button, a, input, textarea, select, [data-card-qty-change]")) return;
+                if (event.target.closest("button, a, input, textarea, select, [data-card-qty-change], [data-variation-quick-controls]")) return;
                 openModal(dish);
             });
 
@@ -921,6 +1004,21 @@
                     animateQuantityNumber(button, delta, changed);
                     if (changed && delta > 0) animateAddFeedback(button, delta);
                 });
+            });
+
+            card.addEventListener("click", (event) => {
+                const variationBadge = event.target.closest(".dish-variation-qty");
+                const button = event.target.closest("[data-card-variation-qty-change]");
+                if (!button && !variationBadge?.classList.contains("is-empty")) return;
+                event.preventDefault();
+                const delta = button ? Number(button.getAttribute("data-card-variation-qty-change")) : 1;
+                const variation = normalizeVariationName(
+                    button?.getAttribute("data-card-variation") ||
+                    variationBadge?.querySelector("[data-card-variation-qty-change='1']")?.getAttribute("data-card-variation")
+                );
+                const changed = incrementCardVariationCartItem(dish, variation, delta);
+                animateQuantityNumber(button || variationBadge, delta, changed);
+                if (changed && delta > 0) animateAddFeedback(button || variationBadge, delta);
             });
 
         });

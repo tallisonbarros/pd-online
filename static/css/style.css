@@ -642,13 +642,13 @@ textarea {
 }
 
 .menu-feature-marquee {
-    margin: 1px 0 0;
+    margin: 14px 0 0;
     display: block;
     width: var(--marquee-width, 100%);
     max-width: var(--marquee-width, 100%);
     min-width: 0;
     overflow: hidden;
-    color: rgba(255, 253, 250, 0.9);
+    color: var(--brand);
     font-size: clamp(0.72rem, 2.2vw, 1rem);
     font-weight: 900;
     letter-spacing: 0.1em;
@@ -657,6 +657,10 @@ textarea {
     white-space: nowrap;
     mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
     -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%);
+}
+
+[data-page="cardapio"] .menu-feature-marquee + .menu-feature-band {
+    margin-top: 6px;
 }
 
 .menu-feature-marquee span {
@@ -4472,29 +4476,75 @@ fieldset.field {
     gap: 8px;
 }
 
-.order-modal-card .qty-control {
-    gap: 8px;
-    padding: 4px;
-}
-
-.order-modal-card .qty-control button {
-    width: 30px;
-    height: 30px;
-}
-
-.order-modal-card .qty-control strong {
-    min-width: 18px;
-    text-align: center;
-}
-
-.order-modal-card .modal-actions {
+.order-modal-card .modal-qty-row {
     align-items: center;
 }
 
+.order-modal-card .modal-qty-control {
+    width: 118px;
+    min-height: 42px;
+    margin: 0;
+    padding: 6px;
+    justify-content: center;
+    gap: 11px;
+    border-color: rgba(92, 59, 49, 0.16);
+    background:
+        linear-gradient(180deg, rgba(255, 253, 250, 0.84), rgba(255, 253, 250, 0.62)),
+        #f8f1ed;
+    box-shadow: inset 0 1px 0 rgba(255, 253, 250, 0.9), 0 10px 18px rgba(34, 19, 17, 0.08);
+}
+
+.order-modal-card .modal-qty-control button {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: rgba(255, 253, 250, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 8px 16px rgba(34, 19, 17, 0.1);
+}
+
+.order-modal-card .modal-qty-control strong {
+    min-width: 22px;
+    text-align: center;
+    font-size: 0.94rem;
+}
+
+.order-modal-card .modal-qty-control button[data-qty-plus] {
+    color: transparent;
+    font-size: 0;
+}
+
+.order-modal-card .modal-qty-control button[data-qty-plus]::before {
+    content: "+";
+    color: var(--brand-strong);
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1;
+    transform: translateY(-0.5px);
+}
+
+.order-modal-card .modal-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    align-items: stretch;
+    gap: 8px;
+}
+
 .order-modal-card .secondary-link {
-    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    border: 1px solid rgba(92, 59, 49, 0.16);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: rgba(255, 253, 250, 0.86);
+    color: var(--brand);
     font-size: 0.82rem;
     line-height: 1.1;
+    font-weight: 900;
+    text-align: center;
 }
 
 .order-modal-card .primary-button {
@@ -8214,12 +8264,13 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .menu-feature-card-wrap .dish-body {
-    padding: 8px 10px;
-    gap: 4px;
+    padding: 5px 10px 4px;
+    gap: 1px;
 }
 
 [data-page="cardapio"] .menu-feature-card-wrap .dish-body h2 {
-    font-size: 0.86rem;
+    font-size: 0.82rem;
+    line-height: 1.05;
 }
 
 [data-page="cardapio"] .menu-feature-card-wrap .dish-body p {
@@ -8320,33 +8371,42 @@ fieldset.field {
 @media (max-width: 520px) {
     [data-page="cardapio"] .menu-feature-band {
         width: min(100%, 430px);
-        grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.52fr);
-        gap: 12px;
-        padding: 22px 48px 22px 24px;
+        grid-template-columns: 154px minmax(0, 1fr);
+        gap: 8px;
+        padding: 20px 34px 18px 22px;
         border-radius: 0 28px 28px 0;
     }
 
+    [data-page="cardapio"] .menu-feature-card-wrap {
+        width: 154px;
+    }
+
     [data-page="cardapio"] .menu-feature-title h1 {
-        font-size: clamp(1rem, 5.8vw, 1.48rem);
+        font-size: clamp(1.12rem, 6.2vw, 1.58rem);
     }
 
     [data-page="cardapio"] .menu-feature-card-wrap .dish-card {
-        width: min(100%, 150px);
+        width: 154px;
     }
 }
 
 @media (max-width: 360px) {
     [data-page="cardapio"] .menu-feature-band {
-        gap: 8px;
-        padding: 16px 34px 16px 18px;
+        grid-template-columns: 138px minmax(0, 1fr);
+        gap: 7px;
+        padding: 16px 26px 15px 16px;
+    }
+
+    [data-page="cardapio"] .menu-feature-card-wrap {
+        width: 138px;
     }
 
     [data-page="cardapio"] .menu-feature-card-wrap .dish-card {
-        width: min(100%, 128px);
+        width: 138px;
     }
 
     [data-page="cardapio"] .menu-feature-title h1 {
-        font-size: 0.96rem;
+        font-size: 1.04rem;
     }
 }
 
@@ -8516,6 +8576,113 @@ fieldset.field {
 
 [data-page="cardapio"] .dish-qty-badge--footer.is-morphing button[data-card-qty-change="-1"] {
     animation: qtySideReveal 360ms cubic-bezier(0.18, 0.9, 0.22, 1) 60ms both;
+}
+
+[data-page="cardapio"] .dish-variation-quick-controls {
+    width: min(126px, calc(100% - 18px));
+    margin: auto auto 5px;
+    display: grid;
+    gap: 2px;
+    align-self: center;
+}
+
+[data-page="cardapio"] .dish-variation-quick-row {
+    display: grid;
+    justify-items: center;
+    gap: 1px;
+}
+
+[data-page="cardapio"] .dish-variation-quick-title {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--brand-strong);
+    font-size: 0.58rem;
+    font-weight: 900;
+    line-height: 0.9;
+    text-align: center;
+    text-overflow: ellipsis;
+    visibility: hidden;
+    white-space: nowrap;
+}
+
+[data-page="cardapio"] .dish-variation-quick-row.has-quantity .dish-variation-quick-title {
+    visibility: visible;
+}
+
+[data-page="cardapio"] .dish-variation-qty.dish-qty-badge--footer {
+    width: 88px;
+    min-height: 28px;
+    margin: 0;
+    padding: 3px;
+    gap: 6px;
+}
+
+[data-page="cardapio"] .dish-variation-qty [data-card-variation-qty-value] {
+    min-width: 18px;
+    color: #fffdfa;
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+[data-page="cardapio"] .dish-variation-empty-label {
+    display: none;
+}
+
+[data-page="cardapio"] .dish-variation-qty button {
+    width: 21px;
+    height: 21px;
+}
+
+[data-page="cardapio"] .dish-variation-qty button[data-card-variation-qty-change="1"] {
+    color: transparent;
+    font-size: 0;
+}
+
+[data-page="cardapio"] .dish-variation-qty button[data-card-variation-qty-change="1"]::before {
+    content: "+";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--brand-strong);
+    font-size: 0.86rem;
+    font-weight: 900;
+}
+
+[data-page="cardapio"] .dish-variation-qty.is-empty {
+    width: 100%;
+    height: 28px;
+    min-height: 28px;
+    padding: 3px 4px 3px 8px;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+[data-page="cardapio"] .dish-variation-qty.is-empty button[data-card-variation-qty-change="-1"],
+[data-page="cardapio"] .dish-variation-qty.is-empty [data-card-variation-qty-value] {
+    display: none;
+}
+
+[data-page="cardapio"] .dish-variation-qty.is-empty .dish-variation-empty-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    color: #fffdfa;
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+[data-page="cardapio"] .dish-variation-qty.is-empty button[data-card-variation-qty-change="1"] {
+    width: 22px;
+    height: 22px;
+    order: 1;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer.hidden {
+    display: none;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer {
