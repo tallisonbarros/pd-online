@@ -153,13 +153,6 @@
                         </div>
                         {% if is_atendente %}
                             <div class="operator-address-search" data-operator-address-search>
-                                <label class="field">
-                                    <div class="address-autocomplete-shell">
-                                        <input type="search" id="operator-address-query" autocomplete="off" placeholder="Digite rua, numero ou referencia">
-                                        <span id="operator-address-loading" class="address-loading hidden">Buscando...</span>
-                                        <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
-                                    </div>
-                                </label>
                                 <label class="field operator-district-field">
                                     <input type="search" id="operator-district-query" list="operator-district-options" autocomplete="off" placeholder="Setor opcional">
                                     <datalist id="operator-district-options">
@@ -167,6 +160,13 @@
                                             <option value="{{ bairro }}"></option>
                                         {% endfor %}
                                     </datalist>
+                                </label>
+                                <label class="field">
+                                    <div class="address-autocomplete-shell">
+                                        <input type="search" id="operator-address-query" autocomplete="off" placeholder="Digite rua, numero ou referencia">
+                                        <span id="operator-address-loading" class="address-loading hidden">Buscando...</span>
+                                        <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
+                                    </div>
                                 </label>
                                 <small class="field-help">Use o setor apenas quando ajudar a filtrar ruas repetidas. Se a sugestao vier incompleta, ajuste pelo mapa.</small>
                                 <button type="button" id="operator-adjust-map" class="secondary-pill compact">Ajustar no mapa</button>

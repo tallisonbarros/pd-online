@@ -1541,7 +1541,7 @@
             operatorAddressSuggestions.innerHTML = items.map((item, index) => {
                 const title = item.street || item.label || "Endereco encontrado";
                 const cityState = [item.city, item.state].filter(Boolean).join(" - ");
-                const district = item.district || "Setor nao identificado";
+                const district = hasKnownDistrict(item) ? item.district : "Setor pendente";
                 return `
                     <button type="button" class="address-suggestion-item" data-operator-address-index="${index}">
                         <strong>${escapeHtml(title)}</strong>
@@ -1596,6 +1596,11 @@
             });
         }
 
+        function hasKnownDistrict(item) {
+            const district = normalizeText(item?.district || "");
+            return Boolean(district && district !== "setor nao identificado" && district !== "setor pendente");
+        }
+
         function googleSearchErrorMessage(error) {
             const message = String(error?.message || error || "").trim();
             if (message.includes("REQUEST_DENIED") || message.includes("ApiNotActivated") || message.includes("RefererNotAllowed")) {
@@ -1641,7 +1646,7 @@
                 if (normalizedTitle.includes(token)) score += 18;
                 else if (normalizedLabel.includes(token)) score += 8;
             });
-            if (item?.district) score += 18;
+            if (hasKnownDistrict(item)) score += 18;
             if (operatorDistrictInput?.value && normalizeText(item?.district).includes(normalizeText(operatorDistrictInput.value))) score += 55;
             if (normalizeText(item?.city).includes("rio verde")) score += 12;
             if (normalizeText(item?.state) === "go") score += 6;
@@ -1655,7 +1660,7 @@
             const limited = items.slice(0, 8);
             return Promise.all(
                 limited.map(async (item) => {
-                    if (!item?.lat || !item?.lng || item?.district) return item;
+                    if (!item?.lat || !item?.lng || hasKnownDistrict(item)) return item;
                     const resolved = await reverseGeocodeWithGoogle(item.lat, item.lng);
                     if (!resolved?.district) return item;
                     return {
@@ -1811,7 +1816,7 @@
         }
 
         async function enrichOperatorAddressFromCoordinates(item) {
-            if (!item?.lat || !item?.lng || item?.district) return item;
+            if (!item?.lat || !item?.lng || hasKnownDistrict(item)) return item;
             const resolved = await reverseGeocodeWithGoogle(item.lat, item.lng);
             if (!resolved?.district) return item;
             return {
