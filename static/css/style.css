@@ -8259,6 +8259,7 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .dish-qty-badge--footer button {
+    position: relative;
     display: inline-grid;
     place-items: center;
     flex: 0 0 auto;
@@ -8269,6 +8270,24 @@ fieldset.field {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 8px 16px rgba(34, 19, 17, 0.14);
 }
 
+[data-page="cardapio"] .dish-qty-badge--footer button[data-card-qty-change="1"] {
+    color: transparent;
+    font-size: 0;
+}
+
+[data-page="cardapio"] .dish-qty-badge--footer button[data-card-qty-change="1"]::before {
+    content: "+";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--brand-strong);
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1;
+    transform: translateY(-0.5px);
+}
+
 [data-page="cardapio"] .dish-qty-badge--footer strong {
     min-width: 22px;
     font-size: 0.94rem;
@@ -8276,13 +8295,13 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .dish-qty-badge--footer.is-empty {
-    display: grid;
-    grid-template-columns: 1fr;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 44px;
     height: 44px;
     min-height: 44px;
-    padding: 6px;
+    padding: 0;
     gap: 0;
     border-radius: 999px;
     box-shadow: 0 12px 24px rgba(34, 19, 17, 0.18), inset 0 1px 0 rgba(255, 253, 250, 0.22);
@@ -8290,25 +8309,17 @@ fieldset.field {
 
 [data-page="cardapio"] .dish-qty-badge--footer.is-empty button[data-card-qty-change="-1"],
 [data-page="cardapio"] .dish-qty-badge--footer.is-empty strong {
-    position: absolute;
-    width: 0;
-    min-width: 0;
-    height: 0;
-    opacity: 0;
-    transform: scale(0.42);
+    display: none;
     pointer-events: none;
 }
 
 [data-page="cardapio"] .dish-qty-badge--footer.is-empty button[data-card-qty-change="1"] {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    grid-column: 1;
-    grid-row: 1;
+    position: static;
     width: 30px;
     height: 30px;
-    margin: -15px 0 0 -15px;
-    transform: scale(1);
+    margin: 0;
+    transform: none;
+    animation: none;
 }
 
 [data-page="cardapio"] .dish-qty-badge--footer.is-morphing {
@@ -8346,13 +8357,12 @@ fieldset.field {
     width: 38px;
     height: 38px;
     min-height: 38px;
-    padding: 5px;
+    padding: 0;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-qty-badge--footer.is-empty button[data-card-qty-change="1"] {
     width: 26px;
     height: 26px;
-    margin: -13px 0 0 -13px;
 }
 
 @keyframes qtyMorphGlow {
