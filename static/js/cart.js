@@ -1463,6 +1463,7 @@
         const operatorAddressSuggestions = document.getElementById("operator-address-suggestions");
         const operatorAdjustMapButton = document.getElementById("operator-adjust-map");
         const operatorUseTypedAddressButton = document.getElementById("operator-use-typed-address");
+        const backToTextSearchButton = document.getElementById("address-back-to-text-search");
 
         if (
             !ruaInput ||
@@ -2021,6 +2022,18 @@
             }
         }
 
+        function returnToOperatorTextSearch() {
+            if (!isOperatorCheckout) return;
+            addressPointConfirmed = false;
+            showDetailsStep(false);
+            mapStep.classList.remove("is-map-visible");
+            hideOperatorSuggestions();
+            window.clearTimeout(operatorSearchTimer);
+            showFeedback("", false);
+            showMapFeedback("");
+            window.setTimeout(() => operatorAddressInput?.focus?.(), 60);
+        }
+
         function applyResolvedAddress(data, options = {}) {
             const payload = data || {};
             ruaInput.value = String(payload.street || payload.label || "").trim();
@@ -2354,6 +2367,8 @@
             setTimeout(() => mapRoot.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
         });
 
+        backToTextSearchButton?.addEventListener("click", returnToOperatorTextSearch);
+
         form.addEventListener("submit", () => {
             shouldShowCoordsWarning = true;
             syncCoordsWarning();
@@ -2414,6 +2429,13 @@
         const talheresToggleInput = document.getElementById("checkout-talheres-toggle");
         const talheresPayloadInput = document.getElementById("checkout-talheres-payload");
         const payloadInput = document.getElementById("carrinho-payload");
+        const couponCodeInput = document.getElementById("checkout-coupon-code");
+        const couponPayloadInput = document.getElementById("checkout-coupon-code-payload");
+        const couponApplyButton = document.getElementById("checkout-coupon-apply");
+        const couponRemoveButton = document.getElementById("checkout-coupon-remove");
+        const couponFeedback = document.getElementById("checkout-coupon-feedback");
+        const couponReview = document.getElementById("checkout-coupon-review");
+        const couponReviewValue = document.getElementById("checkout-coupon-review-value");
         const form = document.getElementById("checkout-form");
         const profileForm = document.getElementById("profile-form");
         const stageDelivery = document.getElementById("checkout-stage-delivery");
@@ -2435,6 +2457,7 @@
         if (!payloadInput || !form) return;
 
         let selectedShippingFee = Number.parseFloat(shippingValueInput?.value || "0") || 0;
+        let appliedCoupon = null;
         let activeStage = "delivery";
         let whatsappSubmitInProgress = false;
         const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
@@ -2475,6 +2498,60 @@
             stagePayment?.classList.remove("field-needs-attention");
             stagePayment?.classList.remove("is-payment-missing", "is-payment-method-missing");
             paymentFeedback?.classList.add("hidden");
+        }
+
+        function currentItemsTotal() {
+            return getCart().reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+        }
+
+        function clearCoupon(message = "") {
+            appliedCoupon = null;
+            if (couponPayloadInput) couponPayloadInput.value = "";
+            if (couponReview) couponReview.classList.add("hidden");
+            if (couponReviewValue) couponReviewValue.textContent = "- R$ 0,00";
+            couponRemoveButton?.classList.add("hidden");
+            couponApplyButton?.classList.remove("hidden");
+            if (couponFeedback) couponFeedback.textContent = message;
+            render();
+        }
+
+        async function applyCoupon() {
+            const code = String(couponCodeInput?.value || "").trim();
+            if (!code) {
+                clearCoupon("Informe um cupom.");
+                return;
+            }
+            const body = new URLSearchParams({
+                codigo: code,
+                subtotal: currentItemsTotal().toFixed(2),
+                frete: selectedShippingFee.toFixed(2),
+            });
+            try {
+                const response = await fetch(window.PRATO_CONFIG?.couponValidateUrl || "/api/cupom/validar/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRFToken": window.PRATO_CONFIG?.csrfToken || "",
+                    },
+                    body,
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    clearCoupon(data.message || "Cupom invalido.");
+                    return;
+                }
+                appliedCoupon = {
+                    codigo: data.codigo,
+                    desconto: Number.parseFloat(data.desconto || "0") || 0,
+                };
+                if (couponPayloadInput) couponPayloadInput.value = appliedCoupon.codigo;
+                if (couponFeedback) couponFeedback.textContent = data.message || "Cupom aplicado.";
+                couponApplyButton?.classList.add("hidden");
+                couponRemoveButton?.classList.remove("hidden");
+                render();
+            } catch (error) {
+                clearCoupon("Nao foi possivel validar o cupom.");
+            }
         }
 
         function highlightMissingDeliveryField() {
@@ -2593,12 +2670,17 @@
                 return;
             }
 
-            const itemsTotal = cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
-            const orderTotal = itemsTotal + selectedShippingFee;
+            const itemsTotal = currentItemsTotal();
+            const couponDiscount = Math.min(Number(appliedCoupon?.desconto || 0), itemsTotal);
+            const orderTotal = itemsTotal + selectedShippingFee - couponDiscount;
             if (itemsContainer) itemsContainer.innerHTML = cart.map(buildCartItemMarkup).join("");
             if (itemsSubtotalElement) itemsSubtotalElement.textContent = money(itemsTotal);
             if (totalReviewElement) totalReviewElement.textContent = money(orderTotal);
             if (totalReviewPaymentElement) totalReviewPaymentElement.textContent = money(orderTotal);
+            if (couponReview && couponReviewValue) {
+                couponReview.classList.toggle("hidden", couponDiscount <= 0);
+                couponReviewValue.textContent = `- ${money(couponDiscount)}`;
+            }
             if (shippingReviewElement && !shippingReviewElement.textContent.trim()) {
                 shippingReviewElement.textContent = Number.isFinite(selectedShippingFee) && selectedShippingFee > 0 ? money(selectedShippingFee) : "--";
             }
@@ -2639,6 +2721,16 @@
         savedProfileOpenButton?.addEventListener("click", clearCheckoutFieldHighlights);
         checkoutAddressSummary?.addEventListener("click", clearCheckoutFieldHighlights);
         talheresToggleInput?.addEventListener("change", syncTalheresPayload);
+        couponApplyButton?.addEventListener("click", applyCoupon);
+        couponRemoveButton?.addEventListener("click", () => {
+            if (couponCodeInput) couponCodeInput.value = "";
+            clearCoupon("Cupom removido.");
+        });
+        couponCodeInput?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            applyCoupon();
+        });
         syncTalheresPayload();
 
         function setPaymentSelection(paymentType, paymentMethod, options = {}) {

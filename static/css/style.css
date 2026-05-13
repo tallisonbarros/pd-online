@@ -2865,6 +2865,31 @@ body.modal-open {
     flex-wrap: wrap;
 }
 
+.profile-editor-footer-link {
+    display: flex;
+    justify-content: center;
+    padding-top: 2px;
+}
+
+.text-action-button {
+    border: 0;
+    padding: 8px 4px;
+    background: transparent;
+    color: var(--brand);
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+}
+
+.text-action-button:hover,
+.text-action-button:focus-visible {
+    color: var(--brand-strong);
+}
+
 .city-badge-row {
     display: flex;
     justify-content: flex-start;
@@ -3284,11 +3309,34 @@ fieldset.field {
     font-size: 0.9rem;
 }
 
+.coupon-box {
+    display: grid;
+    gap: 6px;
+}
+
+.coupon-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+}
+
+.coupon-row input {
+    min-width: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: var(--text);
+}
+
 .address-step-card.is-operator-search-mode:not(.is-map-visible) #use-current-location,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-shell,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-actions,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) #address-map-feedback,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) .resolved-address-inline {
+    display: none;
+}
+
+.address-step-card.is-operator-search-mode.is-map-visible .operator-address-search {
     display: none;
 }
 

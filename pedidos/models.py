@@ -92,6 +92,10 @@ class Pedido(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOVO)
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     valor_frete = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    total_sem_desconto = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    cupom = models.ForeignKey("Cupom", on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos")
+    cupom_codigo = models.CharField(max_length=40, blank=True)
+    cupom_desconto = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     public_token = models.CharField(max_length=64, unique=True, blank=True, editable=False)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -144,6 +148,30 @@ class ItemPedido(models.Model):
     def save(self, *args, **kwargs):
         self.subtotal = Decimal(self.preco_snapshot) * self.quantidade
         super().save(*args, **kwargs)
+
+
+class Cupom(models.Model):
+    class TipoDesconto(models.TextChoices):
+        PERCENTUAL = "percentual", "Percentual"
+        VALOR_FIXO = "valor_fixo", "Valor fixo"
+
+    codigo = models.CharField(max_length=40, unique=True)
+    descricao = models.CharField(max_length=160, blank=True)
+    ativo = models.BooleanField(default=True)
+    tipo_desconto = models.CharField(max_length=20, choices=TipoDesconto.choices, default=TipoDesconto.VALOR_FIXO)
+    valor = models.DecimalField(max_digits=8, decimal_places=2)
+    valor_minimo_pedido = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    uso_maximo_total = models.PositiveIntegerField(blank=True, null=True)
+    data_inicio = models.DateTimeField(blank=True, null=True)
+    data_fim = models.DateTimeField(blank=True, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-ativo", "codigo"]
+
+    def __str__(self):
+        return self.codigo
 
 
 class FaixaFrete(models.Model):

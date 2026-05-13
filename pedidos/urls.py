@@ -10,6 +10,7 @@ urlpatterns = [
     path("dashboard/api/bairros-rio-verde/", views.api_bairros_rio_verde, name="api_bairros_rio_verde"),
     path("dashboard/api/bairros-polygons/", views.api_bairros_polygons, name="api_bairros_polygons"),
     path("api/address/delivery-time/", views.api_address_delivery_time, name="api_address_delivery_time"),
+    path("api/cupom/validar/", views.api_validar_cupom, name="api_validar_cupom"),
     path("carrinho/", views.carrinho, name="carrinho"),
     path("checkout/", views.checkout, name="checkout"),
     path("pedido/criar/", views.criar_pedido, name="criar_pedido"),

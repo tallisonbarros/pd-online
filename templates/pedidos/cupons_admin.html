@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Cupons | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active %}
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Promoções</p>
+                <h1>Cupons</h1>
+            </div>
+        </header>
+
+        {% if feedback %}
+            <div class="ajustes-feedback {% if feedback_kind == 'error' %}is-error{% endif %}">{{ feedback }}</div>
+        {% endif %}
+
+        <section class="ops-card">
+            <p class="ops-kicker">Novo cupom</p>
+            <form method="post" class="ajustes-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save">
+                <label class="field ajustes-field">
+                    <span>Código</span>
+                    <input type="text" name="codigo" placeholder="EX.: PROMO10">
+                </label>
+                <label class="field ajustes-field">
+                    <span>Tipo</span>
+                    <select name="tipo_desconto">
+                        <option value="valor_fixo">Valor fixo</option>
+                        <option value="percentual">Percentual</option>
+                    </select>
+                </label>
+                <label class="field ajustes-field">
+                    <span>Valor</span>
+                    <input type="number" name="valor" min="0" step="0.01" placeholder="10">
+                </label>
+                <label class="field ajustes-field">
+                    <span>Pedido mínimo</span>
+                    <input type="number" name="valor_minimo_pedido" min="0" step="0.01" placeholder="0">
+                </label>
+                <label class="field ajustes-field">
+                    <span>Limite de usos</span>
+                    <input type="number" name="uso_maximo_total" min="1" step="1" placeholder="Sem limite">
+                </label>
+                <label class="field ajustes-field ajustes-field--wide">
+                    <span>Descrição</span>
+                    <input type="text" name="descricao" placeholder="Uso interno">
+                </label>
+                <label class="field ajustes-field">
+                    <span>Ativo</span>
+                    <input type="checkbox" name="ativo" checked>
+                </label>
+                <div class="ajustes-actions ajustes-field">
+                    <button type="submit" class="ped-btn ped-btn-primary">Salvar cupom</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="ops-card">
+            <p class="ops-kicker">Cupons cadastrados</p>
+            <div class="ped-detail-audit-list">
+                {% for cupom in cupons %}
+                    <form method="post" class="usuarios-class-row">
+                        {% csrf_token %}
+                        <input type="hidden" name="cupom_id" value="{{ cupom.id }}">
+                        <input type="text" name="codigo" value="{{ cupom.codigo }}" aria-label="Código">
+                        <select name="tipo_desconto" aria-label="Tipo">
+                            <option value="valor_fixo" {% if cupom.tipo_desconto == 'valor_fixo' %}selected{% endif %}>Valor fixo</option>
+                            <option value="percentual" {% if cupom.tipo_desconto == 'percentual' %}selected{% endif %}>Percentual</option>
+                        </select>
+                        <input type="number" name="valor" min="0" step="0.01" value="{{ cupom.valor|stringformat:'s' }}" aria-label="Valor">
+                        <input type="number" name="valor_minimo_pedido" min="0" step="0.01" value="{{ cupom.valor_minimo_pedido|stringformat:'s' }}" aria-label="Pedido mínimo">
+                        <input type="number" name="uso_maximo_total" min="1" step="1" value="{{ cupom.uso_maximo_total|default_if_none:'' }}" placeholder="Limite" aria-label="Limite">
+                        <label class="secondary-pill compact">
+                            <input type="checkbox" name="ativo" {% if cupom.ativo %}checked{% endif %}> Ativo
+                        </label>
+                        <span class="muted">{{ cupom.usos }} usos</span>
+                        <button type="submit" name="action" value="save" class="ped-btn ped-btn-soft">Salvar</button>
+                        <button type="submit" name="action" value="toggle" class="ped-btn ped-btn-danger">{% if cupom.ativo %}Desativar{% else %}Ativar{% endif %}</button>
+                    </form>
+                {% empty %}
+                    <p>Nenhum cupom cadastrado.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

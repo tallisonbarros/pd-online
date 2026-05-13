@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -140,6 +140,13 @@ class FaixaFreteAdmin(admin.ModelAdmin):
     list_editable = ("km_limite", "valor", "ativo", "ordem")
     list_filter = ("tipo", "ativo")
     ordering = ("ordem", "km_limite", "id")
+
+
+@admin.register(Cupom)
+class CupomAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "tipo_desconto", "valor", "valor_minimo_pedido", "ativo", "uso_maximo_total")
+    list_filter = ("ativo", "tipo_desconto")
+    search_fields = ("codigo", "descricao")
 
 
 @admin.register(ConfiguracaoEntrega)

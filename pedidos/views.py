@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
@@ -25,7 +25,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
 WEEKDAY_LABELS = {
@@ -192,13 +192,10 @@ def montar_mensagem_whatsapp(pedido):
         pix_chave = _safe_text(getattr(ConfiguracaoEntrega.get_solo(), "pix_chave", ""))
         if pix_chave:
             linhas.append(f"*Chave Pix:* {pix_chave}")
-    linhas.extend(
-        [
-            "",
-            f"*Frete:* R$ {pedido.valor_frete:.2f}".replace(".", ","),
-            f"*Total:* R$ {pedido.total:.2f}".replace(".", ","),
-        ]
-    )
+    linhas.extend(["", f"*Frete:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
+    if pedido.cupom_desconto and pedido.cupom_desconto > 0:
+        linhas.append(f"*Cupom {pedido.cupom_codigo}:* - R$ {pedido.cupom_desconto:.2f}".replace(".", ","))
+    linhas.append(f"*Total:* R$ {pedido.total:.2f}".replace(".", ","))
     return "\n".join(linhas)
 
 
@@ -1231,6 +1228,64 @@ def _create_order_items_from_payload(pedido, itens_payload):
     return total
 
 
+def _money_decimal(value):
+    try:
+        return Decimal(str(value or "0").replace(",", ".")).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0.00")
+
+
+def _normalize_coupon_code(value):
+    return _safe_text(value).upper()
+
+
+def validar_cupom(codigo, subtotal, frete=Decimal("0.00")):
+    codigo = _normalize_coupon_code(codigo)
+    subtotal = _money_decimal(subtotal)
+    frete = _money_decimal(frete)
+    if not codigo:
+        return {"ok": False, "message": "Informe um cupom.", "discount": Decimal("0.00"), "coupon": None}
+    cupom = Cupom.objects.filter(codigo__iexact=codigo).first()
+    if not cupom:
+        return {"ok": False, "message": "Cupom nao encontrado.", "discount": Decimal("0.00"), "coupon": None}
+    now = timezone.now()
+    if not cupom.ativo:
+        return {"ok": False, "message": "Cupom inativo.", "discount": Decimal("0.00"), "coupon": cupom}
+    if cupom.data_inicio and cupom.data_inicio > now:
+        return {"ok": False, "message": "Cupom ainda nao esta valido.", "discount": Decimal("0.00"), "coupon": cupom}
+    if cupom.data_fim and cupom.data_fim < now:
+        return {"ok": False, "message": "Cupom expirado.", "discount": Decimal("0.00"), "coupon": cupom}
+    if cupom.valor_minimo_pedido and subtotal < cupom.valor_minimo_pedido:
+        return {"ok": False, "message": f"Pedido minimo de R$ {cupom.valor_minimo_pedido:.2f}.".replace(".", ","), "discount": Decimal("0.00"), "coupon": cupom}
+    if cupom.uso_maximo_total is not None and cupom.pedidos.count() >= cupom.uso_maximo_total:
+        return {"ok": False, "message": "Limite de uso do cupom atingido.", "discount": Decimal("0.00"), "coupon": cupom}
+    if cupom.tipo_desconto == Cupom.TipoDesconto.PERCENTUAL:
+        discount = (subtotal * cupom.valor / Decimal("100")).quantize(Decimal("0.01"))
+    else:
+        discount = cupom.valor.quantize(Decimal("0.01"))
+    discount = min(max(discount, Decimal("0.00")), subtotal)
+    total = subtotal + frete - discount
+    return {"ok": True, "message": "Cupom aplicado.", "discount": discount, "coupon": cupom, "total": total}
+
+
+@require_POST
+def api_validar_cupom(request):
+    subtotal = _money_decimal(request.POST.get("subtotal"))
+    frete = _money_decimal(request.POST.get("frete"))
+    result = validar_cupom(request.POST.get("codigo"), subtotal, frete)
+    return JsonResponse(
+        {
+            "ok": result["ok"],
+            "message": result["message"],
+            "codigo": _normalize_coupon_code(request.POST.get("codigo")),
+            "desconto": f"{result['discount']:.2f}",
+            "desconto_formatado": f"R$ {result['discount']:.2f}".replace(".", ","),
+            "total": f"{(subtotal + frete - result['discount']):.2f}",
+            "total_formatado": f"R$ {(subtotal + frete - result['discount']):.2f}".replace(".", ","),
+        }
+    )
+
+
 @require_POST
 @transaction.atomic
 def criar_pedido(request):
@@ -1265,6 +1320,7 @@ def criar_pedido(request):
     valor_frete_raw = request.POST.get("valor_frete", "").strip()
     distancia_km_raw = request.POST.get("distancia_km", "").strip()
     forma_pagamento = _safe_text(request.POST.get("forma_pagamento"))
+    cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
     config_entrega = ConfiguracaoEntrega.get_solo()
     if not _configured_whatsapp_number(config_entrega):
         return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
@@ -1360,8 +1416,17 @@ def criar_pedido(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    pedido.total = total + valor_frete
-    pedido.save(update_fields=["total"])
+    cupom_result = validar_cupom(cupom_codigo, total, valor_frete) if cupom_codigo else None
+    if cupom_codigo and not cupom_result["ok"]:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest(cupom_result["message"])
+    desconto = cupom_result["discount"] if cupom_result else Decimal("0.00")
+    pedido.total_sem_desconto = total + valor_frete
+    pedido.cupom = cupom_result["coupon"] if cupom_result else None
+    pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
+    pedido.cupom_desconto = desconto
+    pedido.total = total + valor_frete - desconto
+    pedido.save(update_fields=["total_sem_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1387,6 +1452,7 @@ def criar_retirada(request):
     nome_cliente = request.POST.get("nome_cliente", "").strip() or "Cliente"
     observacao_geral = request.POST.get("observacao_geral", "").strip()
     enviar_talheres_raw = request.POST.get("enviar_talheres", "sim").strip().lower()
+    cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
     pedido = Pedido.objects.create(
         nome_cliente=nome_cliente,
         telefone="",
@@ -1410,8 +1476,17 @@ def criar_retirada(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    pedido.total = total
-    pedido.save(update_fields=["total"])
+    cupom_result = validar_cupom(cupom_codigo, total, Decimal("0.00")) if cupom_codigo else None
+    if cupom_codigo and not cupom_result["ok"]:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest(cupom_result["message"])
+    desconto = cupom_result["discount"] if cupom_result else Decimal("0.00")
+    pedido.total_sem_desconto = total
+    pedido.cupom = cupom_result["coupon"] if cupom_result else None
+    pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
+    pedido.cupom_desconto = desconto
+    pedido.total = total - desconto
+    pedido.save(update_fields=["total_sem_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1449,6 +1524,8 @@ def _pedido_public_payload(pedido, include_items=False):
         "horario": timezone.localtime(pedido.criado_em).strftime("%d/%m %H:%M"),
         "itens_count": pedido.itens.count(),
         "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ",") if pedido.cupom_desconto else "",
+        "cupom_codigo": pedido.cupom_codigo,
         "pagamento": pedido.get_forma_pagamento_display(),
         "acompanhamento_url": reverse("pedidos:acompanhar_pedido", args=[pedido.public_token]),
     }
@@ -2255,15 +2332,37 @@ def outros_admin(request):
 
 @staff_member_required(login_url="/admin/login/")
 def cupons_admin(request):
-    return render(
-        request,
-        "pedidos/modulo_admin_placeholder.html",
-        {
-            "active": "cupons",
-            "titulo": "Cupons",
-            "descricao": "Area dedicada para criacao e gestao de cupons promocionais.",
-        },
-    )
+    feedback = ""
+    feedback_kind = ""
+    if request.method == "POST":
+        action = _safe_text(request.POST.get("action"))
+        cupom = Cupom.objects.filter(pk=request.POST.get("cupom_id")).first() if request.POST.get("cupom_id") else None
+        if action in {"save", "toggle"}:
+            cupom = cupom or Cupom()
+            if action == "toggle":
+                cupom.ativo = not cupom.ativo
+                cupom.save(update_fields=["ativo", "atualizado_em"])
+                return redirect("pedidos:cupons_admin")
+            cupom.codigo = _normalize_coupon_code(request.POST.get("codigo"))
+            cupom.descricao = _safe_text(request.POST.get("descricao"))
+            cupom.tipo_desconto = request.POST.get("tipo_desconto") if request.POST.get("tipo_desconto") in dict(Cupom.TipoDesconto.choices) else Cupom.TipoDesconto.VALOR_FIXO
+            cupom.valor = _money_decimal(request.POST.get("valor"))
+            cupom.valor_minimo_pedido = _money_decimal(request.POST.get("valor_minimo_pedido"))
+            uso_maximo = _safe_text(request.POST.get("uso_maximo_total"))
+            cupom.uso_maximo_total = int(uso_maximo) if uso_maximo.isdigit() else None
+            cupom.ativo = request.POST.get("ativo") == "on"
+            if not cupom.codigo or cupom.valor <= 0:
+                feedback = "Informe codigo e valor do desconto."
+                feedback_kind = "error"
+            else:
+                try:
+                    cupom.save()
+                    return redirect("pedidos:cupons_admin")
+                except Exception:
+                    feedback = "Nao foi possivel salvar. Verifique se o codigo ja existe."
+                    feedback_kind = "error"
+    cupons = Cupom.objects.all().annotate(usos=Count("pedidos"))
+    return render(request, "pedidos/cupons_admin.html", {"active": "cupons", "cupons": cupons, "feedback": feedback, "feedback_kind": feedback_kind})
 
 
 @staff_member_required(login_url="/admin/login/")

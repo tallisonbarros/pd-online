@@ -56,6 +56,7 @@
                 <input type="hidden" name="forma_pagamento" id="checkout-payment-method">
                 <input type="hidden" name="observacao_geral" id="checkout-order-note-payload">
                 <input type="hidden" name="enviar_talheres" id="checkout-talheres-payload" value="sim">
+                <input type="hidden" name="cupom_codigo" id="checkout-coupon-code-payload">
 
                 <section id="checkout-delivery-fields">
                 </section>
@@ -68,7 +69,17 @@
                     <section class="checkout-delivery-summary" aria-label="Resumo do pagamento">
                         <span><strong data-cart-count>0</strong> itens</span>
                         <span>Frete <strong id="checkout-shipping-review-payment">--</strong></span>
+                        <span id="checkout-coupon-review" class="hidden">Cupom <strong id="checkout-coupon-review-value">- R$ 0,00</strong></span>
                         <span>Total <strong id="checkout-total-review-payment">R$ 0,00</strong></span>
+                    </section>
+
+                    <section class="coupon-box" aria-label="Cupom de desconto">
+                        <div class="coupon-row">
+                            <input type="text" id="checkout-coupon-code" placeholder="Cupom" autocomplete="off">
+                            <button type="button" class="secondary-pill compact" id="checkout-coupon-apply">Aplicar</button>
+                            <button type="button" class="secondary-pill compact hidden" id="checkout-coupon-remove">Remover</button>
+                        </div>
+                        <small id="checkout-coupon-feedback" class="field-help"></small>
                     </section>
 
                     <div class="payment-choice-grid">
@@ -231,6 +242,11 @@
                             <button type="button" class="secondary-pill" data-profile-editor-close>Cancelar</button>
                             <button type="submit" class="primary-button">Salvar endereço</button>
                         </div>
+                        {% if is_atendente %}
+                            <div class="profile-editor-footer-link">
+                                <button type="button" id="address-back-to-text-search" class="text-action-button">Busca textual</button>
+                            </div>
+                        {% endif %}
                     </section>
 
                     <input type="hidden" name="rua">
