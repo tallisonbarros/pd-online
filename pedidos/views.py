@@ -121,6 +121,7 @@ def serializar_prato(prato):
         "id": prato.id,
         "nome": prato.nome,
         "descricao": prato.descricao,
+        "variacoes": prato.variacoes,
         "preco": f"{prato.preco:.2f}" if prato.preco is not None else "",
         "preco_formatado": f"R$ {prato.preco:.2f}".replace(".", ",") if prato.preco is not None else "",
         "imagem": prato.imagem.url if prato.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
@@ -180,8 +181,11 @@ def montar_mensagem_whatsapp(pedido):
         ]
     )
     for item in pedido.itens.all():
+        nome_item = item.nome_prato_snapshot
+        if item.variacao_nome_snapshot:
+            nome_item = f"{nome_item} - {item.variacao_nome_snapshot}"
         linhas.append(
-            f"- {item.quantidade}x {item.nome_prato_snapshot} | R$ {item.subtotal:.2f}".replace(".", ",")
+            f"- {item.quantidade}x {nome_item} | R$ {item.subtotal:.2f}".replace(".", ",")
         )
         if item.observacao:
             linhas.append(f"  Obs: {item.observacao}")
@@ -194,7 +198,7 @@ def montar_mensagem_whatsapp(pedido):
             linhas.append(f"*Chave Pix:* {pix_chave}")
     linhas.extend(["", f"*Frete:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
     if pedido.cupom_desconto and pedido.cupom_desconto > 0:
-        linhas.append(f"*Cupom {pedido.cupom_codigo}:* - R$ {pedido.cupom_desconto:.2f}".replace(".", ","))
+        linhas.append(f"*Desconto:* - R$ {pedido.cupom_desconto:.2f}".replace(".", ","))
     linhas.append(f"*Total:* R$ {pedido.total:.2f}".replace(".", ","))
     return "\n".join(linhas)
 
@@ -1193,6 +1197,7 @@ def _create_order_items_from_payload(pedido, itens_payload):
         except (TypeError, ValueError):
             raise ValueError("Um dos itens do carrinho e invalido.")
         observacao = (item.get("observacao") or "").strip()
+        variacao_nome = _safe_text(item.get("variacao") or item.get("variacao_nome"))
         prato = None
         adicional = None
         bebida = None
@@ -1207,6 +1212,21 @@ def _create_order_items_from_payload(pedido, itens_payload):
             catalog_item = prato
         if not catalog_item:
             raise ValueError("Um dos itens não est? mais disponível.")
+        if tipo == "prato" and catalog_item:
+            variacoes_validas = {
+                _safe_text(line).casefold(): _safe_text(line)
+                for line in (getattr(catalog_item, "variacoes", "") or "").splitlines()
+                if _safe_text(line)
+            }
+            if variacoes_validas:
+                variacao_key = variacao_nome.casefold()
+                if variacao_key not in variacoes_validas:
+                    raise ValueError(f"Selecione uma variacao para {catalog_item.nome}.")
+                variacao_nome = variacoes_validas[variacao_key]
+            else:
+                variacao_nome = ""
+        else:
+            variacao_nome = ""
         try:
             preco_bruto = str(item.get("preco", catalog_item.preco or "0.00")).replace("R$", "").replace(" ", "")
             if "," in preco_bruto:
@@ -1220,6 +1240,7 @@ def _create_order_items_from_payload(pedido, itens_payload):
             adicional=adicional,
             bebida=bebida,
             nome_prato_snapshot=catalog_item.nome,
+            variacao_nome_snapshot=variacao_nome,
             preco_snapshot=preco,
             quantidade=quantidade,
             observacao=observacao,
@@ -1535,6 +1556,7 @@ def _pedido_public_payload(pedido, include_items=False):
         payload["itens"] = [
             {
                 "nome": item.nome_prato_snapshot,
+                "variacao": item.variacao_nome_snapshot,
                 "quantidade": item.quantidade,
                 "observacao": item.observacao,
                 "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),
@@ -2601,6 +2623,7 @@ def api_pedidos_cozinha(request):
                 "itens": [
                     {
                         "nome": item.nome_prato_snapshot,
+                        "variacao": item.variacao_nome_snapshot,
                         "quantidade": item.quantidade,
                         "observacao": item.observacao,
                         "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),

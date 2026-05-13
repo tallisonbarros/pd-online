@@ -39,7 +39,7 @@
                 <article
                     class="dish-card"
                     data-prato-card
-                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
@@ -214,6 +214,10 @@
             <h2 id="modal-prato-nome"></h2>
             <p id="modal-prato-descricao" class="modal-description"></p>
             <p id="modal-prato-preco" class="modal-price"></p>
+            <fieldset class="field dish-variation-field hidden" id="modal-variacao-field">
+                <legend>Escolha a variação</legend>
+                <div class="dish-variation-options" id="modal-variacao-options"></div>
+            </fieldset>
             <label class="field">
                 <span>Observação</span>
                 <textarea id="modal-observacao" rows="1" placeholder="Obs..."></textarea>

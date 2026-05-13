@@ -39,7 +39,7 @@
                             <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
                             <p class="ped-item-line">
                                 {% for item in pedido.itens.all|slice:":1" %}
-                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}
+                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}
                                 {% empty %}
                                     Sem itens
                                 {% endfor %}
@@ -93,7 +93,7 @@
                             <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
                             <p class="ped-item-line">
                                 {% for item in pedido.itens.all|slice:":1" %}
-                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}
+                                    {{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}
                                 {% empty %}
                                     Sem itens
                                 {% endfor %}

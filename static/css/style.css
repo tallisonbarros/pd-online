@@ -2309,6 +2309,61 @@ body.modal-open {
     margin-top: 0;
 }
 
+.cart-coupon-inline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid rgba(92, 59, 49, 0.12);
+}
+
+.cart-coupon-inline input {
+    min-width: 0;
+    border: 1px solid #e3d8d1;
+    border-radius: 999px;
+    background: rgba(255, 253, 250, 0.72);
+    padding: 8px 11px;
+    color: var(--text);
+    font-size: 0.82rem;
+}
+
+.cart-coupon-inline button {
+    border: 1px solid #e3d8d1;
+    border-radius: 999px;
+    background: #fffdfa;
+    padding: 8px 10px;
+    color: var(--brand);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.cart-coupon-inline small {
+    grid-column: 1 / -1;
+    min-height: 1em;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    line-height: 1.2;
+}
+
+.cart-discount-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(92, 59, 49, 0.08);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.cart-discount-line strong {
+    color: #2f7b57;
+    font-size: 0.92rem;
+}
+
 [data-page="carrinho"] .checkout-summary-panel .checkout-total span {
     font-size: 0.94rem;
 }
@@ -3307,25 +3362,6 @@ fieldset.field {
     padding: 10px 12px;
     border-radius: 12px;
     font-size: 0.9rem;
-}
-
-.coupon-box {
-    display: grid;
-    gap: 6px;
-}
-
-.coupon-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 8px;
-}
-
-.coupon-row input {
-    min-width: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: 14px;
-    padding: 10px 12px;
-    color: var(--text);
 }
 
 .address-step-card.is-operator-search-mode:not(.is-map-visible) #use-current-location,
@@ -4385,6 +4421,50 @@ fieldset.field {
     padding: 8px 10px;
     border-radius: 12px;
     resize: none;
+}
+
+.dish-variation-field {
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.dish-variation-field legend {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.dish-variation-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.dish-variation-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.dish-variation-chip span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    border: 1px solid #e0d4ce;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: #fffdfa;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.dish-variation-chip input:checked + span {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: #fff;
 }
 
 .order-modal-card .qty-row,
@@ -7571,6 +7651,13 @@ fieldset.field {
     color: #3d2621;
     font-size: 15px;
     font-weight: 800;
+}
+.ped-detail-items li.ped-detail-discount {
+    background: #f1f7f3;
+    border-color: #d6e6db;
+}
+.ped-detail-items li.ped-detail-discount span {
+    color: #2f7b57;
 }
 .ped-detail-note,
 .ped-detail-audit-note {

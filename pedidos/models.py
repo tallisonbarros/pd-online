@@ -8,6 +8,10 @@ from django.conf import settings
 class Prato(models.Model):
     nome = models.CharField(max_length=120)
     descricao = models.CharField(max_length=255, blank=True)
+    variacoes = models.TextField(
+        blank=True,
+        help_text="Uma variacao por linha. Ex.: Fraldinha, Frango.",
+    )
     imagem = models.ImageField(upload_to="pratos/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
@@ -133,6 +137,7 @@ class ItemPedido(models.Model):
     bebida = models.ForeignKey(Bebida, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
     adicional = models.ForeignKey(Adicional, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
     nome_prato_snapshot = models.CharField(max_length=120)
+    variacao_nome_snapshot = models.CharField(max_length=120, blank=True)
     preco_snapshot = models.DecimalField(max_digits=8, decimal_places=2)
     quantidade = models.PositiveIntegerField(default=1)
     observacao = models.CharField(max_length=255, blank=True)

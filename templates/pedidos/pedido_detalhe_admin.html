@@ -123,6 +123,9 @@
                         <li>
                             <div>
                                 <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                                {% if item.variacao_nome_snapshot %}
+                                    <small>Variação: {{ item.variacao_nome_snapshot }}</small>
+                                {% endif %}
                                 {% if item.observacao %}
                                     <small>Obs.: {{ item.observacao }}</small>
                                 {% endif %}
@@ -132,6 +135,15 @@
                     {% empty %}
                         <li class="is-empty">Nenhum item encontrado neste pedido.</li>
                     {% endfor %}
+                    {% if pedido.cupom_desconto %}
+                        <li class="ped-detail-discount">
+                            <div>
+                                <strong>Cupom{% if pedido.cupom_codigo %} {{ pedido.cupom_codigo }}{% endif %}</strong>
+                                <small>Desconto aplicado ao pedido</small>
+                            </div>
+                            <span>- R$ {{ pedido.cupom_desconto|floatformat:2 }}</span>
+                        </li>
+                    {% endif %}
                 </ul>
 
                 {% if pedido.observacao_geral %}

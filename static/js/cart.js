@@ -6,6 +6,7 @@
     const checkoutDraftKey = `${cartKey}_checkout_draft`;
     const checkoutPaymentKey = `${cartKey}_checkout_payment`;
     const checkoutCustomerNameKey = `${cartKey}_checkout_customer_name`;
+    const checkoutCouponKey = `${cartKey}_checkout_coupon`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const checkoutLookup = (() => {
         const node = document.getElementById("checkout-pratos-lookup");
@@ -202,7 +203,31 @@
         return item?.item_id || item?.adicional_id || item?.bebida_id || item?.prato_id || item?.id;
     }
 
+    function normalizeVariationName(value) {
+        return String(value || "").trim().replace(/\s+/g, " ");
+    }
+
+    function parseDishVariations(dish) {
+        const raw = Array.isArray(dish?.variacoes)
+            ? dish.variacoes
+            : String(dish?.variacoes || "").split(/\r?\n|;/);
+        const seen = new Set();
+        return raw
+            .map(normalizeVariationName)
+            .filter((variation) => {
+                const key = normalizeText(variation);
+                if (!variation || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }
+
     function cartItemKey(item) {
+        const variationKey = cartItemType(item) === "prato" ? normalizeText(item?.variacao || item?.variacao_nome) : "";
+        return `${cartItemType(item)}:${cartItemId(item)}:${variationKey}`;
+    }
+
+    function cartItemBaseKey(item) {
         return `${cartItemType(item)}:${cartItemId(item)}`;
     }
 
@@ -230,6 +255,7 @@
             nome: String(normalizedItem.nome || lookupItem.nome || "Item"),
             preco: parsePrice(normalizedItem.preco || lookupItem.preco),
             quantidade: Math.max(1, Number(normalizedItem.quantidade || 1)),
+            variacao: normalizeVariationName(normalizedItem.variacao || normalizedItem.variacao_nome),
             observacao: String(normalizedItem.observacao || "").trim(),
             imagem: String(normalizedItem.imagem || lookupItem.imagem || placeholderImage),
         };
@@ -324,6 +350,27 @@
                 return;
             }
             localStorage.setItem(checkoutPaymentKey, JSON.stringify({ type, method }));
+        } catch (error) {
+            // Ignora falha de storage.
+        }
+    }
+
+    function getCheckoutCouponCode() {
+        try {
+            return String(localStorage.getItem(checkoutCouponKey) || "").trim().toUpperCase();
+        } catch (error) {
+            return "";
+        }
+    }
+
+    function saveCheckoutCouponCode(code) {
+        try {
+            const normalized = String(code || "").trim().toUpperCase();
+            if (normalized) {
+                localStorage.setItem(checkoutCouponKey, normalized);
+            } else {
+                localStorage.removeItem(checkoutCouponKey);
+            }
         } catch (error) {
             // Ignora falha de storage.
         }
@@ -478,6 +525,9 @@
     }
 
     function buildCartItemMarkup(item, index) {
+        const variationMarkup = item.variacao
+            ? `<div class="checkout-item-note-wrap"><p class="checkout-item-note">Variação: ${escapeHtml(item.variacao)}</p></div>`
+            : "";
         const noteMarkup = item.observacao
             ? `<div class="checkout-item-note-wrap"><p class="checkout-item-note">Obs: ${escapeHtml(item.observacao)}</p></div>`
             : "";
@@ -510,6 +560,7 @@
                         </div>
                     </div>
                 </div>
+                ${variationMarkup}
                 ${noteMarkup}
             </article>
         `;
@@ -575,12 +626,15 @@
         const name = document.getElementById("modal-prato-nome");
         const description = document.getElementById("modal-prato-descricao");
         const price = document.getElementById("modal-prato-preco");
+        const variationField = document.getElementById("modal-variacao-field");
+        const variationOptions = document.getElementById("modal-variacao-options");
         const obs = document.getElementById("modal-observacao");
         const quantityDisplay = document.getElementById("modal-quantidade");
         const addButton = document.getElementById("modal-add-cart");
 
         let currentDish = null;
         let quantity = 1;
+        let selectedVariation = "";
 
         function addDishToCart(incomingItem) {
             const normalizedIncomingItem = enrichCartItem(incomingItem);
@@ -600,6 +654,7 @@
 
         function buildCardCartItem(dish, quantityToAdd = 1) {
             const dishType = dish.tipo || "prato";
+            const variations = parseDishVariations(dish);
             return {
                 tipo: dishType,
                 item_id: dish.id,
@@ -609,15 +664,16 @@
                 nome: dish.nome,
                 preco: parsePrice(dish.preco),
                 quantidade: Math.max(1, Number(quantityToAdd || 1)),
+                variacao: variations.length === 1 ? variations[0] : "",
                 observacao: "",
                 imagem: dish.imagem || placeholderImage,
             };
         }
 
         function getCartQuantityForDish(dish) {
-            const key = cartItemKey(normalizeCatalogCartFields(dish));
+            const key = cartItemBaseKey(normalizeCatalogCartFields(dish));
             return getCart()
-                .filter((item) => cartItemKey(item) === key)
+                .filter((item) => cartItemBaseKey(item) === key)
                 .reduce((total, item) => total + Number(item.quantidade || 0), 0);
         }
 
@@ -649,19 +705,23 @@
 
         function incrementCardCartItem(dish, delta) {
             const normalizedDish = normalizeCatalogCartFields(dish);
-            const key = cartItemKey(normalizedDish);
+            const key = cartItemBaseKey(normalizedDish);
             const cart = getCart();
 
             if (delta > 0) {
+                if (parseDishVariations(dish).length > 1) {
+                    openModal(dish);
+                    return false;
+                }
                 addDishToCart(buildCardCartItem(dish, delta));
                 syncCardQuantityBadges();
                 return true;
             }
 
-            const simpleIndex = cart.findIndex((item) => cartItemKey(item) === key && !item.observacao);
+            const simpleIndex = cart.findIndex((item) => cartItemBaseKey(item) === key && !item.observacao);
             let fallbackIndex = -1;
             for (let index = cart.length - 1; index >= 0; index -= 1) {
-                if (cartItemKey(cart[index]) === key) {
+                if (cartItemBaseKey(cart[index]) === key) {
                     fallbackIndex = index;
                     break;
                 }
@@ -765,6 +825,8 @@
         function openModal(dish) {
             currentDish = dish;
             quantity = 1;
+            const variations = parseDishVariations(dish);
+            selectedVariation = variations.length === 1 ? variations[0] : "";
             quantityDisplay.textContent = "1";
             obs.value = "";
             image.src = dish.imagem;
@@ -772,6 +834,21 @@
             name.textContent = dish.nome;
             description.textContent = dish.descricao || "";
             price.textContent = dish.preco_formatado || "Preço sob consulta";
+            if (variationField && variationOptions) {
+                variationField.classList.toggle("hidden", !variations.length);
+                variationOptions.innerHTML = variations
+                    .map((variation, index) => {
+                        const checked = variation === selectedVariation || (!selectedVariation && index === 0);
+                        if (checked) selectedVariation = variation;
+                        return `
+                            <label class="dish-variation-chip">
+                                <input type="radio" name="modal-variacao" value="${escapeHtml(variation)}" ${checked ? "checked" : ""}>
+                                <span>${escapeHtml(variation)}</span>
+                            </label>
+                        `;
+                    })
+                    .join("");
+            }
             modal.classList.remove("hidden");
             modal.setAttribute("aria-hidden", "false");
         }
@@ -785,6 +862,10 @@
             if (event.target === modal || event.target.hasAttribute("data-close-modal")) {
                 closeModal();
             }
+        });
+        variationOptions?.addEventListener("change", (event) => {
+            const input = event.target.closest("input[name='modal-variacao']");
+            if (input) selectedVariation = normalizeVariationName(input.value);
         });
 
         document.querySelector("[data-qty-minus]")?.addEventListener("click", function () {
@@ -812,6 +893,7 @@
                 nome: currentDish.nome,
                 preco: parsePrice(currentDish.preco),
                 quantidade: quantity,
+                variacao: selectedVariation,
                 observacao: obs.value.trim(),
                 imagem: currentDish.imagem || placeholderImage,
             };
@@ -2429,11 +2511,7 @@
         const talheresToggleInput = document.getElementById("checkout-talheres-toggle");
         const talheresPayloadInput = document.getElementById("checkout-talheres-payload");
         const payloadInput = document.getElementById("carrinho-payload");
-        const couponCodeInput = document.getElementById("checkout-coupon-code");
         const couponPayloadInput = document.getElementById("checkout-coupon-code-payload");
-        const couponApplyButton = document.getElementById("checkout-coupon-apply");
-        const couponRemoveButton = document.getElementById("checkout-coupon-remove");
-        const couponFeedback = document.getElementById("checkout-coupon-feedback");
         const couponReview = document.getElementById("checkout-coupon-review");
         const couponReviewValue = document.getElementById("checkout-coupon-review-value");
         const form = document.getElementById("checkout-form");
@@ -2506,17 +2584,15 @@
 
         function clearCoupon(message = "") {
             appliedCoupon = null;
+            saveCheckoutCouponCode("");
             if (couponPayloadInput) couponPayloadInput.value = "";
             if (couponReview) couponReview.classList.add("hidden");
             if (couponReviewValue) couponReviewValue.textContent = "- R$ 0,00";
-            couponRemoveButton?.classList.add("hidden");
-            couponApplyButton?.classList.remove("hidden");
-            if (couponFeedback) couponFeedback.textContent = message;
             render();
         }
 
-        async function applyCoupon() {
-            const code = String(couponCodeInput?.value || "").trim();
+        async function applyCoupon(codeOverride = "") {
+            const code = String(codeOverride || getCheckoutCouponCode() || "").trim();
             if (!code) {
                 clearCoupon("Informe um cupom.");
                 return;
@@ -2544,10 +2620,8 @@
                     codigo: data.codigo,
                     desconto: Number.parseFloat(data.desconto || "0") || 0,
                 };
+                saveCheckoutCouponCode(appliedCoupon.codigo);
                 if (couponPayloadInput) couponPayloadInput.value = appliedCoupon.codigo;
-                if (couponFeedback) couponFeedback.textContent = data.message || "Cupom aplicado.";
-                couponApplyButton?.classList.add("hidden");
-                couponRemoveButton?.classList.remove("hidden");
                 render();
             } catch (error) {
                 clearCoupon("Nao foi possivel validar o cupom.");
@@ -2721,17 +2795,8 @@
         savedProfileOpenButton?.addEventListener("click", clearCheckoutFieldHighlights);
         checkoutAddressSummary?.addEventListener("click", clearCheckoutFieldHighlights);
         talheresToggleInput?.addEventListener("change", syncTalheresPayload);
-        couponApplyButton?.addEventListener("click", applyCoupon);
-        couponRemoveButton?.addEventListener("click", () => {
-            if (couponCodeInput) couponCodeInput.value = "";
-            clearCoupon("Cupom removido.");
-        });
-        couponCodeInput?.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            applyCoupon();
-        });
         syncTalheresPayload();
+        const savedCoupon = getCheckoutCouponCode();
 
         function setPaymentSelection(paymentType, paymentMethod, options = {}) {
             const type = String(paymentType || "").trim();
@@ -2879,6 +2944,9 @@
         });
 
         render();
+        if (savedCoupon) {
+            applyCoupon(savedCoupon);
+        }
         setActiveStage(activeStage);
     }
 
@@ -2897,8 +2965,16 @@
         const pickupNameInput = document.getElementById("pickup-nome-payload");
         const pickupNoteInput = document.getElementById("pickup-order-note-payload");
         const pickupTalheresInput = document.getElementById("pickup-talheres-payload");
+        const pickupCouponInput = document.getElementById("pickup-coupon-code-payload");
+        const cartCouponInput = document.getElementById("cart-coupon-code");
+        const cartCouponApplyButton = document.getElementById("cart-coupon-apply");
+        const cartCouponRemoveButton = document.getElementById("cart-coupon-remove");
+        const cartCouponFeedback = document.getElementById("cart-coupon-feedback");
+        const cartCouponDiscountRow = document.getElementById("cart-coupon-discount-row");
+        const cartCouponDiscountValue = document.getElementById("cart-coupon-discount-value");
         const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
         if (!itemsContainer || !itemsSubtotalElement || !goDeliveryLink) return;
+        let cartAppliedCoupon = null;
 
         function readDraftFromPage() {
             return {
@@ -2926,12 +3002,75 @@
             if (pickupNameInput) pickupNameInput.value = String(draftPayload.nome || "").trim();
             if (pickupNoteInput) pickupNoteInput.value = String(draftPayload.observacao_geral || "").trim();
             if (pickupTalheresInput) pickupTalheresInput.value = draftPayload.enviar_talheres === "nao" ? "nao" : "sim";
+            if (pickupCouponInput) pickupCouponInput.value = getCheckoutCouponCode();
+        }
+
+        function cartItemsTotal() {
+            return getCart().reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+        }
+
+        function getCartCouponDiscount() {
+            return cartAppliedCoupon ? Math.max(Number(cartAppliedCoupon.desconto || 0), 0) : 0;
+        }
+
+        function syncCartCouponUi(message = "") {
+            const code = getCheckoutCouponCode();
+            if (cartCouponInput) cartCouponInput.value = code;
+            cartCouponRemoveButton?.classList.toggle("hidden", !code);
+            cartCouponDiscountRow?.classList.toggle("hidden", !code || !getCartCouponDiscount());
+            if (cartCouponDiscountValue) cartCouponDiscountValue.textContent = `- ${money(getCartCouponDiscount())}`;
+            if (cartCouponFeedback) cartCouponFeedback.textContent = message;
+        }
+
+        async function applyCartCoupon(codeOverride = "", options = {}) {
+            const code = String(codeOverride || cartCouponInput?.value || "").trim();
+            if (!code) {
+                cartAppliedCoupon = null;
+                saveCheckoutCouponCode("");
+                syncCartCouponUi("");
+                render();
+                return;
+            }
+            try {
+                const response = await fetch(window.PRATO_CONFIG?.couponValidateUrl || "/api/cupom/validar/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRFToken": window.PRATO_CONFIG?.csrfToken || "",
+                    },
+                    body: new URLSearchParams({
+                        codigo: code,
+                        subtotal: cartItemsTotal().toFixed(2),
+                        frete: "0.00",
+                    }),
+                });
+                const data = await response.json();
+                if (!data.ok) {
+                    cartAppliedCoupon = null;
+                    saveCheckoutCouponCode("");
+                    syncCartCouponUi(data.message || "Cupom invalido.");
+                    render();
+                    return;
+                }
+                cartAppliedCoupon = {
+                    codigo: data.codigo,
+                    desconto: Number.parseFloat(data.desconto || "0") || 0,
+                };
+                saveCheckoutCouponCode(data.codigo);
+                syncCartCouponUi(options.silent ? "" : "Cupom aplicado.");
+                render();
+            } catch (error) {
+                cartAppliedCoupon = null;
+                syncCartCouponUi("Nao foi possivel validar agora.");
+                render();
+            }
         }
 
         const draft = getCheckoutDraft();
         if (nameInput) nameInput.value = draft.nome || getCheckoutCustomerName();
         if (orderNoteInput) orderNoteInput.value = draft.observacao_geral || "";
         if (talheresToggleInput) talheresToggleInput.checked = draft.enviar_talheres !== "nao";
+        syncCartCouponUi();
 
         function render() {
             const cart = getCart();
@@ -2941,7 +3080,9 @@
             }
             itemsContainer.innerHTML = cart.map(buildCartItemMarkup).join("");
             const itemsTotal = cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
-            itemsSubtotalElement.textContent = money(itemsTotal);
+            const couponDiscount = Math.min(getCartCouponDiscount(), itemsTotal);
+            itemsSubtotalElement.textContent = money(Math.max(itemsTotal - couponDiscount, 0));
+            syncCartCouponUi(cartCouponFeedback?.textContent || "");
             goDeliveryLink.classList.toggle("is-disabled", !cart.length);
             goDeliveryLink.setAttribute("aria-disabled", cart.length ? "false" : "true");
             if (goPickupButton) goPickupButton.disabled = !cart.length;
@@ -2957,6 +3098,7 @@
                 updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
                 saveCart(updatedCart);
                 render();
+                if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
                 return;
             }
 
@@ -2965,6 +3107,7 @@
                 const index = Number(removeButton.getAttribute("data-remove-item"));
                 saveCart(getCart().filter((_, itemIndex) => itemIndex !== index));
                 render();
+                if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
             }
         });
 
@@ -2975,6 +3118,18 @@
         orderNoteInput?.addEventListener("change", persistDraftFromPage);
         orderNoteInput?.addEventListener("blur", persistDraftFromPage);
         talheresToggleInput?.addEventListener("change", persistDraftFromPage);
+        cartCouponApplyButton?.addEventListener("click", applyCartCoupon);
+        cartCouponInput?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            applyCartCoupon();
+        });
+        cartCouponRemoveButton?.addEventListener("click", () => {
+            cartAppliedCoupon = null;
+            saveCheckoutCouponCode("");
+            syncCartCouponUi("Cupom removido.");
+            render();
+        });
         window.addEventListener("pagehide", persistDraftFromPage);
         window.addEventListener("beforeunload", persistDraftFromPage);
         goDeliveryLink.addEventListener("click", (event) => {
@@ -3012,6 +3167,7 @@
         });
 
         render();
+        if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
     }
 
     function kitchenCardMarkup(pedido, statusChoices) {
@@ -3023,7 +3179,7 @@
             .join("");
 
         const itens = pedido.itens
-            .map((item) => `<li>${item.quantidade}x ${escapeHtml(item.nome)}${item.observacao ? `<small>Obs: ${escapeHtml(item.observacao)}</small>` : ""}</li>`)
+            .map((item) => `<li>${item.quantidade}x ${escapeHtml(item.nome)}${item.variacao ? `<small>Variação: ${escapeHtml(item.variacao)}</small>` : ""}${item.observacao ? `<small>Obs: ${escapeHtml(item.observacao)}</small>` : ""}</li>`)
             .join("");
 
         return `

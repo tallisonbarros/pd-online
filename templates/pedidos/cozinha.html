@@ -73,6 +73,9 @@
                                 <li class="ops-order-item">
                                     <div>
                                         <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                                        {% if item.variacao_nome_snapshot %}
+                                            <small>Variação: {{ item.variacao_nome_snapshot }}</small>
+                                        {% endif %}
                                         {% if item.observacao %}
                                             <small>Obs.: {{ item.observacao }}</small>
                                         {% endif %}

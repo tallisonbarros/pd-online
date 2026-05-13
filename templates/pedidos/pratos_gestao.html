@@ -39,6 +39,9 @@
                             <div class="management-meta">
                                 <p><strong>Preço:</strong> {% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
                                 <p><strong>Dias:</strong> {{ prato.dias_disponiveis|default:"Todos os dias" }}</p>
+                                {% if prato.variacoes %}
+                                    <p><strong>Variações:</strong> {{ prato.variacoes|linebreaksbr }}</p>
+                                {% endif %}
                             </div>
                             <div class="management-actions">
                                 <a class="secondary-pill compact" href="{% url 'pedidos:gestao_pratos' %}?edit={{ prato.id }}">Editar</a>
@@ -84,6 +87,12 @@
                         <label class="field">
                             <span>Descrição</span>
                             {{ form.descricao }}
+                        </label>
+
+                        <label class="field">
+                            <span>Variações do prato</span>
+                            {{ form.variacoes }}
+                            <small>Opcional. Cadastre uma variação por linha, como Fraldinha e Frango.</small>
                         </label>
 
                         {% if prato_edicao %}

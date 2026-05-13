@@ -13,10 +13,10 @@ class PratoAdmin(admin.ModelAdmin):
     list_display = ("nome", "preco", "ativo", "dias_disponiveis", "criado_em")
     list_editable = ("preco", "ativo", "dias_disponiveis")
     list_filter = ("ativo", "criado_em")
-    search_fields = ("nome", "descricao", "dias_disponiveis")
+    search_fields = ("nome", "descricao", "variacoes", "dias_disponiveis")
     list_per_page = 25
     fieldsets = (
-        ("Dados do prato", {"fields": ("nome", "descricao", "imagem")}),
+        ("Dados do prato", {"fields": ("nome", "descricao", "variacoes", "imagem")}),
         ("Publicacao", {"fields": ("preco", "ativo", "dias_disponiveis")}),
     )
 
@@ -129,9 +129,9 @@ class PedidoAdmin(admin.ModelAdmin):
 
 @admin.register(ItemPedido)
 class ItemPedidoAdmin(admin.ModelAdmin):
-    list_display = ("pedido", "nome_prato_snapshot", "quantidade", "subtotal")
+    list_display = ("pedido", "nome_prato_snapshot", "variacao_nome_snapshot", "quantidade", "subtotal")
     list_select_related = ("pedido", "prato", "bebida", "adicional")
-    search_fields = ("nome_prato_snapshot", "pedido__nome_cliente", "pedido__numero")
+    search_fields = ("nome_prato_snapshot", "variacao_nome_snapshot", "pedido__nome_cliente", "pedido__numero")
 
 
 @admin.register(FaixaFrete)

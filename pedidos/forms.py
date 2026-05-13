@@ -23,13 +23,19 @@ class PratoForm(forms.ModelForm):
 
     class Meta:
         model = Prato
-        fields = ["nome", "descricao", "imagem", "preco", "ativo", "dias_disponiveis"]
+        fields = ["nome", "descricao", "variacoes", "imagem", "preco", "ativo", "dias_disponiveis"]
         widgets = {
             "nome": forms.TextInput(attrs={"placeholder": "Ex.: Frango Guisado"}),
             "descricao": forms.Textarea(
                 attrs={
                     "rows": 4,
                     "placeholder": "Descrição curta para aparecer no cardápio.",
+                }
+            ),
+            "variacoes": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "placeholder": "Uma por linha. Ex.:\nFraldinha\nFrango",
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
@@ -54,6 +60,18 @@ class PratoForm(forms.ModelForm):
         if not selected_set or selected_set == set(valid_order):
             return ""
         return ",".join(value for value in valid_order if value in selected_set)
+
+    def clean_variacoes(self):
+        raw = self.cleaned_data.get("variacoes") or ""
+        seen = set()
+        variations = []
+        for line in raw.replace(";", "\n").splitlines():
+            value = " ".join(line.strip().split())
+            key = value.casefold()
+            if value and key not in seen:
+                seen.add(key)
+                variations.append(value)
+        return "\n".join(variations)
 
 
 class BebidaForm(forms.ModelForm):

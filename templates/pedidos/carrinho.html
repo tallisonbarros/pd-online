@@ -22,6 +22,16 @@
                     <span class="muted"><strong data-cart-count>0</strong></span>
                 </div>
                 <div id="checkout-items" class="checkout-items"></div>
+                <div class="cart-coupon-inline" aria-label="Cupom de desconto">
+                    <input type="text" id="cart-coupon-code" placeholder="Cupom">
+                    <button type="button" id="cart-coupon-apply">OK</button>
+                    <button type="button" id="cart-coupon-remove" class="hidden">Limpar</button>
+                    <small id="cart-coupon-feedback"></small>
+                </div>
+                <div class="cart-discount-line hidden" id="cart-coupon-discount-row">
+                    <span>Cupom</span>
+                    <strong id="cart-coupon-discount-value">- R$ 0,00</strong>
+                </div>
                 <div class="checkout-total">
                     <span>Subtotal</span>
                     <strong id="checkout-items-subtotal">R$ 0,00</strong>
