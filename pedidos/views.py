@@ -2426,6 +2426,7 @@ def gestao_pratos(request):
     if edit_id:
         prato_edicao = get_object_or_404(Prato, id=edit_id)
         form = PratoForm(instance=prato_edicao)
+    open_new_modal = request.GET.get("new") == "1" and not prato_edicao
 
     return render(
         request,
@@ -2434,7 +2435,7 @@ def gestao_pratos(request):
             "pratos": pratos,
             "form": form,
             "prato_edicao": prato_edicao,
-            "form_modal_open": bool(prato_edicao),
+            "form_modal_open": bool(prato_edicao) or open_new_modal,
         },
     )
 

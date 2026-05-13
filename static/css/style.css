@@ -4625,14 +4625,16 @@ fieldset.field {
     padding: 6px;
     justify-content: center;
     gap: 11px;
-    border-color: rgba(92, 59, 49, 0.16);
+    border: 1px solid rgba(255, 253, 250, 0.22);
+    border-radius: 999px;
     background:
-        linear-gradient(180deg, rgba(255, 253, 250, 0.84), rgba(255, 253, 250, 0.62)),
-        #f8f1ed;
-    box-shadow: inset 0 1px 0 rgba(255, 253, 250, 0.9), 0 10px 18px rgba(34, 19, 17, 0.08);
+        linear-gradient(180deg, rgba(255, 253, 250, 0.12), rgba(255, 253, 250, 0) 45%),
+        linear-gradient(135deg, #65443a 0%, #4e342e 54%, #321f1a 100%);
+    box-shadow: 0 14px 26px rgba(34, 19, 17, 0.2), inset 0 1px 0 rgba(255, 253, 250, 0.2);
 }
 
 .order-modal-card .modal-qty-control button {
+    position: relative;
     display: inline-grid;
     place-items: center;
     width: 30px;
@@ -4644,6 +4646,7 @@ fieldset.field {
 
 .order-modal-card .modal-qty-control strong {
     min-width: 22px;
+    color: #fffdfa;
     text-align: center;
     font-size: 0.94rem;
 }
@@ -4655,6 +4658,10 @@ fieldset.field {
 
 .order-modal-card .modal-qty-control button[data-qty-plus]::before {
     content: "+";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
     color: var(--brand-strong);
     font-size: 1rem;
     font-weight: 900;
@@ -4662,9 +4669,30 @@ fieldset.field {
     transform: translateY(-0.5px);
 }
 
+.order-modal-card .modal-qty-control.is-empty {
+    width: 42px;
+    min-height: 42px;
+    padding: 6px;
+    gap: 0;
+}
+
+.order-modal-card .modal-qty-control.is-empty button[data-qty-minus],
+.order-modal-card .modal-qty-control.is-empty strong {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.7);
+}
+
+.order-modal-card .modal-qty-control.is-empty button[data-qty-plus] {
+    width: 30px;
+    height: 30px;
+}
+
 .order-modal-card .modal-actions {
     display: grid;
-    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    grid-template-columns: 1fr;
     align-items: stretch;
     gap: 8px;
 }

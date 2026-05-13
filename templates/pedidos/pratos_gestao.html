@@ -10,7 +10,7 @@
     <main class="ops-main">
         <section class="management-grid management-grid--cards">
             <div class="management-list management-list--cards">
-                <button type="button" class="management-create-card" data-open-management-modal="#prato-form-modal">
+                <button type="button" class="management-create-card" data-open-management-modal="#prato-form-modal" data-management-create-url="{% url 'pedidos:gestao_pratos' %}?new=1">
                     <span class="management-create-icon" aria-hidden="true">+</span>
                     <strong>Novo prato</strong>
                     <small>Cadastrar item do cardápio</small>
@@ -63,7 +63,7 @@
             </div>
         </section>
 
-        <div id="prato-form-modal" class="modal-backdrop hidden management-modal" data-management-modal {% if form_modal_open %}data-auto-open="true"{% endif %} aria-hidden="true">
+        <div id="prato-form-modal" class="modal-backdrop hidden management-modal" data-management-modal data-management-mode="{% if prato_edicao %}edit{% else %}create{% endif %}" {% if form_modal_open %}data-auto-open="true"{% endif %} aria-hidden="true">
             <div class="modal-card management-modal-card" role="dialog" aria-modal="true" aria-labelledby="prato-form-title">
                 <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
                 <div class="modal-content">

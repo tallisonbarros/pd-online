@@ -691,10 +691,9 @@
         const variationOptions = document.getElementById("modal-variacao-options");
         const obs = document.getElementById("modal-observacao");
         const quantityDisplay = document.getElementById("modal-quantidade");
-        const addButton = document.getElementById("modal-add-cart");
+        const modalQuantityBadge = modal.querySelector(".modal-qty-control");
 
         let currentDish = null;
-        let quantity = 1;
         let selectedVariation = "";
 
         function addDishToCart(incomingItem) {
@@ -898,6 +897,38 @@
             return true;
         }
 
+        function getModalCartQuantity() {
+            if (!currentDish) return 0;
+            return selectedVariation
+                ? getCartQuantityForDishVariation(currentDish, selectedVariation)
+                : getCartQuantityForDish(currentDish);
+        }
+
+        function syncModalQuantity() {
+            if (!quantityDisplay || !modalQuantityBadge) return;
+            const modalQuantity = getModalCartQuantity();
+            quantityDisplay.textContent = String(modalQuantity);
+            modalQuantityBadge.classList.toggle("is-empty", modalQuantity <= 0);
+        }
+
+        function buildModalCartItem(quantityToAdd = 1) {
+            if (!currentDish) return null;
+            const currentType = currentDish.tipo || "prato";
+            return {
+                tipo: currentType,
+                item_id: currentDish.id,
+                prato_id: currentType === "prato" ? currentDish.id : undefined,
+                adicional_id: currentType === "adicional" ? currentDish.id : undefined,
+                bebida_id: currentType === "bebida" ? currentDish.id : undefined,
+                nome: currentDish.nome,
+                preco: parsePrice(currentDish.preco),
+                quantidade: Math.max(1, Number(quantityToAdd || 1)),
+                variacao: selectedVariation,
+                observacao: obs.value.trim(),
+                imagem: currentDish.imagem || placeholderImage,
+            };
+        }
+
         function animateQuantityNumber(trigger, delta, changed = true) {
             const badge = trigger?.closest(".dish-qty-badge");
             const value = badge?.querySelector("[data-card-qty-value], [data-card-variation-qty-value]");
@@ -920,20 +951,6 @@
             value._qtyAnimationTimer = window.setTimeout(() => {
                 value.classList.remove("is-qty-increasing", "is-qty-decreasing", "is-qty-unchanged");
                 badge.classList.remove("is-qty-active");
-            }, 360);
-        }
-
-        function animateInlineQuantityNumber(value, delta) {
-            if (!value) return;
-            const directionClass = delta > 0 ? "is-qty-increasing" : "is-qty-decreasing";
-            if (value._qtyAnimationTimer) {
-                clearTimeout(value._qtyAnimationTimer);
-            }
-            value.classList.remove("is-qty-increasing", "is-qty-decreasing");
-            void value.offsetWidth;
-            value.classList.add(directionClass);
-            value._qtyAnimationTimer = window.setTimeout(() => {
-                value.classList.remove("is-qty-increasing", "is-qty-decreasing");
             }, 360);
         }
 
@@ -982,10 +999,8 @@
 
         function openModal(dish) {
             currentDish = dish;
-            quantity = 1;
             const variations = parseDishVariations(dish);
             selectedVariation = variations.length === 1 ? variations[0] : "";
-            quantityDisplay.textContent = "1";
             obs.value = "";
             image.src = dish.imagem;
             image.alt = dish.nome;
@@ -1007,6 +1022,7 @@
                     })
                     .join("");
             }
+            syncModalQuantity();
             modal.classList.remove("hidden");
             modal.setAttribute("aria-hidden", "false");
         }
@@ -1023,42 +1039,30 @@
         });
         variationOptions?.addEventListener("change", (event) => {
             const input = event.target.closest("input[name='modal-variacao']");
-            if (input) selectedVariation = normalizeVariationName(input.value);
+            if (input) {
+                selectedVariation = normalizeVariationName(input.value);
+                syncModalQuantity();
+            }
         });
 
-        document.querySelector("[data-qty-minus]")?.addEventListener("click", function () {
-            const previousQuantity = quantity;
-            quantity = Math.max(1, quantity - 1);
-            quantityDisplay.textContent = String(quantity);
-            animateInlineQuantityNumber(quantityDisplay, quantity < previousQuantity ? -1 : 0);
-        });
-
-        document.querySelector("[data-qty-plus]")?.addEventListener("click", function () {
-            quantity += 1;
-            quantityDisplay.textContent = String(quantity);
-            animateInlineQuantityNumber(quantityDisplay, 1);
-        });
-
-        addButton.addEventListener("click", function () {
+        document.querySelector("[data-qty-minus]")?.addEventListener("click", function (event) {
             if (!currentDish) return;
-            const currentType = currentDish.tipo || "prato";
-            const incomingItem = {
-                tipo: currentType,
-                item_id: currentDish.id,
-                prato_id: currentType === "prato" ? currentDish.id : undefined,
-                adicional_id: currentType === "adicional" ? currentDish.id : undefined,
-                bebida_id: currentType === "bebida" ? currentDish.id : undefined,
-                nome: currentDish.nome,
-                preco: parsePrice(currentDish.preco),
-                quantidade: quantity,
-                variacao: selectedVariation,
-                observacao: obs.value.trim(),
-                imagem: currentDish.imagem || placeholderImage,
-            };
+            const changed = selectedVariation
+                ? incrementCardVariationCartItem(currentDish, selectedVariation, -1)
+                : incrementCardCartItem(currentDish, -1);
+            syncModalQuantity();
+            animateQuantityNumber(event.currentTarget, -1, changed);
+        });
+
+        document.querySelector("[data-qty-plus]")?.addEventListener("click", function (event) {
+            if (!currentDish) return;
+            const incomingItem = buildModalCartItem(1);
+            if (!incomingItem) return;
             addDishToCart(incomingItem);
-            animateAddFeedback(addButton, incomingItem.quantidade);
             syncCardQuantityBadges();
-            closeModal();
+            syncModalQuantity();
+            animateQuantityNumber(event.currentTarget, 1, true);
+            animateAddFeedback(event.currentTarget, 1);
         });
 
         document.querySelectorAll("[data-prato-card]").forEach((card) => {

@@ -15,7 +15,13 @@
 
     document.querySelectorAll("[data-open-management-modal]").forEach(function (button) {
         button.addEventListener("click", function () {
-            setModalOpen(document.querySelector(button.dataset.openManagementModal), true);
+            const modal = document.querySelector(button.dataset.openManagementModal);
+            const createUrl = button.dataset.managementCreateUrl;
+            if (createUrl && modal?.dataset.managementMode === "edit") {
+                window.location.href = createUrl;
+                return;
+            }
+            setModalOpen(modal, true);
         });
     });
 
