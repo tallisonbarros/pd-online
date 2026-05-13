@@ -160,7 +160,15 @@
                                         <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
                                     </div>
                                 </label>
-                                <small class="field-help">Escolha uma opcao com bairro. Se a rua existir em mais de um bairro, selecione a opcao correta antes de informar o numero.</small>
+                                <label class="field operator-district-field">
+                                    <input type="search" id="operator-district-query" list="operator-district-options" autocomplete="off" placeholder="Setor opcional">
+                                    <datalist id="operator-district-options">
+                                        {% for bairro in bairros_sugestoes %}
+                                            <option value="{{ bairro }}"></option>
+                                        {% endfor %}
+                                    </datalist>
+                                </label>
+                                <small class="field-help">Use o setor apenas quando ajudar a filtrar ruas repetidas. Se a sugestao vier incompleta, ajuste pelo mapa.</small>
                                 <button type="button" id="operator-adjust-map" class="secondary-pill compact">Ajustar no mapa</button>
                             </div>
                         {% endif %}

@@ -3251,6 +3251,12 @@ fieldset.field {
     justify-self: start;
 }
 
+.operator-district-field input {
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+}
+
 .address-step-card.is-operator-search-mode:not(.is-map-visible) #use-current-location,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-shell,
 .address-step-card.is-operator-search-mode:not(.is-map-visible) .address-map-actions,
@@ -8418,11 +8424,13 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .dish-media {
-    display: grid;
-    place-items: center;
+    display: block;
+    position: relative;
 }
 
 [data-page="cardapio"] .dish-media img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     margin: auto;

@@ -1457,6 +1457,7 @@
         const isOperatorCheckout = checkoutRoot?.dataset.operatorCheckout === "true";
         const operatorSearch = document.querySelector("[data-operator-address-search]");
         const operatorAddressInput = document.getElementById("operator-address-query");
+        const operatorDistrictInput = document.getElementById("operator-district-query");
         const operatorAddressLoading = document.getElementById("operator-address-loading");
         const operatorAddressSuggestions = document.getElementById("operator-address-suggestions");
         const operatorAdjustMapButton = document.getElementById("operator-adjust-map");
@@ -1641,6 +1642,7 @@
                 else if (normalizedLabel.includes(token)) score += 8;
             });
             if (item?.district) score += 18;
+            if (operatorDistrictInput?.value && normalizeText(item?.district).includes(normalizeText(operatorDistrictInput.value))) score += 55;
             if (normalizeText(item?.city).includes("rio verde")) score += 12;
             if (normalizeText(item?.state) === "go") score += 6;
             if (item?.source_method === "geocode") score += 18;
@@ -1682,18 +1684,76 @@
             });
         }
 
+        function buildOperatorGeocodeQueries(query, district, city, state) {
+            const normalizedQuery = String(query || "").trim();
+            const normalizedDistrict = String(district || "").trim();
+            const baseStreet = normalizeText(normalizedQuery).startsWith("rua ")
+                ? normalizedQuery
+                : `Rua ${normalizedQuery}`;
+            const variants = [normalizedQuery, baseStreet];
+            const tokens = normalizeText(normalizedQuery).split(/\s+/).filter(Boolean);
+            if (tokens.length === 2 && tokens[0] === "jose" && !tokens.includes("souza")) {
+                variants.unshift(`Rua ${normalizedQuery} de Souza`);
+            }
+            const suffixes = [
+                [normalizedDistrict, city, state, "Brasil"].filter(Boolean).join(", "),
+                [city, state, "Brasil"].filter(Boolean).join(", "),
+            ].filter(Boolean);
+            const queries = [];
+            variants.forEach((variant) => {
+                suffixes.forEach((suffix) => {
+                    queries.push([variant, suffix].filter(Boolean).join(", "));
+                });
+            });
+            return [...new Set(queries)];
+        }
+
+        async function fetchGeocodeSuggestions(geocoder, queries, state, city) {
+            const responses = await Promise.all(
+                queries.map(async (address) => {
+                    try {
+                        return await geocoder.geocode({
+                            address,
+                            componentRestrictions: {
+                                country: "BR",
+                                administrativeArea: state,
+                                locality: city,
+                            },
+                            language: googleMapsLanguage,
+                        });
+                    } catch (error) {
+                        return null;
+                    }
+                })
+            );
+            return responses
+                .flatMap((response) => response?.results || [])
+                .map((result) => {
+                    const location = result.geometry?.location;
+                    if (!location) return null;
+                    const mapped = mapGoogleResult(result, location.lat(), location.lng());
+                    return mapped ? { ...mapped, source_method: "geocode" } : null;
+                })
+                .filter(Boolean);
+        }
+
         async function fetchOperatorAddressSuggestions(query, extraParams = {}) {
             const normalizedQuery = String(query || "").trim();
             if (normalizedQuery.length < 3) return [];
             const city = extraParams.cidade || cidadeInput.value || "Rio Verde";
             const state = extraParams.estado || estadoInput.value || "GO";
+            const selectedDistrict = extraParams.bairro || operatorDistrictInput?.value || "";
             let placesError = null;
             let candidates = [];
+
+            const geocoder = await ensureGoogleGeocoder();
+            const geocodeQueries = buildOperatorGeocodeQueries(normalizedQuery, selectedDistrict, city, state);
+            candidates = candidates.concat(await fetchGeocodeSuggestions(geocoder, geocodeQueries, state, city));
 
             try {
                 const { autocomplete, details } = await ensureGooglePlaces();
                 const predictions = await getPlacePredictions(autocomplete, {
-                    input: [normalizedQuery, city, state].filter(Boolean).join(", "),
+                    input: [normalizedQuery, selectedDistrict, city, state].filter(Boolean).join(", "),
                     componentRestrictions: { country: "br" },
                     locationBias: {
                         center: { lat: -17.7923, lng: -50.9192 },
@@ -1722,31 +1782,6 @@
                 placesError = error;
             }
 
-            const geocoder = await ensureGoogleGeocoder();
-            let response = null;
-            try {
-                response = await geocoder.geocode({
-                    address: [normalizedQuery, city, state, "Brasil"].filter(Boolean).join(", "),
-                    componentRestrictions: {
-                        country: "BR",
-                        administrativeArea: state,
-                        locality: city,
-                    },
-                    language: googleMapsLanguage,
-                });
-            } catch (error) {
-                if (placesError) throw placesError;
-                throw error;
-            }
-            const geocodeResults = (response?.results || [])
-                .map((result) => {
-                    const location = result.geometry?.location;
-                    if (!location) return null;
-                    const mapped = mapGoogleResult(result, location.lat(), location.lng());
-                    return mapped ? { ...mapped, source_method: "geocode" } : null;
-                })
-                .filter(Boolean);
-            candidates = candidates.concat(geocodeResults);
             const enriched = await enrichSuggestionDistricts(uniqueOperatorSuggestions(candidates));
             const results = enriched
                 .sort((a, b) => operatorSuggestionScore(b, normalizedQuery) - operatorSuggestionScore(a, normalizedQuery))
@@ -2173,6 +2208,13 @@
             if (query.length >= 3 && operatorAddressSuggestions?.classList.contains("hidden")) {
                 runOperatorAddressSearch(query);
             }
+        });
+
+        operatorDistrictInput?.addEventListener("input", () => {
+            const query = operatorAddressInput?.value.trim() || "";
+            window.clearTimeout(operatorSearchTimer);
+            if (query.length < 3) return;
+            operatorSearchTimer = window.setTimeout(() => runOperatorAddressSearch(query), 220);
         });
 
         document.addEventListener("click", (event) => {

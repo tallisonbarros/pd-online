@@ -266,6 +266,7 @@ def checkout(request):
             "pratos_lookup_json": itens_lookup,
             "pix_chave": config.pix_chave,
             "is_atendente": user_is_atendente(request.user),
+            "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
         },
     )
 
