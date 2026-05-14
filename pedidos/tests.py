@@ -719,6 +719,26 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["pedidos_badge"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [active.id])
 
+    def test_order_apis_display_created_time_in_local_timezone(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Ativo",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.NOVO,
+            total=Decimal("35.00"),
+        )
+        Pedido.objects.filter(pk=pedido.pk).update(
+            criado_em=datetime.fromisoformat("2026-05-14T12:00:00+00:00")
+        )
+
+        admin_payload = self.client.get("/controle/api/pedidos-admin/").json()
+        cozinha_payload = self.client.get("/controle/api/pedidos/").json()
+
+        self.assertEqual(admin_payload["pedidos"][0]["criado_em"], "14/05, 09:00")
+        self.assertEqual(cozinha_payload["pedidos"][0]["horario"], "09:00")
+
     def test_active_order_can_toggle_delivery_marker(self):
         self.client.force_login(self.staff_user)
         pedido = Pedido.objects.create(
@@ -747,6 +767,30 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get("/controle/api/pedidos-admin/").json()
         self.assertTrue(payload["pedidos"][0]["entregador_solicitado"])
         self.assertEqual(payload["pedidos"][0]["copy_url"], f"/controle/api/pedido/{pedido.id}/copias/")
+        self.assertEqual(payload["pedidos"][0]["icone_url"], pedido.icone_pedido_url)
+
+    def test_order_icons_are_assigned_by_order_number_sequence(self):
+        first = Pedido.objects.create(
+            nome_cliente="Cliente Um",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        second = Pedido.objects.create(
+            nome_cliente="Cliente Dois",
+            telefone="64999999999",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("40.00"),
+        )
+
+        self.assertEqual(first.icone_pedido, Pedido.icon_path_for_number(first.numero))
+        self.assertEqual(second.icone_pedido, Pedido.icon_path_for_number(second.numero))
+        self.assertNotEqual(first.icone_pedido, second.icone_pedido)
+        self.assertTrue(first.icone_pedido_url.startswith("/media/Icones_pedidos/"))
 
     def test_order_copy_api_returns_customer_and_delivery_texts(self):
         self.client.force_login(self.staff_user)
@@ -799,6 +843,58 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["pedidos_badge"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [approval.id])
 
+    def test_active_order_api_uses_pickup_stage_labels(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Retirada",
+            telefone="",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_ENTREGADOR,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get("/controle/api/pedidos-admin/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["pedidos"][0]
+        self.assertEqual(payload["id"], pedido.id)
+        self.assertEqual(payload["tipo_coleta"], Pedido.TipoColeta.RETIRADA)
+        self.assertEqual(payload["status_label"], "Aguardando coleta")
+        self.assertIn(
+            {"status": Pedido.Status.AGUARDANDO_ENTREGADOR, "number": "3", "label": "Aguardando coleta"},
+            payload["stage_labels"],
+        )
+        self.assertIn(
+            {"status": Pedido.Status.FINALIZADO, "number": "4", "label": "Finalizado"},
+            payload["stage_labels"],
+        )
+        self.assertNotIn(Pedido.Status.SAIU_ENTREGA, [stage["status"] for stage in payload["stage_labels"]])
+
+    def test_pickup_order_skips_delivery_stage_when_advanced(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Retirada",
+            telefone="",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_ENTREGADOR,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/status/",
+            {"status": Pedido.Status.SAIU_ENTREGA},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Pedido.Status.FINALIZADO)
+        self.assertEqual(response.json()["status"], "Finalizado")
+
     def test_completed_orders_admin_api_returns_closed_orders(self):
         self.client.force_login(self.staff_user)
         done = Pedido.objects.create(
@@ -826,6 +922,28 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["cancelados_count"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_concluidos"]], [done.id])
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_cancelados"]], [canceled.id])
+
+    def test_completed_orders_page_opens_modal_and_shows_only_back_action(self):
+        self.client.force_login(self.staff_user)
+        done = Pedido.objects.create(
+            nome_cliente="Cliente Entregue",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get("/controle/pedidos-concluidos/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'data-order-detail-url="/controle/pedidos/{done.id}/"')
+        self.assertContains(response, "data-pedido-detail-modal")
+        self.assertContains(response, "pedido_detail_modal.js")
+        self.assertContains(response, "Voltar etapa")
+        self.assertContains(response, 'name="status" value="saiu_entrega"')
+        self.assertNotContains(response, "ped-card-more")
+        self.assertNotContains(response, "Detalhes")
 
 
 class AjustesAdminTests(TestCase):
@@ -1632,6 +1750,8 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_APROVACAO)
         self.assertEqual(pedido.nome_cliente, "Cliente Retirada")
         self.assertEqual(pedido.endereco, "Retirada no local")
+        self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.RETIRADA)
+        self.assertEqual(pedido.icone_pedido, Pedido.icon_path_for_number(pedido.numero))
         self.assertEqual(pedido.valor_frete, Decimal("0.00"))
         self.assertEqual(pedido.distancia_km, Decimal("0.00"))
         self.assertEqual(pedido.total, Decimal("24.90"))

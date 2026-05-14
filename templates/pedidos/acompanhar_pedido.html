@@ -21,7 +21,7 @@
                     <p class="address-resolution-kicker">Acompanhamento</p>
                     <h2>#{{ pedido.numero }}</h2>
                 </div>
-                <span class="status-badge" data-order-status-label>{{ pedido.get_status_display }}</span>
+                <span class="status-badge" data-order-status-label>{{ pedido.status_label_contextual }}</span>
             </header>
 
             <section class="order-flow-track" aria-label="Etapas do pedido" data-order-flow>

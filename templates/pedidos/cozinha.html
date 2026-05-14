@@ -35,7 +35,7 @@
                 <article class="ops-order-card" data-order-id="{{ pedido.id }}">
                     <div class="ops-order-topline">
                         <p class="ops-order-code">Pedido #{{ pedido.numero }}</p>
-                        <span class="status-badge">{{ pedido.get_status_display }}</span>
+                        <span class="status-badge">{{ pedido.status_label_contextual }}</span>
                     </div>
 
                     <div class="ops-order-header">

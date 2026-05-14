@@ -11,6 +11,7 @@
         class="ops-main pedidos-admin-page"
         data-page="pedidos-closed-admin"
         data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}"
+        data-status-url-template="{% url 'pedidos:atualizar_status_pedido' 0 %}"
     >
         <div class="pedidos-workspace">
             {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" %}
@@ -27,29 +28,41 @@
                 </details>
 
                 {% for pedido in pedidos_concluidos %}
-            <article class="ped-card">
+            <article
+                class="ped-card ped-card--clickable"
+                data-order-id="{{ pedido.id }}"
+                data-order-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+                role="button"
+                tabindex="0"
+                aria-label="Abrir detalhes do pedido #{{ pedido.numero }}"
+            >
                 <div class="ped-card-top">
                     <div class="ped-client">
                         <div class="ped-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="M7 11l3 3 7-7 1.4 1.4L10 16.8 5.6 12.4 7 11z"/></svg>
+                            <img src="{{ pedido.icone_pedido_url }}" alt="">
                         </div>
                         <div>
                             <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
                             <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
-                            <p class="ped-item-line">{{ pedido.get_status_display }}</p>
+                            <p class="ped-item-line">{{ pedido.status_label_contextual }}</p>
                         </div>
                     </div>
                     <div class="ped-card-tools">
-                        <a class="ped-card-more" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}" aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}" title="Mais detalhes">
-                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
-                            <span class="ped-card-more-label">Detalhes</span>
-                        </a>
                         <div class="ped-stats">
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
                                 <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <div class="ped-actions">
+                    <div class="ped-actions-right">
+                        <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}" data-status-form>
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="{% if pedido.tipo_coleta == 'retirada' %}aguardando_entregador{% else %}saiu_entrega{% endif %}">
+                            <button class="ped-btn ped-btn-soft" type="submit"><span aria-hidden="true">&larr;</span> Voltar etapa</button>
+                        </form>
                     </div>
                 </div>
             </article>
@@ -71,23 +84,26 @@
                 </details>
 
                 {% for pedido in pedidos_cancelados %}
-            <article class="ped-card">
+            <article
+                class="ped-card ped-card--clickable"
+                data-order-id="{{ pedido.id }}"
+                data-order-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+                role="button"
+                tabindex="0"
+                aria-label="Abrir detalhes do pedido #{{ pedido.numero }}"
+            >
                 <div class="ped-card-top">
                     <div class="ped-client">
                         <div class="ped-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="M7.4 6L12 10.6 16.6 6 18 7.4 13.4 12 18 16.6 16.6 18 12 13.4 7.4 18 6 16.6 10.6 12 6 7.4 7.4 6z"/></svg>
+                            <img src="{{ pedido.icone_pedido_url }}" alt="">
                         </div>
                         <div>
                             <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
                             <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
-                            <p class="ped-item-line">{{ pedido.get_status_display }}</p>
+                            <p class="ped-item-line">{{ pedido.status_label_contextual }}</p>
                         </div>
                     </div>
                     <div class="ped-card-tools">
-                        <a class="ped-card-more" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}" aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}" title="Mais detalhes">
-                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
-                            <span class="ped-card-more-label">Detalhes</span>
-                        </a>
                         <div class="ped-stats">
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
@@ -102,8 +118,49 @@
         </div>
     </main>
 </div>
+
+<div id="pedido-detail-modal" class="modal-backdrop hidden ped-detail-modal" aria-hidden="true" data-pedido-detail-modal>
+    <div class="modal-card ped-detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="pedido-detail-modal-title">
+        <button type="button" class="modal-close" data-close-pedido-detail-modal aria-label="Fechar">&times;</button>
+        <div class="modal-content ped-detail-modal-content">
+            <div class="ped-modal-loading" data-pedido-detail-loading>Carregando pedido...</div>
+            <div data-pedido-detail-content></div>
+        </div>
+    </div>
+</div>
+
+<div id="pedido-items-editor-modal" class="modal-backdrop hidden ped-items-editor-modal" aria-hidden="true" data-items-editor-modal>
+    <div class="modal-card ped-items-editor-modal-card" role="dialog" aria-modal="true" aria-labelledby="pedido-items-editor-title">
+        <button type="button" class="modal-close" data-close-items-editor aria-label="Fechar">&times;</button>
+        <div class="modal-content ped-items-editor-modal-content">
+            <div class="ped-items-editor-head">
+                <div>
+                    <span class="ped-modal-kicker">Pedido</span>
+                    <h2 id="pedido-items-editor-title">Editar itens</h2>
+                </div>
+            </div>
+            <div data-items-editor-host></div>
+        </div>
+    </div>
+</div>
+
+<div id="pedido-delivery-editor-modal" class="modal-backdrop hidden ped-delivery-editor-modal" aria-hidden="true" data-delivery-editor-modal>
+    <div class="modal-card ped-delivery-editor-modal-card" role="dialog" aria-modal="true" aria-labelledby="pedido-delivery-editor-title">
+        <button type="button" class="modal-close" data-close-delivery-editor aria-label="Fechar">&times;</button>
+        <div class="modal-content ped-delivery-editor-modal-content">
+            <div class="ped-items-editor-head">
+                <div>
+                    <span class="ped-modal-kicker">Pedido</span>
+                    <h2 id="pedido-delivery-editor-title">Editar entrega</h2>
+                </div>
+            </div>
+            <div data-delivery-editor-host></div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'js/pedidos_admin.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/pedido_detail_modal.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

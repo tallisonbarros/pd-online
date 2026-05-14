@@ -5,6 +5,9 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+PEDIDO_ICON_FOLDER = "Icones_pedidos"
+PEDIDO_ICON_COUNT = 30
+
 
 class Prato(models.Model):
     nome = models.CharField(max_length=120)
@@ -68,6 +71,10 @@ class Pedido(models.Model):
         DINHEIRO = "dinheiro", "Dinheiro"
         CARTAO = "cartao_entrega", "Cartao na entrega"
 
+    class TipoColeta(models.TextChoices):
+        ENTREGA = "entrega", "Entrega"
+        RETIRADA = "retirada", "Retirada"
+
     class Status(models.TextChoices):
         AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovação"
         NOVO = "novo", "Novo"
@@ -92,6 +99,8 @@ class Pedido(models.Model):
     complemento = models.CharField(max_length=255, blank=True)
     lote_quadra = models.CharField(max_length=120, blank=True)
     ponto_referencia = models.CharField(max_length=255, blank=True)
+    tipo_coleta = models.CharField(max_length=8, choices=TipoColeta.choices, default=TipoColeta.ENTREGA)
+    icone_pedido = models.CharField(max_length=80, blank=True)
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
     enviar_talheres = models.BooleanField(default=True)
     observacao_geral = models.TextField(blank=True)
@@ -126,6 +135,48 @@ class Pedido(models.Model):
 
         return build_google_maps_route_url(self)
 
+    @staticmethod
+    def icon_path_for_number(numero):
+        base_number = int(numero or 1)
+        icon_index = ((base_number - 1) % PEDIDO_ICON_COUNT) + 1
+        return f"{PEDIDO_ICON_FOLDER}/{icon_index}.svg"
+
+    @property
+    def icone_pedido_url(self):
+        icon_path = self.icone_pedido or self.icon_path_for_number(self.numero or self.pk or 1)
+        return f"{settings.MEDIA_URL}{icon_path}"
+
+    @property
+    def is_retirada(self):
+        return self.tipo_coleta == self.TipoColeta.RETIRADA
+
+    @property
+    def status_label_contextual(self):
+        if self.status == self.Status.AGUARDANDO_ENTREGADOR:
+            return "Aguardando coleta"
+        if self.status == self.Status.SAIU_ENTREGA and self.is_retirada:
+            return "Finalizado"
+        if self.status == self.Status.FINALIZADO and self.is_retirada:
+            return "Finalizado"
+        if self.status == self.Status.FINALIZADO:
+            return "Entregue"
+        return self.get_status_display()
+
+    @property
+    def stage_labels(self):
+        stages = [
+            {"status": self.Status.NOVO, "number": "1", "label": "Pedido recebido"},
+            {"status": self.Status.EM_PREPARO, "number": "2", "label": "Em produção"},
+            {"status": self.Status.AGUARDANDO_ENTREGADOR, "number": "3", "label": "Aguardando coleta"},
+        ]
+        if self.is_retirada:
+            return [*stages, {"status": self.Status.FINALIZADO, "number": "4", "label": "Finalizado"}]
+        return [
+            *stages,
+            {"status": self.Status.SAIU_ENTREGA, "number": "4", "label": "Saiu para entrega"},
+            {"status": self.Status.FINALIZADO, "number": "5", "label": "Entregue"},
+        ]
+
     def save(self, *args, **kwargs):
         old_status = None
         if self.pk:
@@ -144,6 +195,12 @@ class Pedido(models.Model):
                 Pedido.objects.exclude(numero__isnull=True).order_by("-numero").values_list("numero", flat=True).first()
             )
             self.numero = (ultimo_numero or 2239) + 1
+        icon_changed = False
+        if not self.icone_pedido:
+            self.icone_pedido = self.icon_path_for_number(self.numero)
+            icon_changed = True
+        if icon_changed and update_fields is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"icone_pedido"}
         if not self.public_token:
             self.public_token = secrets.token_urlsafe(24)
         super().save(*args, **kwargs)

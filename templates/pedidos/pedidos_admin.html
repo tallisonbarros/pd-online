@@ -28,7 +28,7 @@
                     <div class="ped-card-top">
                         <div class="ped-client">
                             <div class="ped-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                                <img src="{{ pedido.icone_pedido_url }}" alt="">
                             </div>
                             <div>
                                 <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
@@ -66,16 +66,14 @@
 
                     <div class="ped-flow">
                         <div class="ped-stages">
-                            <div class="ped-stage {% if pedido.status == 'novo' %}is-active{% endif %}"><i>1</i><span>Pedido recebido</span></div>
-                            <div class="ped-stage {% if pedido.status == 'em_preparo' %}is-active{% endif %}"><i>2</i><span>Em produção</span></div>
-                            <div class="ped-stage {% if pedido.status == 'aguardando_entregador' %}is-active{% endif %}"><i>3</i><span>Aguardando entregador</span></div>
-                            <div class="ped-stage {% if pedido.status == 'saiu_entrega' %}is-active{% endif %}"><i>4</i><span>Saiu para entrega</span></div>
-                            <div class="ped-stage {% if pedido.status == 'finalizado' %}is-active{% endif %}"><i>5</i><span>Entregue</span></div>
+                            {% for stage in pedido.stage_labels %}
+                                <div class="ped-stage {% if pedido.status == stage.status %}is-active{% endif %}"><i>{{ stage.number }}</i><span>{{ stage.label }}</span></div>
+                            {% endfor %}
                         </div>
                     </div>
 
                     <div class="ped-actions">
-                        <div class="ped-actions-right">
+                        <div class="ped-actions-left">
                             <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="cliente" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
                                 Copiar pedido
                             </button>
@@ -88,14 +86,16 @@
                                     Entregador solicitado
                                 </button>
                             </form>
+                        </div>
+                        <div class="ped-actions-right">
                             <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
                                 {% csrf_token %}
-                                <input type="hidden" name="status" value="{% if pedido.status == 'saiu_entrega' %}aguardando_entregador{% elif pedido.status == 'aguardando_entregador' %}em_preparo{% elif pedido.status == 'em_preparo' %}novo{% else %}novo{% endif %}">
+                                <input type="hidden" name="status" value="{% if pedido.status == 'finalizado' and pedido.tipo_coleta == 'retirada' %}aguardando_entregador{% elif pedido.status == 'saiu_entrega' %}aguardando_entregador{% elif pedido.status == 'aguardando_entregador' %}em_preparo{% elif pedido.status == 'em_preparo' %}novo{% else %}novo{% endif %}">
                                 <button class="ped-btn ped-btn-soft" type="submit"><span aria-hidden="true">&larr;</span> Voltar etapa</button>
                             </form>
                             <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">
                                 {% csrf_token %}
-                                <input type="hidden" name="status" value="{% if pedido.status == 'novo' %}em_preparo{% elif pedido.status == 'em_preparo' %}aguardando_entregador{% elif pedido.status == 'aguardando_entregador' %}saiu_entrega{% elif pedido.status == 'saiu_entrega' %}finalizado{% else %}finalizado{% endif %}">
+                                <input type="hidden" name="status" value="{% if pedido.status == 'novo' %}em_preparo{% elif pedido.status == 'em_preparo' %}aguardando_entregador{% elif pedido.status == 'aguardando_entregador' and pedido.tipo_coleta == 'retirada' %}finalizado{% elif pedido.status == 'aguardando_entregador' %}saiu_entrega{% elif pedido.status == 'saiu_entrega' %}finalizado{% else %}finalizado{% endif %}">
                                 <button class="ped-btn ped-btn-primary" type="submit">Avançar etapa <span aria-hidden="true">&rarr;</span></button>
                             </form>
                         </div>

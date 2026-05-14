@@ -7739,6 +7739,7 @@ fieldset.field {
     width: 46px; height: 46px; border-radius: 12px; border: 1px solid #e2d6cf; display: grid; place-items: center;
 }
 .ped-icon svg { width: 24px; height: 24px; fill: #221311; }
+.ped-icon img { width: 28px; height: 28px; object-fit: contain; display: block; }
 .ped-client h2 { margin: 2px 0 0; color: #302621; font-size: 33px; line-height: 1.1; }
 .ped-client h2 span { color: #302621; }
 .ped-time { margin: 4px 0 0; color: #7c675c; font-size: 13px; }
@@ -7812,7 +7813,16 @@ fieldset.field {
 .ped-stage.is-active i { background: #00a66d; color: #fff; }
 .ped-stage.is-active span { color: #21342d; }
 .ped-actions { margin-top: 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-.ped-actions-right { display: flex; gap: 8px; }
+.ped-actions-left,
+.ped-actions-right { display: flex; gap: 8px; align-items: center; }
+.ped-actions-left {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+.ped-actions-right {
+    justify-content: flex-end;
+    margin-left: auto;
+}
 .ped-btn {
     border-radius: 14px; border: 1px solid #dfd1c8; background: #fffdfa; color: #302621; padding: 8px 12px; font-size: 14px; font-weight: 800;
     transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
@@ -7832,6 +7842,21 @@ fieldset.field {
 }
 .ped-btn-copy {
     white-space: nowrap;
+}
+.ped-actions-left .ped-btn {
+    min-height: 32px;
+    border-radius: 11px;
+    padding: 5px 9px;
+    background: #fbf7f4;
+    color: #6a554b;
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: none;
+}
+.ped-actions-left .ped-btn-toggle.is-active {
+    border-color: #b8d8c4;
+    background: #edf8f1;
+    color: #25704b;
 }
 .ped-confirm-modal {
     z-index: 1300;
@@ -8619,7 +8644,9 @@ fieldset.field {
     .ped-card-tools { padding-top: 0; }
     .ped-stages { grid-template-columns: 1fr; }
     .ped-actions { flex-direction: column; align-items: flex-start; }
+    .ped-actions-left,
     .ped-actions-right { flex-wrap: wrap; }
+    .ped-actions-right { justify-content: flex-start; margin-left: 0; }
     .ped-headline h1 { font-size: 34px; }
     .ped-detail-grid { grid-template-columns: 1fr; }
     .ped-detail-hero { flex-direction: column; }

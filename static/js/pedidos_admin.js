@@ -10,10 +10,10 @@
     let pollHandle = null;
     let isSyncing = false;
 
-    const stages = [
+    const defaultStages = [
         ["novo", "1", "Pedido recebido"],
         ["em_preparo", "2", "Em produção"],
-        ["aguardando_entregador", "3", "Aguardando entregador"],
+        ["aguardando_entregador", "3", "Aguardando coleta"],
         ["saiu_entrega", "4", "Saiu para entrega"],
         ["finalizado", "5", "Entregue"],
     ];
@@ -39,23 +39,36 @@
         return pedido.copy_url || buildStatusUrl(pedido.id).replace("/controle/pedido/", "/controle/api/pedido/").replace("/status/", "/copias/");
     }
 
-    function previousStatus(status) {
+    function isPickupOrder(pedido) {
+        return pedido.tipo_coleta === "retirada";
+    }
+
+    function previousStatus(pedido) {
+        const status = pedido.status;
+        if (isPickupOrder(pedido) && status === "finalizado") return "aguardando_entregador";
+        if (status === "finalizado") return "saiu_entrega";
         if (status === "saiu_entrega") return "aguardando_entregador";
         if (status === "aguardando_entregador") return "em_preparo";
         if (status === "em_preparo") return "novo";
         return "novo";
     }
 
-    function nextStatus(status) {
+    function nextStatus(pedido) {
+        const status = pedido.status;
         if (status === "novo") return "em_preparo";
         if (status === "em_preparo") return "aguardando_entregador";
+        if (isPickupOrder(pedido) && status === "aguardando_entregador") return "finalizado";
         if (status === "aguardando_entregador") return "saiu_entrega";
         if (status === "saiu_entrega") return "finalizado";
         return "finalizado";
     }
 
-    function buildStages(currentStatus) {
-        return stages.map(([status, number, label]) => {
+    function buildStages(pedido) {
+        const stageItems = Array.isArray(pedido.stage_labels) && pedido.stage_labels.length
+            ? pedido.stage_labels.map((stage) => [stage.status, stage.number, stage.label])
+            : defaultStages;
+        const currentStatus = pedido.status;
+        return stageItems.map(([status, number, label]) => {
             const active = status === currentStatus ? " is-active" : "";
             return `<div class="ped-stage${active}"><i>${number}</i><span>${escapeHtml(label)}</span></div>`;
         }).join("");
@@ -99,6 +112,13 @@
         `;
     }
 
+    function buildPedidoIcon(pedido, fallbackPath) {
+        if (pedido.icone_url) {
+            return `<img src="${escapeHtml(pedido.icone_url)}" alt="">`;
+        }
+        return `<svg viewBox="0 0 24 24"><path d="${fallbackPath || "M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"}"/></svg>`;
+    }
+
     function buildOrderCard(pedido) {
         const pedidoId = escapeHtml(pedido.id);
         const pedidoNumero = escapeHtml(pedido.numero);
@@ -115,7 +135,7 @@
                 <div class="ped-card-top">
                     <div class="ped-client">
                         <div class="ped-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                            ${buildPedidoIcon(pedido)}
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
@@ -141,17 +161,19 @@
 
                 <div class="ped-flow">
                     <div class="ped-stages">
-                        ${buildStages(pedido.status)}
+                        ${buildStages(pedido)}
                     </div>
                 </div>
 
                 <div class="ped-actions">
-                    <div class="ped-actions-right">
+                    <div class="ped-actions-left">
                         ${buildCopyButton(pedido, "cliente", "Copiar pedido")}
                         ${buildCopyButton(pedido, "entregador", "Copiar endereço")}
                         ${buildEntregadorForm(pedido)}
-                        ${buildStatusForm(pedido.id, previousStatus(pedido.status), "ped-btn ped-btn-soft", '<span aria-hidden="true">&larr;</span> Voltar etapa')}
-                        ${buildStatusForm(pedido.id, nextStatus(pedido.status), "ped-btn ped-btn-primary", 'Avançar etapa <span aria-hidden="true">&rarr;</span>')}
+                    </div>
+                    <div class="ped-actions-right">
+                        ${buildStatusForm(pedido.id, previousStatus(pedido), "ped-btn ped-btn-soft", '<span aria-hidden="true">&larr;</span> Voltar etapa')}
+                        ${buildStatusForm(pedido.id, nextStatus(pedido), "ped-btn ped-btn-primary", 'Avançar etapa <span aria-hidden="true">&rarr;</span>')}
                     </div>
                 </div>
             </article>
@@ -174,7 +196,7 @@
                 <div class="ped-card-top">
                     <div class="ped-client">
                         <div class="ped-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                            ${buildPedidoIcon(pedido)}
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
@@ -208,12 +230,30 @@
 
     function buildClosedCard(pedido, iconPath) {
         const pedidoNumero = escapeHtml(pedido.numero);
+        const pedidoId = escapeHtml(pedido.id);
+        const detailUrl = escapeHtml(pedido.detail_url);
+        const actionMarkup = pedido.status === "finalizado"
+            ? `
+                <div class="ped-actions">
+                    <div class="ped-actions-right">
+                        ${buildStatusForm(pedido.id, previousStatus(pedido), "ped-btn ped-btn-soft", '<span aria-hidden="true">&larr;</span> Voltar etapa')}
+                    </div>
+                </div>
+            `
+            : "";
         return `
-            <article class="ped-card">
+            <article
+                class="ped-card ped-card--clickable"
+                data-order-id="${pedidoId}"
+                data-order-detail-url="${detailUrl}"
+                role="button"
+                tabindex="0"
+                aria-label="Abrir detalhes do pedido #${pedidoNumero}"
+            >
                 <div class="ped-card-top">
                     <div class="ped-client">
                         <div class="ped-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="${iconPath}"/></svg>
+                            ${buildPedidoIcon(pedido, iconPath)}
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
@@ -222,10 +262,6 @@
                         </div>
                     </div>
                     <div class="ped-card-tools">
-                        <a class="ped-card-more" href="${escapeHtml(pedido.detail_url)}" aria-label="Ver mais detalhes do pedido #${pedidoNumero}" title="Mais detalhes">
-                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
-                            <span class="ped-card-more-label">Detalhes</span>
-                        </a>
                         <div class="ped-stats">
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
@@ -234,6 +270,7 @@
                         </div>
                     </div>
                 </div>
+                ${actionMarkup}
             </article>
         `;
     }

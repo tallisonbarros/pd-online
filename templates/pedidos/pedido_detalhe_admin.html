@@ -15,7 +15,7 @@
                 <p>Detalhes completos do pedido, com conferência de itens, frete salvo e distância usada no cálculo.</p>
             </div>
             <div class="ped-detail-hero-actions">
-                <span class="ped-detail-status">{{ pedido.get_status_display }}</span>
+                <span class="ped-detail-status">{{ pedido.status_label_contextual }}</span>
                 <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:cozinha_pedidos' %}">&larr; Voltar para pedidos</a>
             </div>
         </section>

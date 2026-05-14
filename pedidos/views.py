@@ -171,7 +171,7 @@ def montar_mensagem_whatsapp(pedido):
     linhas = [
         f"*PRATO-DELIVERY*",
         f"Pedido #{pedido.numero}",
-        f"*Status:* {pedido.get_status_display()}",
+        f"*Status:* {pedido.status_label_contextual}",
         "",
         f"*Cliente:* {pedido.nome_cliente}",
         f"*Endereço:* {pedido.endereco}",
@@ -1336,12 +1336,13 @@ def criar_pedido(request):
         endereco_formatado=endereco_formatado,
         latitude=latitude,
         longitude=longitude,
-          endereco=endereco,
-          lote_quadra=lote_quadra,
-          complemento=complemento,
-          ponto_referencia=ponto_referencia,
-          forma_pagamento=forma_pagamento,
-          enviar_talheres=enviar_talheres,
+        endereco=endereco,
+        lote_quadra=lote_quadra,
+        complemento=complemento,
+        ponto_referencia=ponto_referencia,
+        tipo_coleta=Pedido.TipoColeta.ENTREGA,
+        forma_pagamento=forma_pagamento,
+        enviar_talheres=enviar_talheres,
         observacao_geral=observacao_geral,
         status=Pedido.Status.AGUARDANDO_APROVACAO,
         valor_frete=valor_frete,
@@ -1395,6 +1396,7 @@ def criar_retirada(request):
         estado="GO",
         endereco_formatado="Retirada no local",
         endereco="Retirada no local",
+        tipo_coleta=Pedido.TipoColeta.RETIRADA,
         forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
         enviar_talheres=enviar_talheres_raw != "nao",
         observacao_geral=observacao_geral,
@@ -1445,7 +1447,7 @@ def _pedido_public_payload(pedido, include_items=False):
         "token": pedido.public_token,
         "numero": pedido.numero,
         "status": pedido.status,
-        "status_label": pedido.get_status_display(),
+        "status_label": pedido.status_label_contextual,
         "status_step": status_step.get(pedido.status, 1),
         "criado_em": timezone.localtime(pedido.criado_em).isoformat(),
         "horario": timezone.localtime(pedido.criado_em).strftime("%d/%m %H:%M"),
@@ -2036,6 +2038,10 @@ def _tempo_producao_pedido(pedido):
     return timesince(pedido.producao_iniciada_em, timezone.now())
 
 
+def _format_local_datetime(value, fmt):
+    return timezone.localtime(value).strftime(fmt)
+
+
 def _pedido_primeiro_item_line(pedido):
     primeiro_item = next(iter(pedido.itens.all()), None)
     if not primeiro_item:
@@ -2061,11 +2067,14 @@ def _pedido_admin_summary(pedido):
         "id": pedido.id,
         "numero": pedido.numero,
         "cliente": pedido.nome_cliente,
-        "criado_em": pedido.criado_em.strftime("%d/%m, %H:%M"),
+        "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
         "item_line": _pedido_primeiro_item_line(pedido),
         "item_lines": _pedido_item_lines(pedido),
         "status": pedido.status,
-        "status_label": pedido.get_status_display(),
+        "status_label": pedido.status_label_contextual,
+        "tipo_coleta": pedido.tipo_coleta,
+        "stage_labels": pedido.stage_labels,
+        "icone_url": pedido.icone_pedido_url,
         "tempo_producao": _tempo_producao_pedido(pedido),
         "entregador_solicitado": pedido.entregador_solicitado,
         "total": f"R$ {pedido.total:.2f}".replace(".", ","),
@@ -2806,12 +2815,14 @@ def atualizar_status_pedido(request, pedido_id):
     status = request.POST.get("status")
     if pedido.status == Pedido.Status.AGUARDANDO_APROVACAO and status == Pedido.Status.NOVO:
         status = Pedido.Status.EM_PREPARO
+    if pedido.tipo_coleta == Pedido.TipoColeta.RETIRADA and status == Pedido.Status.SAIU_ENTREGA:
+        status = Pedido.Status.FINALIZADO
     if status not in dict(Pedido.Status.choices):
         return HttpResponseBadRequest("Status invalido.")
     pedido.status = status
     pedido.save(update_fields=["status"])
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"ok": True, "status": pedido.get_status_display()})
+        return JsonResponse({"ok": True, "status": pedido.status_label_contextual})
     return redirect("pedidos:cozinha_pedidos")
 
 
@@ -2857,8 +2868,10 @@ def api_pedidos_cozinha(request):
                 "valor_frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
                 "observacao_geral": pedido.observacao_geral,
                 "status": pedido.status,
-                "status_label": pedido.get_status_display(),
-                "horario": pedido.criado_em.strftime("%H:%M"),
+                "status_label": pedido.status_label_contextual,
+                "tipo_coleta": pedido.tipo_coleta,
+                "stage_labels": pedido.stage_labels,
+                "horario": _format_local_datetime(pedido.criado_em, "%H:%M"),
                 "total": f"R$ {pedido.total:.2f}".replace(".", ","),
                 "itens": [
                     {

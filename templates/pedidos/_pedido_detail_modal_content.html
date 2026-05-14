@@ -24,7 +24,7 @@
                 {{ pedido.nome_cliente }}
             {% endif %}
         </h2>
-        <p>{{ pedido.criado_em|date:"d/m/Y H:i" }} · {{ pedido.get_status_display }}</p>
+        <p>{{ pedido.criado_em|date:"d/m/Y H:i" }} · {{ pedido.status_label_contextual }}</p>
     </div>
     <div class="ped-modal-total">
         <span>Total</span>

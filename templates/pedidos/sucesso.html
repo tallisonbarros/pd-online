@@ -22,7 +22,7 @@
                     <h2>#{{ pedido.numero }}</h2>
                     <p>Confirme pelo WhatsApp para o pedido entrar na operação.</p>
                 </div>
-                <span class="status-badge">{{ pedido.get_status_display }}</span>
+                <span class="status-badge">{{ pedido.status_label_contextual }}</span>
             </header>
 
             {% if whatsapp_url %}
@@ -121,7 +121,7 @@
                 token: "{{ pedido.public_token|escapejs }}",
                 numero: {{ pedido.numero }},
                 total: "R$ {{ pedido.total|floatformat:2|escapejs }}",
-                status: "{{ pedido.get_status_display|escapejs }}",
+                status: "{{ pedido.status_label_contextual|escapejs }}",
                 criado_em: "{{ pedido.criado_em|date:'c'|escapejs }}",
                 acompanhamento_url: "{% url 'pedidos:acompanhar_pedido' pedido.public_token %}"
             };
