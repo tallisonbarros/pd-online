@@ -864,7 +864,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(first.icone_pedido, Pedido.icon_path_for_number(first.numero))
         self.assertEqual(second.icone_pedido, Pedido.icon_path_for_number(second.numero))
         self.assertNotEqual(first.icone_pedido, second.icone_pedido)
-        self.assertTrue(first.icone_pedido_url.startswith("/media/Icones_pedidos/"))
+        self.assertTrue(first.icone_pedido_url.startswith("/static/img/Icones_pedidos/"))
 
     def test_order_copy_api_returns_customer_and_delivery_texts(self):
         self.client.force_login(self.staff_user)

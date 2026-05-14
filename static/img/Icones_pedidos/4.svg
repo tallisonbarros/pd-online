@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: CorelDRAW 2020 (64 Bit) -->
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="1000mm" height="1000mm" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+viewBox="0 0 1000000 1000000"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
+ <defs>
+  <style type="text/css">
+   <![CDATA[
+    .str0 {stroke:#373435;stroke-width:200;stroke-miterlimit:22.9256}
+    .fil1 {fill:#FEFEFE}
+    .fil0 {fill:#373435}
+   ]]>
+  </style>
+ </defs>
+ <g id="Camada_x0020_1">
+  <metadata id="CorelCorpID_0Corel-Layer"/>
+  <g id="_2401310159600">
+   <rect class="fil0 str0" x="136171.1" y="449739.2" width="727596.3" height="319304.8"/>
+   <g>
+    <polygon class="fil0 str0" points="257437.3,303924.7 318070.3,376831.9 378703.3,449739.2 257437.3,449739.2 136171.2,449739.2 196804.2,376831.9 "/>
+    <polygon class="fil0 str0" points="499969.4,231017.4 621235.5,376831.9 742501.5,522646.4 499969.4,522646.4 257437.3,522646.4 378703.4,376831.9 "/>
+    <polygon class="fil0 str0" points="742501.5,303924.7 803134.5,376831.9 863767.5,449739.2 742501.5,449739.2 621235.4,449739.2 681868.4,376831.9 "/>
+   </g>
+  </g>
+  <rect class="fil1 str0" transform="matrix(0.560472 0.673563 -0.560472 0.673563 499969 351300)" width="110066.6" height="110066.6"/>
+ </g>
+</svg>

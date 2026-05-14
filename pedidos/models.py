@@ -1,11 +1,11 @@
 from decimal import Decimal
 import secrets
 
-from django.db import models
 from django.conf import settings
+from django.db import models
 from django.utils import timezone
 
-PEDIDO_ICON_FOLDER = "Icones_pedidos"
+PEDIDO_ICON_FOLDER = "img/Icones_pedidos"
 PEDIDO_ICON_COUNT = 30
 
 
@@ -144,7 +144,9 @@ class Pedido(models.Model):
     @property
     def icone_pedido_url(self):
         icon_path = self.icone_pedido or self.icon_path_for_number(self.numero or self.pk or 1)
-        return f"{settings.MEDIA_URL}{icon_path}"
+        if icon_path.startswith("img/"):
+            return f"/static/{icon_path}"
+        return f"/static/img/{icon_path}"
 
     @property
     def is_retirada(self):
