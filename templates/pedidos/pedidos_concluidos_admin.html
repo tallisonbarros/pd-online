@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pedidos concluídos | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active="pedidos" pedidos_badge=pedidos_badge %}
+
+    <main
+        class="ops-main pedidos-admin-page"
+        data-page="pedidos-closed-admin"
+        data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}"
+    >
+        <div class="pedidos-workspace">
+            {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" %}
+
+            <section id="pedidos-concluidos-lista" class="ped-live-list pedidos-content-panel" data-orders-list>
+                <details class="ped-collapse" open>
+                    <summary>
+                        <div>
+                            <h3>Concluídos</h3>
+                            <p>{{ concluidos_count }} pedido(s) entregue(s)</p>
+                        </div>
+                        <span class="ped-badge done">{{ concluidos_count }}</span>
+                    </summary>
+                </details>
+
+                {% for pedido in pedidos_concluidos %}
+            <article class="ped-card">
+                <div class="ped-card-top">
+                    <div class="ped-client">
+                        <div class="ped-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M7 11l3 3 7-7 1.4 1.4L10 16.8 5.6 12.4 7 11z"/></svg>
+                        </div>
+                        <div>
+                            <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
+                            <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
+                            <p class="ped-item-line">{{ pedido.get_status_display }}</p>
+                        </div>
+                    </div>
+                    <div class="ped-card-tools">
+                        <a class="ped-card-more" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}" aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}" title="Mais detalhes">
+                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
+                            <span class="ped-card-more-label">Detalhes</span>
+                        </a>
+                        <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Valor total</span>
+                                <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+                {% empty %}
+                    <div class="empty-state">
+                        <h2>Nenhum pedido concluído</h2>
+                        <p>Pedidos entregues aparecerão aqui.</p>
+                    </div>
+                {% endfor %}
+
+                <details class="ped-collapse" open>
+                    <summary>
+                        <div>
+                            <h3>Cancelados</h3>
+                            <p>{% if cancelados_count %}{{ cancelados_count }} pedido(s) cancelado(s).{% else %}Nenhum pedido cancelado no momento.{% endif %}</p>
+                        </div>
+                        <span class="ped-badge cancel">{{ cancelados_count }}</span>
+                    </summary>
+                </details>
+
+                {% for pedido in pedidos_cancelados %}
+            <article class="ped-card">
+                <div class="ped-card-top">
+                    <div class="ped-client">
+                        <div class="ped-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24"><path d="M7.4 6L12 10.6 16.6 6 18 7.4 13.4 12 18 16.6 16.6 18 12 13.4 7.4 18 6 16.6 10.6 12 6 7.4 7.4 6z"/></svg>
+                        </div>
+                        <div>
+                            <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
+                            <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
+                            <p class="ped-item-line">{{ pedido.get_status_display }}</p>
+                        </div>
+                    </div>
+                    <div class="ped-card-tools">
+                        <a class="ped-card-more" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}" aria-label="Ver mais detalhes do pedido #{{ pedido.numero }}" title="Mais detalhes">
+                            <span class="ped-card-more-dots" aria-hidden="true">...</span>
+                            <span class="ped-card-more-label">Detalhes</span>
+                        </a>
+                        <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Valor total</span>
+                                <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+                {% endfor %}
+            </section>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pedidos_admin.js' %}?v={% now 'U' %}"></script>
+{% endblock %}

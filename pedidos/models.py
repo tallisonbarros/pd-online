@@ -3,6 +3,7 @@ import secrets
 
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class Prato(models.Model):
@@ -71,6 +72,7 @@ class Pedido(models.Model):
         AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovação"
         NOVO = "novo", "Novo"
         EM_PREPARO = "em_preparo", "Em preparo"
+        AGUARDANDO_ENTREGADOR = "aguardando_entregador", "Aguardando entregador"
         SAIU_ENTREGA = "saiu_entrega", "Saiu para entrega"
         FINALIZADO = "finalizado", "Finalizado"
         CANCELADO = "cancelado", "Cancelado"
@@ -93,7 +95,7 @@ class Pedido(models.Model):
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
     enviar_talheres = models.BooleanField(default=True)
     observacao_geral = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOVO)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOVO)
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     valor_frete = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     total_sem_desconto = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
@@ -105,6 +107,8 @@ class Pedido(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     public_token = models.CharField(max_length=64, unique=True, blank=True, editable=False)
     criado_em = models.DateTimeField(auto_now_add=True)
+    producao_iniciada_em = models.DateTimeField(blank=True, null=True)
+    entregador_solicitado = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-criado_em"]
@@ -123,6 +127,18 @@ class Pedido(models.Model):
         return build_google_maps_route_url(self)
 
     def save(self, *args, **kwargs):
+        old_status = None
+        if self.pk:
+            old_status = Pedido.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+
+        production_start_changed = False
+        if self.status == self.Status.EM_PREPARO and old_status != self.Status.EM_PREPARO and not self.producao_iniciada_em:
+            self.producao_iniciada_em = timezone.now()
+            production_start_changed = True
+        update_fields = kwargs.get("update_fields")
+        if production_start_changed and update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {"producao_iniciada_em"}
+
         if not self.numero:
             ultimo_numero = (
                 Pedido.objects.exclude(numero__isnull=True).order_by("-numero").values_list("numero", flat=True).first()

@@ -1,3 +1,5 @@
+import json
+
 from decimal import Decimal
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace
@@ -10,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, ConfiguracaoEntrega, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 from .utils import build_google_maps_route_url
 from .views import _calcular_frete_por_distancia
 
@@ -267,7 +269,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.context["itens_subtotal"], Decimal("24.00"))
         self.assertTrue(response.context["frete_confere"])
 
-    def test_orders_admin_shows_approval_queue(self):
+    def test_orders_admin_keeps_only_active_orders(self):
         self.client.force_login(self.staff_user)
         pedido = Pedido.objects.create(
             nome_cliente="Cliente WhatsApp",
@@ -286,9 +288,544 @@ class PedidoDetalheAdminTests(TestCase):
         response = self.client.get("/controle/pedidos/")
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Atuais")
+        self.assertContains(response, "Adicionar pedido")
+        self.assertEqual(response.context["aprovacao_count"], 1)
+        self.assertNotContains(response, "Aprovar pedido")
+        self.assertNotContains(response, "Pedidos para aprovação")
+        self.assertNotIn(pedido, list(response.context["pedidos_ativos"]))
+
+    def test_approval_orders_admin_shows_approval_queue(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            rua="Rua Teste",
+            numero_endereco="100",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get("/controle/pedidos-aprovacao/")
+
+        self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pedidos para aprovação")
         self.assertContains(response, "Aprovar pedido")
+        self.assertContains(response, "data-order-detail-url")
+        self.assertNotContains(response, "ped-card-more")
         self.assertIn(pedido, list(response.context["pedidos_aprovacao"]))
+
+        detail_response = self.client.get(
+            f"/controle/pedidos/{pedido.id}/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "ped-modal-head")
+        self.assertContains(detail_response, "Cliente WhatsApp")
+        self.assertContains(detail_response, "Entrega")
+        self.assertContains(detail_response, "Total")
+        self.assertNotContains(detail_response, "Total recalculado")
+        self.assertNotContains(detail_response, "ops-shell")
+
+    def test_approving_order_moves_directly_to_production(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/status/",
+            {"status": Pedido.Status.EM_PREPARO},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Pedido.Status.EM_PREPARO)
+        self.assertIsNotNone(pedido.producao_iniciada_em)
+
+    def test_legacy_approval_to_new_status_is_normalized_to_production(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/status/",
+            {"status": Pedido.Status.NOVO},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Pedido.Status.EM_PREPARO)
+        self.assertIsNotNone(pedido.producao_iniciada_em)
+
+    def test_active_order_advances_through_waiting_driver_step(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        production_started_at = pedido.producao_iniciada_em
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/status/",
+            {"status": Pedido.Status.AGUARDANDO_ENTREGADOR},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, Pedido.Status.AGUARDANDO_ENTREGADOR)
+        self.assertEqual(pedido.producao_iniciada_em, production_started_at)
+
+        payload_response = self.client.get("/controle/api/pedidos-admin/")
+        self.assertNotEqual(payload_response.json()["pedidos"][0]["tempo_producao"], "--")
+
+    def test_production_timer_is_preserved_when_returning_steps(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        production_started_at = pedido.producao_iniciada_em
+
+        for status in [
+            Pedido.Status.AGUARDANDO_ENTREGADOR,
+            Pedido.Status.EM_PREPARO,
+            Pedido.Status.NOVO,
+            Pedido.Status.EM_PREPARO,
+        ]:
+            response = self.client.post(
+                f"/controle/pedido/{pedido.id}/status/",
+                {"status": status},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertEqual(response.status_code, 200)
+            pedido.refresh_from_db()
+            self.assertEqual(pedido.producao_iniciada_em, production_started_at)
+
+    def test_only_manager_can_update_order_payment(self):
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        self.client.force_login(self.staff_user)
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.DINHEIRO},
+        )
+        self.assertEqual(response.status_code, 400)
+
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.DINHEIRO},
+        )
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
+
+    def test_manager_can_update_simple_order_fields(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        detail_response = self.client.get(
+            f"/controle/pedidos/{pedido.id}/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertContains(detail_response, "data-inline-edit")
+        self.assertContains(detail_response, "data-field=\"nome_cliente\"")
+        self.assertContains(detail_response, "data-field=\"telefone\"")
+        self.assertContains(detail_response, "data-field=\"forma_pagamento\"")
+        self.assertContains(detail_response, "data-param=\"forma_pagamento\"")
+        self.assertContains(detail_response, "data-field=\"enviar_talheres\"")
+        self.assertContains(detail_response, "data-field=\"observacao_geral\"")
+        self.assertContains(detail_response, "data-open-delivery-editor")
+        self.assertContains(detail_response, "data-delivery-editor-template")
+        self.assertNotContains(detail_response, "data-toggle-order-editor")
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "nome_cliente", "value": "Cliente Editado"},
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "telefone", "value": "6411112222"},
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "enviar_talheres", "value": "nao"},
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "observacao_geral", "value": "Sem cebola"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.nome_cliente, "Cliente Editado")
+        self.assertEqual(pedido.telefone, "6411112222")
+        self.assertFalse(pedido.enviar_talheres)
+        self.assertEqual(pedido.observacao_geral, "Sem cebola")
+
+    def test_manager_can_update_order_delivery_without_coordinates(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("12.00"),
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entrega/",
+            {
+                "rua": "Rua Nova",
+                "numero": "55",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "complemento": "Casa",
+                "lote_quadra": "Lote 2",
+                "ponto_referencia": "Perto da praca",
+                "endereco_formatado": "Rua Nova, 55 - Centro, Rio Verde - GO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["frete_recalculado"])
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro, Rio Verde - GO")
+        self.assertEqual(pedido.valor_frete, Decimal("12.00"))
+        self.assertEqual(pedido.complemento, "Casa")
+
+    def test_manager_can_replace_order_items_and_recalculate_total(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        adicional = Adicional.objects.create(nome="Bacon", preco=Decimal("9.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("10.00"),
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/itens/",
+            {
+                "itens_payload": json.dumps(
+                    [
+                        {"tipo": "prato", "item_id": prato.id, "quantidade": 2},
+                        {"tipo": "adicional", "item_id": adicional.id, "quantidade": 1},
+                    ]
+                )
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.itens.count(), 2)
+        self.assertEqual(pedido.total_sem_desconto, Decimal("69.00"))
+        self.assertEqual(pedido.total, Decimal("69.00"))
+
+    def test_manager_can_apply_and_remove_coupon_from_order_modal(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        Cupom.objects.create(
+            codigo="OFF10",
+            tipo_desconto=Cupom.TipoDesconto.VALOR_FIXO,
+            valor=Decimal("10.00"),
+            ativo=True,
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("5.00"),
+            total=Decimal("30.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+
+        detail_response = self.client.get(
+            f"/controle/pedidos/{pedido.id}/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertContains(detail_response, "data-coupon-form")
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/cupom/",
+            {"cupom_codigo": "off10"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.cupom_codigo, "OFF10")
+        self.assertEqual(pedido.cupom_desconto, Decimal("10.00"))
+        self.assertEqual(pedido.total, Decimal("20.00"))
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/cupom/",
+            {"cupom_codigo": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.cupom_codigo, "")
+        self.assertEqual(pedido.cupom_desconto, Decimal("0.00"))
+        self.assertEqual(pedido.total, Decimal("30.00"))
+
+    def test_invalid_coupon_returns_bad_request_for_order_modal(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("30.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/cupom/",
+            {"cupom_codigo": "NAOEXISTE"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_editor_catalog_requires_manager(self):
+        self.client.force_login(self.staff_user)
+        response = self.client.get("/controle/api/catalogo-editor/")
+        self.assertEqual(response.status_code, 400)
+
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        response = self.client.get("/controle/api/catalogo-editor/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["nome"], "Carreteiro")
+
+    def test_completed_orders_admin_shows_closed_orders(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Entregue",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get("/controle/pedidos-concluidos/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Concluídos")
+        self.assertIn(pedido, list(response.context["pedidos_concluidos"]))
+
+    def test_orders_admin_api_returns_only_active_orders(self):
+        self.client.force_login(self.staff_user)
+        active = Pedido.objects.create(
+            nome_cliente="Cliente Ativo",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.NOVO,
+            total=Decimal("35.00"),
+        )
+        Pedido.objects.create(
+            nome_cliente="Cliente Finalizado",
+            telefone="64999999999",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("40.00"),
+        )
+
+        response = self.client.get("/controle/api/pedidos-admin/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["aprovacao_count"], 0)
+        self.assertEqual(payload["pedidos_badge"], 1)
+        self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [active.id])
+
+    def test_active_order_can_toggle_delivery_marker(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Ativo",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        page_response = self.client.get("/controle/pedidos/")
+        self.assertContains(page_response, "Entregador solicitado")
+        self.assertContains(page_response, "Copiar pedido")
+        self.assertContains(page_response, "Copiar endereço")
+        self.assertContains(page_response, f"/controle/api/pedido/{pedido.id}/copias/")
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entregador/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertTrue(pedido.entregador_solicitado)
+        payload = self.client.get("/controle/api/pedidos-admin/").json()
+        self.assertTrue(payload["pedidos"][0]["entregador_solicitado"])
+        self.assertEqual(payload["pedidos"][0]["copy_url"], f"/controle/api/pedido/{pedido.id}/copias/")
+
+    def test_order_copy_api_returns_customer_and_delivery_texts(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Ativo",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            complemento="Casa 2",
+            ponto_referencia="Portao azul",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn(f"Pedido #{pedido.numero}", payload["cliente"])
+        self.assertIn("*Cliente:* Cliente Ativo", payload["cliente"])
+        self.assertIn(f"Pedido #{pedido.numero} - Cliente Ativo", payload["entregador"])
+        self.assertIn("Endereço: Rua Teste, 100 - Centro, Rio Verde - GO", payload["entregador"])
+        self.assertIn("Complemento: Casa 2", payload["entregador"])
+        self.assertNotIn("Telefone", payload["entregador"])
+
+    def test_approval_orders_admin_api_returns_realtime_queue(self):
+        self.client.force_login(self.staff_user)
+        approval = Pedido.objects.create(
+            nome_cliente="Cliente Aprovacao",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+        Pedido.objects.create(
+            nome_cliente="Cliente Ativo",
+            telefone="64999999999",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("40.00"),
+        )
+
+        response = self.client.get("/controle/api/pedidos-aprovacao/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["aprovacao_count"], 1)
+        self.assertEqual(payload["pedidos_badge"], 1)
+        self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [approval.id])
+
+    def test_completed_orders_admin_api_returns_closed_orders(self):
+        self.client.force_login(self.staff_user)
+        done = Pedido.objects.create(
+            nome_cliente="Cliente Entregue",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+        canceled = Pedido.objects.create(
+            nome_cliente="Cliente Cancelado",
+            telefone="64999999999",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.CANCELADO,
+            total=Decimal("40.00"),
+        )
+
+        response = self.client.get("/controle/api/pedidos-concluidos/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["concluidos_count"], 1)
+        self.assertEqual(payload["cancelados_count"], 1)
+        self.assertEqual([pedido["id"] for pedido in payload["pedidos_concluidos"]], [done.id])
+        self.assertEqual([pedido["id"] for pedido in payload["pedidos_cancelados"]], [canceled.id])
 
 
 class AjustesAdminTests(TestCase):
@@ -1243,4 +1780,5 @@ class CriarPedidoFreteTests(TestCase):
         self.assertContains(response, "Configure e salve a origem", status_code=400)
         mock_route.assert_not_called()
         self.assertFalse(Pedido.objects.exists())
+
 

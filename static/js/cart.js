@@ -1677,12 +1677,14 @@
         renderProfiles();
     }
 
-    function initAddressEditor(form) {
+    function initAddressEditor(form, options = {}) {
         const noopApi = {
             applyResolvedAddress() {},
             clearResolvedAddress() {},
             refreshMap() {},
         };
+        const root = options.root || form?.closest("[data-address-editor-root]") || document;
+        const byId = (id) => root?.querySelector?.(`#${id}`) || document.getElementById(id);
 
         const ruaInput = form.querySelector("input[name='rua']");
         const numeroInput = form.querySelector("input[name='numero']");
@@ -1694,37 +1696,37 @@
         const enderecoFormatadoInput = form.querySelector("input[name='endereco_formatado']");
         const geocodeTipoInput = form.querySelector("input[name='geocode_tipo']");
         const geocodePrecisionInput = form.querySelector("input[name='geocode_precision']");
-        const feedback = document.getElementById("address-feedback");
-        const coordsWarning = document.getElementById("coords-warning");
-        const resolutionCard = document.getElementById("address-resolution-card");
-        const resolutionBadge = document.getElementById("address-resolution-badge");
-        const resolutionLabel = document.getElementById("address-resolution-label");
-        const resolutionMeta = document.getElementById("address-resolution-meta");
-        const resolvedStreetDisplay = document.getElementById("resolved-street-display");
-        const resolvedDistrictDisplay = document.getElementById("resolved-district-display");
-        const mapStep = document.getElementById("address-step-map");
-        const detailsStep = document.getElementById("address-step-details");
-        const detailsStepMarker = document.getElementById("address-step-marker-details");
-        const backToMapButton = document.getElementById("address-step-back-to-map");
-        const previewMapRoot = document.getElementById("address-preview-map");
-        const previewTitle = document.getElementById("address-preview-title");
-        const previewSubtitle = document.getElementById("address-preview-subtitle");
-        const mapRoot = document.getElementById("address-map");
+        const feedback = byId("address-feedback");
+        const coordsWarning = byId("coords-warning");
+        const resolutionCard = byId("address-resolution-card");
+        const resolutionBadge = byId("address-resolution-badge");
+        const resolutionLabel = byId("address-resolution-label");
+        const resolutionMeta = byId("address-resolution-meta");
+        const resolvedStreetDisplay = byId("resolved-street-display");
+        const resolvedDistrictDisplay = byId("resolved-district-display");
+        const mapStep = byId("address-step-map");
+        const detailsStep = byId("address-step-details");
+        const detailsStepMarker = byId("address-step-marker-details");
+        const backToMapButton = byId("address-step-back-to-map");
+        const previewMapRoot = byId("address-preview-map");
+        const previewTitle = byId("address-preview-title");
+        const previewSubtitle = byId("address-preview-subtitle");
+        const mapRoot = byId("address-map");
         const mapShell = mapRoot?.closest(".address-map-shell");
-        const mapFeedback = document.getElementById("address-map-feedback");
-        const useLocationButton = document.getElementById("use-current-location");
-        const confirmMapCenterButton = document.getElementById("confirm-map-center");
+        const mapFeedback = byId("address-map-feedback");
+        const useLocationButton = byId("use-current-location");
+        const confirmMapCenterButton = byId("confirm-map-center");
         const checkoutRoot = document.querySelector("[data-page='checkout']");
-        const isOperatorCheckout = checkoutRoot?.dataset.operatorCheckout === "true";
-        const operatorSearch = document.querySelector("[data-operator-address-search]");
-        const operatorAddressInput = document.getElementById("operator-address-query");
-        const operatorDistrictInput = document.getElementById("operator-district-query");
-        const operatorAddressOptionsButton = document.getElementById("operator-address-options");
-        const operatorAddressLoading = document.getElementById("operator-address-loading");
-        const operatorAddressSuggestions = document.getElementById("operator-address-suggestions");
-        const operatorAdjustMapButton = document.getElementById("operator-adjust-map");
-        const operatorUseTypedAddressButton = document.getElementById("operator-use-typed-address");
-        const backToTextSearchButton = document.getElementById("address-back-to-text-search");
+        const isOperatorCheckout = options.isOperatorCheckout ?? checkoutRoot?.dataset.operatorCheckout === "true";
+        const operatorSearch = root?.querySelector?.("[data-operator-address-search]") || document.querySelector("[data-operator-address-search]");
+        const operatorAddressInput = byId("operator-address-query");
+        const operatorDistrictInput = byId("operator-district-query");
+        const operatorAddressOptionsButton = byId("operator-address-options");
+        const operatorAddressLoading = byId("operator-address-loading");
+        const operatorAddressSuggestions = byId("operator-address-suggestions");
+        const operatorAdjustMapButton = byId("operator-adjust-map");
+        const operatorUseTypedAddressButton = byId("operator-use-typed-address");
+        const backToTextSearchButton = byId("address-back-to-text-search");
 
         if (
             !ruaInput ||
@@ -2670,6 +2672,10 @@
             },
         };
     }
+
+    window.PRATO_ADDRESS_EDITOR = {
+        initAddressEditor,
+    };
 
     function initCheckoutPage() {
         const itemsContainer = document.getElementById("checkout-items");

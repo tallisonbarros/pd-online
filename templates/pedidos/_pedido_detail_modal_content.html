@@ -1,0 +1,407 @@
+<div class="ped-modal-head">
+    <div>
+        <div class="ped-modal-kicker-row">
+            <span class="ped-modal-kicker">Pedido #{{ pedido.numero }}</span>
+            {% if pedido.status != "cancelado" and pedido.status != "finalizado" %}
+                <form class="ped-modal-status-form" method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}" data-modal-status-form data-confirm="Tem certeza que deseja cancelar este pedido?">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="cancelado">
+                    <button class="ped-modal-cancel-link" type="submit">Cancelar pedido</button>
+                </form>
+            {% endif %}
+        </div>
+        <h2 id="pedido-detail-modal-title">
+            {% if can_edit_payment %}
+                <span
+                    class="ped-inline-edit"
+                    data-inline-edit
+                    data-field="nome_cliente"
+                    data-type="text"
+                    data-value="{{ pedido.nome_cliente }}"
+                    data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                >{{ pedido.nome_cliente }}</span>
+            {% else %}
+                {{ pedido.nome_cliente }}
+            {% endif %}
+        </h2>
+        <p>{{ pedido.criado_em|date:"d/m/Y H:i" }} · {{ pedido.get_status_display }}</p>
+    </div>
+    <div class="ped-modal-total">
+        <span>Total</span>
+        <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+    </div>
+</div>
+
+<div class="ped-modal-grid">
+    <section class="ped-modal-section">
+        <div class="ped-modal-section-head">
+            <h3>Itens</h3>
+            {% if can_edit_payment %}<button class="ped-btn ped-btn-soft" type="button" data-open-items-editor>Editar</button>{% endif %}
+        </div>
+        <ul class="ped-modal-items">
+            {% for item in pedido.itens.all %}
+                <li>
+                    <div>
+                        <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
+                        {% if item.variacao_nome_snapshot %}<small>{{ item.variacao_nome_snapshot }}</small>{% endif %}
+                        {% if item.observacao %}<small>Obs.: {{ item.observacao }}</small>{% endif %}
+                    </div>
+                    <span>R$ {{ item.subtotal|floatformat:2 }}</span>
+                </li>
+            {% empty %}
+                <li class="is-empty">Nenhum item encontrado.</li>
+            {% endfor %}
+            {% if pedido.promocao_desconto %}
+                <li class="is-discount">
+                    <div>
+                        <strong>{{ pedido.promocao_descricao|default:"Promoção especial" }}</strong>
+                        <small>Promoção aplicada</small>
+                    </div>
+                    <span>- R$ {{ pedido.promocao_desconto|floatformat:2 }}</span>
+                </li>
+            {% endif %}
+            {% if pedido.cupom_desconto %}
+                <li class="is-discount">
+                    <div>
+                        <strong>Cupom{% if pedido.cupom_codigo %} {{ pedido.cupom_codigo }}{% endif %}</strong>
+                        <small>Desconto aplicado</small>
+                    </div>
+                    <span>- R$ {{ pedido.cupom_desconto|floatformat:2 }}</span>
+                </li>
+            {% endif %}
+        </ul>
+        {% if pedido.observacao_geral %}
+            <div class="ped-modal-note">
+                <span>Observação geral</span>
+                <p>{{ pedido.observacao_geral }}</p>
+            </div>
+        {% endif %}
+        {% if can_edit_payment %}
+            <template data-items-editor-template>
+                <form class="ped-items-editor-form" method="post" action="{% url 'pedidos:atualizar_itens_pedido' pedido.id %}" data-items-editor data-catalog-url="{% url 'pedidos:api_catalogo_editor_pedido' %}">
+                    {% csrf_token %}
+                    <div class="ped-items-editor-layout">
+                        <section class="ped-items-editor-add">
+                            <h3>Adicionar item</h3>
+                            <div class="ped-item-editor-controls">
+                                <select data-editor-catalog aria-label="Item do catálogo"></select>
+                                <select data-editor-variation aria-label="Variação" class="hidden"></select>
+                                <input type="number" min="1" step="1" value="1" data-editor-qty aria-label="Quantidade">
+                                <input type="text" data-editor-note placeholder="Observação">
+                                <button class="ped-btn ped-btn-soft" type="button" data-editor-add-item>Adicionar</button>
+                            </div>
+                        </section>
+                        <section class="ped-items-editor-current">
+                            <h3>Itens do pedido</h3>
+                            <div class="ped-item-editor-list" data-editor-items>
+                                {% for item in pedido.itens.all %}
+                                    {% if item.prato_id or item.bebida_id or item.adicional_id %}
+                                        <div
+                                            class="ped-item-editor-row"
+                                            data-editor-row
+                                            data-tipo="{% if item.prato_id %}prato{% elif item.bebida_id %}bebida{% else %}adicional{% endif %}"
+                                            data-item-id="{% if item.prato_id %}{{ item.prato_id }}{% elif item.bebida_id %}{{ item.bebida_id }}{% else %}{{ item.adicional_id }}{% endif %}"
+                                            data-variacao="{{ item.variacao_nome_snapshot }}"
+                                            data-quantidade="{{ item.quantidade }}"
+                                            data-observacao="{{ item.observacao }}"
+                                        >
+                                            <span>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}</span>
+                                            <button type="button" data-editor-remove-item aria-label="Remover item">Remover</button>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </section>
+                    </div>
+                    <input type="hidden" name="itens_payload" data-editor-payload>
+                    <div class="ped-items-editor-footer">
+                        <button class="ped-btn ped-btn-soft" type="button" data-close-items-editor>Cancelar</button>
+                        <button class="ped-btn ped-btn-primary" type="submit">Salvar itens</button>
+                    </div>
+                </form>
+            </template>
+        {% endif %}
+    </section>
+
+    <section class="ped-modal-section">
+        <div class="ped-modal-section-head">
+            <h3>Cliente e entrega</h3>
+        </div>
+        <dl class="ped-modal-facts">
+            <div>
+                <dt>Telefone</dt>
+                <dd>
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="telefone"
+                            data-type="text"
+                            data-value="{{ pedido.telefone }}"
+                            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                        >{{ pedido.telefone|default:"Adicionar telefone" }}</span>
+                    {% else %}
+                        {{ pedido.telefone }}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Pagamento</dt>
+                <dd>
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="forma_pagamento"
+                            data-param="forma_pagamento"
+                            data-type="select"
+                            data-value="{{ pedido.forma_pagamento }}"
+                            data-options="{% for value, label in payment_choices %}{{ value }}:{{ label }}{% if not forloop.last %}|{% endif %}{% endfor %}"
+                            data-action="{% url 'pedidos:atualizar_pagamento_pedido' pedido.id %}"
+                        >{{ pedido.get_forma_pagamento_display }}</span>
+                    {% else %}
+                        {{ pedido.get_forma_pagamento_display }}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Talheres</dt>
+                <dd>
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="enviar_talheres"
+                            data-type="select"
+                            data-value="{% if pedido.enviar_talheres %}sim{% else %}nao{% endif %}"
+                            data-options="sim:Enviar|nao:Não enviar"
+                            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                        >{% if pedido.enviar_talheres %}Enviar{% else %}Não enviar{% endif %}</span>
+                    {% else %}
+                        {% if pedido.enviar_talheres %}Enviar{% else %}Não enviar{% endif %}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt>Endereço</dt>
+                <dd class="ped-address-row">
+                    {% if can_edit_payment %}
+                        <button class="ped-icon-edit" type="button" data-open-delivery-editor aria-label="Editar endereco" title="Editar endereco">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.25V20h3.75L18.8 8.94l-3.75-3.75L4 16.25zm2.92 2.33H6v-.92l9.05-9.05.92.92-9.05 9.05zM19.86 7.88a1 1 0 0 0 0-1.41l-2.33-2.33a1 1 0 0 0-1.41 0l-.78.78 3.75 3.75.77-.79z"/></svg>
+                        </button>
+                    {% endif %}
+                    <span>{{ pedido.endereco }}</span>
+                </dd>
+            </div>
+            {% if pedido.lote_quadra %}
+                <div>
+                    <dt>Lote / Quadra</dt>
+                    <dd>{{ pedido.lote_quadra }}</dd>
+                </div>
+            {% endif %}
+            {% if pedido.complemento %}
+                <div>
+                    <dt>Complemento</dt>
+                    <dd>{{ pedido.complemento }}</dd>
+                </div>
+            {% endif %}
+            {% if pedido.ponto_referencia %}
+                <div>
+                    <dt>Referência</dt>
+                    <dd>{{ pedido.ponto_referencia }}</dd>
+                </div>
+            {% endif %}
+        </dl>
+        <a class="ped-btn ped-btn-soft ped-modal-route" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">Abrir rota</a>
+        {% if can_edit_payment %}
+            <template data-delivery-editor-template>
+                <section class="profile-selector-panel" data-delivery-selector-panel>
+                    <div class="profile-selector-head">
+                        <strong>Endereco do pedido</strong>
+                        <small>Use o endereco atual ou cadastre outro ponto de entrega.</small>
+                    </div>
+                    <div class="saved-profile-list">
+                        <article class="saved-profile-entry is-selected">
+                            <button type="button" class="saved-profile-button" data-delivery-use-current>
+                                <span class="saved-profile-meta">
+                                    <span class="saved-profile-text">
+                                        <strong>{{ pedido.endereco }}</strong>
+                                        <small>
+                                            {% if pedido.complemento %}{{ pedido.complemento }}{% endif %}
+                                            {% if pedido.ponto_referencia %}{% if pedido.complemento %} - {% endif %}{{ pedido.ponto_referencia }}{% endif %}
+                                            {% if not pedido.complemento and not pedido.ponto_referencia %}Clique para editar este endereco{% endif %}
+                                        </small>
+                                    </span>
+                                </span>
+                            </button>
+                        </article>
+                    </div>
+                    <div class="saved-profile-selector-actions">
+                        <button type="button" class="saved-profile-create" data-delivery-create>Cadastrar novo endereco</button>
+                    </div>
+                </section>
+
+                <section id="profile-editor-panel" class="profile-editor-panel hidden" data-delivery-editor-panel>
+                    <div class="profile-editor-head"></div>
+                    <form id="profile-form" class="profile-form" method="post" action="{% url 'pedidos:atualizar_entrega_pedido' pedido.id %}" data-delivery-editor novalidate>
+                        {% csrf_token %}
+                        <div class="address-flow-steps" aria-label="Etapas do endereco">
+                            <span class="address-flow-step is-active" aria-label="Etapa 1"></span>
+                            <span id="address-step-marker-details" class="address-flow-step" aria-label="Etapa 2"></span>
+                        </div>
+                        <section id="address-step-map" class="address-step-card address-step-card--map is-operator-search-mode">
+                            <div class="address-map-head">
+                                <div>
+                                    <p class="address-map-kicker">Etapa 1</p>
+                                    <strong>Busque o endereco do cliente</strong>
+                                </div>
+                                <button type="button" id="use-current-location" class="secondary-pill compact">Usar minha localizacao</button>
+                            </div>
+                            <div class="operator-address-search" data-operator-address-search>
+                                <label class="field operator-district-field">
+                                    <input type="search" id="operator-district-query" list="operator-district-options" autocomplete="off" placeholder="Setor opcional" value="{{ pedido.bairro }}">
+                                    <datalist id="operator-district-options">
+                                        {% for bairro in bairros_sugestoes %}
+                                            <option value="{{ bairro }}"></option>
+                                        {% endfor %}
+                                    </datalist>
+                                </label>
+                                <label class="field">
+                                    <div class="address-autocomplete-shell">
+                                        <input type="search" id="operator-address-query" autocomplete="off" placeholder="Digite rua, numero ou referencia" value="{{ pedido.rua }}">
+                                        <span id="operator-address-loading" class="address-loading hidden">Buscando...</span>
+                                        <button type="button" id="operator-address-options" class="address-options-button" aria-label="Mostrar ruas do setor">⌄</button>
+                                        <div id="operator-address-suggestions" class="address-suggestions hidden"></div>
+                                    </div>
+                                </label>
+                                <small class="field-help">Use o setor apenas quando ajudar a filtrar ruas repetidas. Se a sugestao vier incompleta, ajuste pelo mapa.</small>
+                                <button type="button" id="operator-use-typed-address" class="secondary-pill compact">Usar texto digitado</button>
+                                <button type="button" id="operator-adjust-map" class="secondary-pill compact">Ajustar no mapa</button>
+                            </div>
+                            <div class="address-map-shell">
+                                <div id="address-map" class="address-map-canvas" aria-label="Mapa para confirmar local da entrega"></div>
+                                <div class="address-map-pin" aria-hidden="true"></div>
+                            </div>
+                            <div class="address-map-actions">
+                                <button type="button" id="confirm-map-center" class="primary-button">Confirmar</button>
+                            </div>
+                            <small id="address-map-feedback" class="field-help">Arraste o mapa para posicionar o centro no local exato da entrega.</small>
+                            <small id="address-feedback" class="field-help hidden"></small>
+                            <div class="resolved-address-inline">
+                                <p class="resolved-address-inline-text">
+                                    <strong id="resolved-street-display">Confirme um ponto no mapa</strong>
+                                    <span id="resolved-district-display">Aguardando confirmacao</span>
+                                </p>
+                            </div>
+                        </section>
+
+                        <section id="address-step-details" class="address-step-card address-step-card--details hidden">
+                            <div class="address-map-head">
+                                <div>
+                                    <p class="address-map-kicker">Etapa 2</p>
+                                    <strong>Confira o local e complete os dados</strong>
+                                </div>
+                                <button type="button" id="address-step-back-to-map" class="secondary-pill compact">Alterar ponto</button>
+                            </div>
+                            <div class="address-preview-shell">
+                                <div id="address-preview-map" class="address-preview-map" aria-label="Previa do ponto selecionado"></div>
+                                <div class="address-preview-pin" aria-hidden="true"></div>
+                            </div>
+                            <div class="address-preview-copy">
+                                <strong id="address-preview-title">Rua aguardando confirmacao</strong>
+                                <small id="address-preview-subtitle">Setor, cidade e estado aparecerao aqui.</small>
+                            </div>
+                            <div class="ped-delivery-modal-grid">
+                    <input type="hidden" name="rua" value="{{ pedido.rua }}">
+                    <label>Número<input type="text" name="numero" value="{{ pedido.numero_endereco }}"></label>
+                    <input type="hidden" name="bairro" value="{{ pedido.bairro }}">
+                    <input type="hidden" name="cidade" value="{{ pedido.cidade|default:'Rio Verde' }}">
+                    <input type="hidden" name="estado" value="{{ pedido.estado|default:'GO' }}">
+                    <label>Complemento<input type="text" name="complemento" value="{{ pedido.complemento }}"></label>
+                    <label>Lote/Quadra<input type="text" name="lote_quadra" value="{{ pedido.lote_quadra }}"></label>
+                    <label>Referência<input type="text" name="ponto_referencia" value="{{ pedido.ponto_referencia }}"></label>
+                    <input type="hidden" id="endereco-formatado-input" name="endereco_formatado" value="{{ pedido.endereco_formatado }}">
+                    <input type="hidden" id="latitude-input" name="latitude" value="{{ pedido.latitude|default:'' }}">
+                    <input type="hidden" id="longitude-input" name="longitude" value="{{ pedido.longitude|default:'' }}">
+                    <input type="hidden" id="geocode-tipo-input" name="geocode_tipo">
+                    <input type="hidden" id="geocode-precision-input" name="geocode_precision">
+                            </div>
+                            <p id="coords-warning" class="coords-warning hidden">
+                                Endereco sem coordenadas confirmadas. O frete pode ficar aproximado enquanto isso.
+                            </p>
+                        </section>
+                        <div class="profile-editor-actions">
+                            <button type="button" class="secondary-pill" data-close-delivery-editor>Cancelar</button>
+                            <button class="primary-button" type="submit">Salvar endereco</button>
+                        </div>
+                    </form>
+                </section>
+            </template>
+        {% endif %}
+    </section>
+</div>
+
+<section class="ped-modal-section ped-modal-observation">
+    <div class="ped-modal-section-head">
+        <h3>Observação geral</h3>
+    </div>
+    {% if can_edit_payment %}
+        <span
+            class="ped-inline-edit ped-inline-edit--block"
+            data-inline-edit
+            data-field="observacao_geral"
+            data-type="textarea"
+            data-value="{{ pedido.observacao_geral }}"
+            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+        >{{ pedido.observacao_geral|default:"Adicionar observação" }}</span>
+    {% else %}
+        <p>{{ pedido.observacao_geral|default:"Sem observação." }}</p>
+    {% endif %}
+</section>
+
+<section class="ped-modal-section ped-modal-audit">
+    <div class="ped-modal-audit-head">
+        <h3>Conferência</h3>
+        <span class="ped-audit-badge {% if frete_confere and total_confere %}is-ok{% else %}is-warn{% endif %}">
+            {% if frete_confere and total_confere %}Conferido{% else %}Revisar{% endif %}
+        </span>
+    </div>
+    <div class="ped-coupon-box">
+        <div>
+            <span>Cupom</span>
+            <strong>
+                {% if pedido.cupom_codigo %}
+                    {{ pedido.cupom_codigo }} - R$ {{ pedido.cupom_desconto|floatformat:2 }}
+                {% else %}
+                    Nenhum cupom aplicado
+                {% endif %}
+            </strong>
+        </div>
+        {% if can_edit_payment %}
+            <form class="ped-coupon-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
+                {% csrf_token %}
+                <input type="text" name="cupom_codigo" value="{{ pedido.cupom_codigo }}" placeholder="Codigo do cupom" aria-label="Codigo do cupom">
+                <button class="ped-btn ped-btn-primary" type="submit">Aplicar</button>
+            </form>
+            {% if pedido.cupom_codigo %}
+                <form class="ped-coupon-remove-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
+                    {% csrf_token %}
+                    <input type="hidden" name="cupom_codigo" value="">
+                    <button class="ped-modal-cancel-link" type="submit">Remover cupom</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+    <dl class="ped-modal-audit-list">
+        <div><dt>Subtotal</dt><dd>R$ {{ itens_subtotal|floatformat:2 }}</dd></div>
+        <div>
+            <dt>Entrega</dt>
+            <dd>
+                R$ {{ pedido.valor_frete|floatformat:2 }}
+                <small>{{ pedido.distancia_km|floatformat:2 }} km</small>
+            </dd>
+        </div>
+        <div><dt>Total</dt><dd>R$ {{ pedido.total|floatformat:2 }}</dd></div>
+    </dl>
+</section>
+

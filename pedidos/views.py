@@ -21,11 +21,21 @@ from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_time
+from django.utils.timesince import timesince
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import AdicionalForm, BebidaForm, PratoForm
 from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .order_services import (
+    create_order_items_from_payload,
+    money_decimal,
+    normalize_coupon_code,
+    recalculate_order_totals,
+    replace_order_items,
+    serialize_editor_catalog,
+    validar_cupom,
+)
 
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
 WEEKDAY_LABELS = {
@@ -42,6 +52,7 @@ RIO_VERDE_CENTER = {"lat": -17.7923, "lon": -50.9192}
 RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,maxLat
 OSRM_ROUTE_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
 ATENDENTE_GROUP_NAME = "Atendente"
+GERENTE_GROUP_NAME = "Gerente"
 
 RIO_VERDE_BAIRROS_OFICIAIS = [
     "Anhanguera", "Area Rural de Rio Verde", "Cesar Bastos", "Ceu Azul", "Cidade Empresarial Nova Alianca",
@@ -203,6 +214,22 @@ def montar_mensagem_whatsapp(pedido):
     if pedido.cupom_desconto and pedido.cupom_desconto > 0:
         linhas.append(f"*Desconto:* - R$ {pedido.cupom_desconto:.2f}".replace(".", ","))
     linhas.append(f"*Total:* R$ {pedido.total:.2f}".replace(".", ","))
+    return "\n".join(linhas)
+
+
+def montar_mensagem_entregador(pedido):
+    linhas = [
+        f"Pedido #{pedido.numero} - {pedido.nome_cliente}",
+        f"Endereço: {pedido.endereco}",
+    ]
+    if pedido.lote_quadra:
+        linhas.append(f"Lote/Quadra: {pedido.lote_quadra}")
+    if pedido.complemento:
+        linhas.append(f"Complemento: {pedido.complemento}")
+    if pedido.ponto_referencia:
+        linhas.append(f"Referência: {pedido.ponto_referencia}")
+    if pedido.google_maps_route_url:
+        linhas.append(f"Rota: {pedido.google_maps_route_url}")
     return "\n".join(linhas)
 
 
@@ -806,6 +833,11 @@ def _serialize_faixas_for_form(faixas=None, extra_rows=2):
 
 def _ensure_default_user_groups():
     Group.objects.get_or_create(name=ATENDENTE_GROUP_NAME)
+    Group.objects.get_or_create(name=GERENTE_GROUP_NAME)
+
+
+def _user_can_manage_order_payment(user):
+    return bool(user.is_superuser or user.groups.filter(name=GERENTE_GROUP_NAME).exists())
 
 
 def _serialize_users_for_admin():
@@ -1171,140 +1203,8 @@ def api_address_delivery_time(request):
     )
 
 
-def _create_order_items_from_payload(pedido, itens_payload):
-    total = Decimal("0.00")
-    prato_ids = []
-    adicional_ids = []
-    bebida_ids = []
-    for item in itens_payload:
-        tipo = _safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
-        try:
-            item_id = int(item.get("item_id") or item.get("adicional_id") or item.get("bebida_id") or item.get("prato_id"))
-        except (TypeError, ValueError):
-            raise ValueError("Um dos itens do carrinho e invalido.")
-        if tipo == "adicional":
-            adicional_ids.append(item_id)
-        elif tipo == "bebida":
-            bebida_ids.append(item_id)
-        else:
-            prato_ids.append(item_id)
-    pratos = {prato.id: prato for prato in Prato.objects.filter(id__in=prato_ids, ativo=True)}
-    adicionais = {adicional.id: adicional for adicional in Adicional.objects.filter(id__in=adicional_ids, ativo=True)}
-    bebidas = {bebida.id: bebida for bebida in Bebida.objects.filter(id__in=bebida_ids, ativo=True)}
-
-    for item in itens_payload:
-        tipo = _safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
-        try:
-            item_id = int(item.get("item_id") or item.get("adicional_id") or item.get("bebida_id") or item.get("prato_id"))
-            quantidade = max(int(item.get("quantidade", 1)), 1)
-        except (TypeError, ValueError):
-            raise ValueError("Um dos itens do carrinho e invalido.")
-        observacao = (item.get("observacao") or "").strip()
-        variacao_nome = _safe_text(item.get("variacao") or item.get("variacao_nome"))
-        prato = None
-        adicional = None
-        bebida = None
-        if tipo == "adicional":
-            adicional = adicionais.get(item_id)
-            catalog_item = adicional
-        elif tipo == "bebida":
-            bebida = bebidas.get(item_id)
-            catalog_item = bebida
-        else:
-            prato = pratos.get(item_id)
-            catalog_item = prato
-        if not catalog_item:
-            raise ValueError("Um dos itens não est? mais disponível.")
-        if tipo == "prato" and catalog_item:
-            variacoes_validas = {
-                _safe_text(line).casefold(): _safe_text(line)
-                for line in (getattr(catalog_item, "variacoes", "") or "").splitlines()
-                if _safe_text(line)
-            }
-            if variacoes_validas:
-                variacao_key = variacao_nome.casefold()
-                if variacao_key not in variacoes_validas:
-                    raise ValueError(f"Selecione uma variacao para {catalog_item.nome}.")
-                variacao_nome = variacoes_validas[variacao_key]
-            else:
-                variacao_nome = ""
-        else:
-            variacao_nome = ""
-        try:
-            preco_bruto = str(item.get("preco", catalog_item.preco or "0.00")).replace("R$", "").replace(" ", "")
-            if "," in preco_bruto:
-                preco_bruto = preco_bruto.replace(".", "").replace(",", ".")
-            preco = Decimal(preco_bruto)
-        except (InvalidOperation, TypeError):
-            preco = catalog_item.preco or Decimal("0.00")
-        item_pedido = ItemPedido.objects.create(
-            pedido=pedido,
-            prato=prato,
-            adicional=adicional,
-            bebida=bebida,
-            nome_prato_snapshot=catalog_item.nome,
-            variacao_nome_snapshot=variacao_nome,
-            preco_snapshot=preco,
-            quantidade=quantidade,
-            observacao=observacao,
-        )
-        total += item_pedido.subtotal
-    return total
-
-
-def _calcular_promocao_marmitas(pedido):
-    itens_prato = [item for item in pedido.itens.all() if item.prato_id]
-    quantidade_pratos = sum(max(item.quantidade, 0) for item in itens_prato)
-    marmitas_gratis = quantidade_pratos // 5
-    if marmitas_gratis <= 0:
-        return {"descricao": "", "discount": Decimal("0.00")}
-    precos = [item.preco_snapshot for item in itens_prato if item.preco_snapshot and item.preco_snapshot > 0]
-    if not precos:
-        return {"descricao": "", "discount": Decimal("0.00")}
-    desconto = (min(precos) * marmitas_gratis).quantize(Decimal("0.01"))
-    descricao = "5ª marmita grátis" if marmitas_gratis == 1 else f"{marmitas_gratis} marmitas grátis"
-    return {"descricao": descricao, "discount": desconto}
-
-
-def _money_decimal(value):
-    try:
-        return Decimal(str(value or "0").replace(",", ".")).quantize(Decimal("0.01"))
-    except (InvalidOperation, TypeError, ValueError):
-        return Decimal("0.00")
-
-
-def _normalize_coupon_code(value):
-    return _safe_text(value).upper()
-
-
-def validar_cupom(codigo, subtotal, frete=Decimal("0.00")):
-    codigo = _normalize_coupon_code(codigo)
-    subtotal = _money_decimal(subtotal)
-    frete = _money_decimal(frete)
-    if not codigo:
-        return {"ok": False, "message": "Informe um cupom.", "discount": Decimal("0.00"), "coupon": None}
-    cupom = Cupom.objects.filter(codigo__iexact=codigo).first()
-    if not cupom:
-        return {"ok": False, "message": "Cupom nao encontrado.", "discount": Decimal("0.00"), "coupon": None}
-    now = timezone.now()
-    if not cupom.ativo:
-        return {"ok": False, "message": "Cupom inativo.", "discount": Decimal("0.00"), "coupon": cupom}
-    if cupom.data_inicio and cupom.data_inicio > now:
-        return {"ok": False, "message": "Cupom ainda nao esta valido.", "discount": Decimal("0.00"), "coupon": cupom}
-    if cupom.data_fim and cupom.data_fim < now:
-        return {"ok": False, "message": "Cupom expirado.", "discount": Decimal("0.00"), "coupon": cupom}
-    if cupom.valor_minimo_pedido and subtotal < cupom.valor_minimo_pedido:
-        return {"ok": False, "message": f"Pedido minimo de R$ {cupom.valor_minimo_pedido:.2f}.".replace(".", ","), "discount": Decimal("0.00"), "coupon": cupom}
-    if cupom.uso_maximo_total is not None and cupom.pedidos.count() >= cupom.uso_maximo_total:
-        return {"ok": False, "message": "Limite de uso do cupom atingido.", "discount": Decimal("0.00"), "coupon": cupom}
-    if cupom.tipo_desconto == Cupom.TipoDesconto.PERCENTUAL:
-        discount = (subtotal * cupom.valor / Decimal("100")).quantize(Decimal("0.01"))
-    else:
-        discount = cupom.valor.quantize(Decimal("0.01"))
-    discount = min(max(discount, Decimal("0.00")), subtotal)
-    total = subtotal + frete - discount
-    return {"ok": True, "message": "Cupom aplicado.", "discount": discount, "coupon": cupom, "total": total}
-
+_money_decimal = money_decimal
+_normalize_coupon_code = normalize_coupon_code
 
 @require_POST
 def api_validar_cupom(request):
@@ -1449,27 +1349,16 @@ def criar_pedido(request):
     )
 
     try:
-        total = _create_order_items_from_payload(pedido, itens_payload)
+        create_order_items_from_payload(pedido, itens_payload)
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    promocao_result = _calcular_promocao_marmitas(pedido)
-    promocao_desconto = min(promocao_result["discount"], total)
-    subtotal_com_promocao = max(total - promocao_desconto, Decimal("0.00"))
-    cupom_result = validar_cupom(cupom_codigo, subtotal_com_promocao, valor_frete) if cupom_codigo else None
-    if cupom_codigo and not cupom_result["ok"]:
+    try:
+        recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+    except ValueError as exc:
         transaction.set_rollback(True)
-        return HttpResponseBadRequest(cupom_result["message"])
-    desconto = min(cupom_result["discount"], subtotal_com_promocao) if cupom_result else Decimal("0.00")
-    pedido.total_sem_desconto = total + valor_frete
-    pedido.promocao_descricao = promocao_result["descricao"]
-    pedido.promocao_desconto = promocao_desconto
-    pedido.cupom = cupom_result["coupon"] if cupom_result else None
-    pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
-    pedido.cupom_desconto = desconto
-    pedido.total = total + valor_frete - promocao_desconto - desconto
-    pedido.save(update_fields=["total_sem_desconto", "promocao_descricao", "promocao_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
+        return HttpResponseBadRequest(str(exc))
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1514,27 +1403,16 @@ def criar_retirada(request):
         distancia_km=Decimal("0.00"),
     )
     try:
-        total = _create_order_items_from_payload(pedido, itens_payload)
+        create_order_items_from_payload(pedido, itens_payload)
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
 
-    promocao_result = _calcular_promocao_marmitas(pedido)
-    promocao_desconto = min(promocao_result["discount"], total)
-    subtotal_com_promocao = max(total - promocao_desconto, Decimal("0.00"))
-    cupom_result = validar_cupom(cupom_codigo, subtotal_com_promocao, Decimal("0.00")) if cupom_codigo else None
-    if cupom_codigo and not cupom_result["ok"]:
+    try:
+        recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+    except ValueError as exc:
         transaction.set_rollback(True)
-        return HttpResponseBadRequest(cupom_result["message"])
-    desconto = min(cupom_result["discount"], subtotal_com_promocao) if cupom_result else Decimal("0.00")
-    pedido.total_sem_desconto = total
-    pedido.promocao_descricao = promocao_result["descricao"]
-    pedido.promocao_desconto = promocao_desconto
-    pedido.cupom = cupom_result["coupon"] if cupom_result else None
-    pedido.cupom_codigo = cupom_result["coupon"].codigo if cupom_result else ""
-    pedido.cupom_desconto = desconto
-    pedido.total = total - promocao_desconto - desconto
-    pedido.save(update_fields=["total_sem_desconto", "promocao_descricao", "promocao_desconto", "cupom", "cupom_codigo", "cupom_desconto", "total"])
+        return HttpResponseBadRequest(str(exc))
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1558,6 +1436,7 @@ def _pedido_public_payload(pedido, include_items=False):
         Pedido.Status.AGUARDANDO_APROVACAO: 2,
         Pedido.Status.NOVO: 3,
         Pedido.Status.EM_PREPARO: 3,
+        Pedido.Status.AGUARDANDO_ENTREGADOR: 3,
         Pedido.Status.SAIU_ENTREGA: 4,
         Pedido.Status.FINALIZADO: 4,
         Pedido.Status.CANCELADO: 0,
@@ -2100,24 +1979,170 @@ def api_cozinha_operacao(request):
 @staff_member_required(login_url="/admin/login/")
 def pedidos_admin(request):
     base = Pedido.objects.prefetch_related("itens")
-    aguardando_aprovacao = base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO)[:20]
     pedidos_ativos = base.exclude(
         status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
-    )[:20]
-    concluidos = base.filter(status=Pedido.Status.FINALIZADO)[:20]
-    cancelados = base.filter(status=Pedido.Status.CANCELADO)[:20]
+    ).order_by("-criado_em", "-id")[:20]
     return render(
         request,
         "pedidos/pedidos_admin.html",
         {
-            "pedidos_aprovacao": aguardando_aprovacao,
             "pedidos_ativos": pedidos_ativos,
-            "pedidos_concluidos": concluidos,
-            "pedidos_cancelados": cancelados,
+            "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+            "pedidos_badge": base.exclude(
+                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+            ).count(),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def pedidos_aprovacao_admin(request):
+    base = Pedido.objects.prefetch_related("itens")
+    return render(
+        request,
+        "pedidos/pedidos_aprovacao_admin.html",
+        {
+            "pedidos_aprovacao": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20],
+            "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+            "pedidos_badge": base.exclude(
+                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+            ).count(),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def pedidos_concluidos_admin(request):
+    base = Pedido.objects.prefetch_related("itens")
+    return render(
+        request,
+        "pedidos/pedidos_concluidos_admin.html",
+        {
+            "pedidos_concluidos": base.filter(status=Pedido.Status.FINALIZADO).order_by("-criado_em", "-id")[:20],
+            "pedidos_cancelados": base.filter(status=Pedido.Status.CANCELADO).order_by("-criado_em", "-id")[:20],
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
             "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),
+            "pedidos_badge": base.exclude(
+                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+            ).count(),
         },
+    )
+
+
+def _tempo_producao_pedido(pedido):
+    if not pedido.producao_iniciada_em:
+        return "--"
+    return timesince(pedido.producao_iniciada_em, timezone.now())
+
+
+def _pedido_primeiro_item_line(pedido):
+    primeiro_item = next(iter(pedido.itens.all()), None)
+    if not primeiro_item:
+        return "Sem itens"
+    item_line = f"{primeiro_item.quantidade}x {primeiro_item.nome_prato_snapshot}"
+    if primeiro_item.variacao_nome_snapshot:
+        item_line = f"{item_line} - {primeiro_item.variacao_nome_snapshot}"
+    return item_line
+
+
+def _pedido_item_lines(pedido):
+    lines = []
+    for item in pedido.itens.all():
+        item_line = f"{item.quantidade}x {item.nome_prato_snapshot}"
+        if item.variacao_nome_snapshot:
+            item_line = f"{item_line} - {item.variacao_nome_snapshot}"
+        lines.append(item_line)
+    return lines or ["Sem itens"]
+
+
+def _pedido_admin_summary(pedido):
+    return {
+        "id": pedido.id,
+        "numero": pedido.numero,
+        "cliente": pedido.nome_cliente,
+        "criado_em": pedido.criado_em.strftime("%d/%m, %H:%M"),
+        "item_line": _pedido_primeiro_item_line(pedido),
+        "item_lines": _pedido_item_lines(pedido),
+        "status": pedido.status,
+        "status_label": pedido.get_status_display(),
+        "tempo_producao": _tempo_producao_pedido(pedido),
+        "entregador_solicitado": pedido.entregador_solicitado,
+        "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        "detail_url": reverse("pedidos:pedido_detalhe_admin", args=[pedido.id]),
+        "copy_url": reverse("pedidos:api_pedido_copias", args=[pedido.id]),
+    }
+
+
+def _pedidos_base_counts(base):
+    return {
+        "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+        "pedidos_badge": base.exclude(
+            status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+        ).count(),
+    }
+
+
+def _pedidos_admin_payload():
+    base = Pedido.objects.prefetch_related("itens")
+    pedidos = base.exclude(
+        status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+    ).order_by("-criado_em", "-id")[:20]
+    return {
+        "pedidos": [_pedido_admin_summary(pedido) for pedido in pedidos],
+        **_pedidos_base_counts(base),
+    }
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedidos_admin(request):
+    return JsonResponse(_pedidos_admin_payload())
+
+
+def _pedidos_aprovacao_payload():
+    base = Pedido.objects.prefetch_related("itens")
+    pedidos = base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20]
+    return {
+        "pedidos": [_pedido_admin_summary(pedido) for pedido in pedidos],
+        **_pedidos_base_counts(base),
+    }
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedidos_aprovacao_admin(request):
+    return JsonResponse(_pedidos_aprovacao_payload())
+
+
+def _pedidos_concluidos_payload():
+    base = Pedido.objects.prefetch_related("itens")
+    concluidos = base.filter(status=Pedido.Status.FINALIZADO).order_by("-criado_em", "-id")[:20]
+    cancelados = base.filter(status=Pedido.Status.CANCELADO).order_by("-criado_em", "-id")[:20]
+    return {
+        "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos],
+        "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados],
+        "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
+        "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),
+        **_pedidos_base_counts(base),
+    }
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedidos_concluidos_admin(request):
+    return JsonResponse(_pedidos_concluidos_payload())
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedido_copias(request, pedido_id):
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
+    return JsonResponse(
+        {
+            "cliente": montar_mensagem_whatsapp(pedido),
+            "entregador": montar_mensagem_entregador(pedido),
+        }
     )
 
 
@@ -2129,24 +2154,196 @@ def pedido_detalhe_admin(request, pedido_id):
     total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
     diferenca_frete = pedido.valor_frete - frete_esperado
 
-    return render(
-        request,
-        "pedidos/pedido_detalhe_admin.html",
+    context = {
+        "active": "pedidos",
+        "pedidos_badge": Pedido.objects.exclude(
+            status__in=[Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+        ).count(),
+        "pedido": pedido,
+        "itens_subtotal": itens_subtotal,
+        "frete_esperado": frete_esperado,
+        "faixa_frete_atual": faixa_frete_atual,
+        "diferenca_frete": diferenca_frete,
+        "frete_confere": diferenca_frete == Decimal("0.00"),
+        "total_recalculado": total_recalculado,
+        "total_confere": total_recalculado == pedido.total,
+        "can_edit_payment": _user_can_manage_order_payment(request.user),
+        "payment_choices": Pedido.FormaPagamento.choices,
+        "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
+    }
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return render(request, "pedidos/_pedido_detail_modal_content.html", context)
+    return render(request, "pedidos/pedido_detalhe_admin.html", context)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def atualizar_pagamento_pedido(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para alterar pagamento.")
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    forma_pagamento = request.POST.get("forma_pagamento")
+    if forma_pagamento not in dict(Pedido.FormaPagamento.choices):
+        return HttpResponseBadRequest("Forma de pagamento invalida.")
+    pedido.forma_pagamento = forma_pagamento
+    pedido.save(update_fields=["forma_pagamento"])
+    return JsonResponse({"ok": True, "pagamento": pedido.get_forma_pagamento_display()})
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def atualizar_cupom_pedido(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    cupom_codigo = normalize_coupon_code(request.POST.get("cupom_codigo"))
+    try:
+        recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+    except ValueError as exc:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest(str(exc))
+    pedido.refresh_from_db()
+    return JsonResponse(
         {
-            "active": "pedidos",
-            "pedidos_badge": Pedido.objects.exclude(
-                status__in=[Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
-            ).count(),
-            "pedido": pedido,
-            "itens_subtotal": itens_subtotal,
-            "frete_esperado": frete_esperado,
-            "faixa_frete_atual": faixa_frete_atual,
-            "diferenca_frete": diferenca_frete,
-            "frete_confere": diferenca_frete == Decimal("0.00"),
-            "total_recalculado": total_recalculado,
-            "total_confere": total_recalculado == pedido.total,
-        },
+            "ok": True,
+            "cupom_codigo": pedido.cupom_codigo,
+            "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ","),
+            "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        }
     )
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_catalogo_editor_pedido(request):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
+    return JsonResponse(serialize_editor_catalog())
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def atualizar_itens_pedido(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
+    try:
+        payload = json.loads(request.POST.get("itens_payload") or "[]")
+    except json.JSONDecodeError:
+        return HttpResponseBadRequest("Itens invalidos.")
+    if not payload:
+        return HttpResponseBadRequest("O pedido precisa ter pelo menos um item.")
+    try:
+        replace_order_items(pedido, payload)
+    except ValueError as exc:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest(str(exc))
+    return JsonResponse({"ok": True, "total": f"R$ {pedido.total:.2f}".replace(".", ",")})
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def atualizar_dados_pedido(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    field = _safe_text(request.POST.get("field"))
+    if field == "nome_cliente":
+        pedido.nome_cliente = _safe_text(request.POST.get("value")) or pedido.nome_cliente
+        pedido.save(update_fields=["nome_cliente"])
+    elif field == "telefone":
+        pedido.telefone = _safe_text(request.POST.get("value"))
+        pedido.save(update_fields=["telefone"])
+    elif field == "enviar_talheres":
+        pedido.enviar_talheres = request.POST.get("value") == "sim"
+        pedido.save(update_fields=["enviar_talheres"])
+    elif field == "observacao_geral":
+        pedido.observacao_geral = _safe_text(request.POST.get("value"))
+        pedido.save(update_fields=["observacao_geral"])
+    else:
+        return HttpResponseBadRequest("Campo invalido.")
+    return JsonResponse({"ok": True})
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def atualizar_entrega_pedido(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    rua = _safe_text(request.POST.get("rua"))
+    numero = _safe_text(request.POST.get("numero"))
+    bairro = _safe_text(request.POST.get("bairro"))
+    cidade = _safe_text(request.POST.get("cidade")) or "Rio Verde"
+    estado = _safe_text(request.POST.get("estado")) or "GO"
+    endereco_formatado = _safe_text(request.POST.get("endereco_formatado"))
+    destination_result = _destination_result_from_values(request.POST)
+    endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
+    endereco = f"{endereco_base}, {cidade} - {estado}" if cidade and estado and endereco_base else endereco_base
+    common_fields = {
+        "rua": rua,
+        "numero_endereco": numero,
+        "bairro": bairro,
+        "cidade": cidade,
+        "estado": estado,
+        "endereco": endereco or pedido.endereco,
+        "endereco_formatado": endereco_formatado or endereco or pedido.endereco_formatado,
+        "complemento": _safe_text(request.POST.get("complemento")),
+        "lote_quadra": _safe_text(request.POST.get("lote_quadra")),
+        "ponto_referencia": _safe_text(request.POST.get("ponto_referencia")),
+    }
+    if not destination_result:
+        for field, value in common_fields.items():
+            setattr(pedido, field, value)
+        pedido.save(update_fields=list(common_fields.keys()))
+        return JsonResponse({
+            "ok": True,
+            "frete_recalculado": False,
+            "frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
+            "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+        })
+    origin_result = _resolve_saved_origin_result()
+    if not origin_result:
+        return HttpResponseBadRequest("Configure a origem de entrega antes de recalcular.")
+    duration_seconds, distance_meters = _fetch_route_summary(
+        origin_result["lat"],
+        origin_result["lng"],
+        destination_result["lat"],
+        destination_result["lng"],
+    )
+    if duration_seconds is None or distance_meters is None:
+        return HttpResponseBadRequest("Nao foi possivel calcular a rota para o ponto de entrega.")
+    distancia_km = Decimal(str(round(max(distance_meters / 1000.0, 0.0), 2)))
+    valor_frete, _ = _calcular_frete_por_distancia(distancia_km)
+
+    for field, value in common_fields.items():
+        setattr(pedido, field, value)
+    pedido.endereco_formatado = destination_result.get("label") or common_fields["endereco_formatado"]
+    pedido.latitude = _to_decimal(destination_result.get("lat"))
+    pedido.longitude = _to_decimal(destination_result.get("lng"))
+    pedido.distancia_km = distancia_km
+    pedido.valor_frete = valor_frete
+    pedido.save(update_fields=[
+        "rua",
+        "numero_endereco",
+        "bairro",
+        "cidade",
+        "estado",
+        "endereco",
+        "endereco_formatado",
+        "latitude",
+        "longitude",
+        "complemento",
+        "lote_quadra",
+        "ponto_referencia",
+        "distancia_km",
+        "valor_frete",
+    ])
+    recalculate_order_totals(pedido)
+    return JsonResponse({"ok": True, "frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","), "total": f"R$ {pedido.total:.2f}".replace(".", ",")})
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -2607,12 +2804,25 @@ def excluir_imagem_adicional(request, adicional_id):
 def atualizar_status_pedido(request, pedido_id):
     pedido = get_object_or_404(Pedido, id=pedido_id)
     status = request.POST.get("status")
+    if pedido.status == Pedido.Status.AGUARDANDO_APROVACAO and status == Pedido.Status.NOVO:
+        status = Pedido.Status.EM_PREPARO
     if status not in dict(Pedido.Status.choices):
         return HttpResponseBadRequest("Status invalido.")
     pedido.status = status
     pedido.save(update_fields=["status"])
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "status": pedido.get_status_display()})
+    return redirect("pedidos:cozinha_pedidos")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def alternar_entregador_pedido(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido.entregador_solicitado = not pedido.entregador_solicitado
+    pedido.save(update_fields=["entregador_solicitado"])
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True, "entregador_solicitado": pedido.entregador_solicitado})
     return redirect("pedidos:cozinha_pedidos")
 
 
