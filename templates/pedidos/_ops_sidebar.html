@@ -24,6 +24,12 @@
             <span>Pedidos</span>
             <span class="ops-nav-badge">{{ pedidos_badge|default:"0" }}</span>
         </a>
+        <a class="ops-nav-item {% if active == 'clientes' %}is-active{% endif %}" href="{% url 'pedidos:clientes_admin' %}">
+            <span class="ops-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z"/></svg>
+            </span>
+            <span>Clientes</span>
+        </a>
         <a class="ops-nav-item {% if active == 'pratos' %}is-active{% endif %}" href="{% url 'pedidos:gestao_pratos' %}">
             <span class="ops-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M4 8a6 6 0 0 1 12 0h2a1 1 0 1 1 0 2h-1a5 5 0 0 1-10 0H6a1 1 0 1 1 0-2h2zm3 0a3 3 0 1 0 6 0H7zm9 6H8a4 4 0 0 0 8 0z"/></svg>

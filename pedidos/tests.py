@@ -12,8 +12,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
-from .order_services import create_order_items_from_payload
+from .models import Adicional, Bebida, Cliente, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, Prato
+from .order_services import create_order_items_from_payload, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import _calcular_frete_por_distancia
 
@@ -797,6 +797,86 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIsNotNone(pedido.producao_iniciada_em)
         self.assertEqual(pedido.total, Decimal("50.00"))
         self.assertEqual(response.json()["detail_url"], f"/controle/pedidos/{pedido.id}/")
+
+    def test_sync_customer_from_order_reuses_phone(self):
+        first = Pedido.objects.create(
+            nome_cliente="Maria",
+            telefone="(64) 99999-0000",
+            rua="Rua 1",
+            numero_endereco="10",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            endereco="Rua 1, 10 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("25.00"),
+        )
+        second = Pedido.objects.create(
+            nome_cliente="Maria Silva",
+            telefone="64 99999-0000",
+            rua="Rua 2",
+            numero_endereco="20",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            endereco="Rua 2, 20 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("30.00"),
+        )
+
+        first_customer = sync_customer_from_order(first)
+        second_customer = sync_customer_from_order(second)
+
+        self.assertEqual(first_customer.id, second_customer.id)
+        self.assertEqual(Cliente.objects.count(), 1)
+        self.assertEqual(Cliente.objects.get().pedidos.count(), 2)
+        self.assertEqual(EnderecoCliente.objects.count(), 2)
+        self.assertEqual(second.cliente_id, first_customer.id)
+
+    def test_customers_admin_lists_customer_and_profile(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Perfil",
+            telefone="64988887777",
+            endereco="Rua Perfil, 50 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("40.00"),
+        )
+        cliente = sync_customer_from_order(pedido)
+
+        list_response = self.client.get("/controle/clientes/")
+        detail_response = self.client.get(f"/controle/clientes/{cliente.id}/")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "Cliente Perfil")
+        self.assertContains(list_response, "64988887777")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, pedido.public_token)
+        self.assertContains(detail_response, "Rua Perfil")
+
+    def test_manager_can_edit_customer_name_manually(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Nome Pedido",
+            telefone="64977776666",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("20.00"),
+        )
+        cliente = sync_customer_from_order(pedido)
+
+        response = self.client.post(f"/controle/clientes/{cliente.id}/", {"nome": "Nome Manual"})
+
+        self.assertEqual(response.status_code, 200)
+        cliente.refresh_from_db()
+        self.assertEqual(cliente.nome, "Nome Manual")
+        self.assertTrue(cliente.nome_editado_manualmente)
 
     def test_completed_orders_admin_shows_closed_orders(self):
         self.client.force_login(self.staff_user)

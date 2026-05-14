@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Relacionamento</p>
+                <h1>Clientes</h1>
+            </div>
+        </header>
+
+        <section class="ops-card clientes-list-card">
+            <div class="clientes-table">
+                <div class="clientes-table-row clientes-table-head">
+                    <span>Nome</span>
+                    <span>Telefone</span>
+                    <span>Pedidos</span>
+                    <span>Último pedido</span>
+                    <span></span>
+                </div>
+                {% for cliente in clientes %}
+                    <div class="clientes-table-row">
+                        <strong>{{ cliente.nome }}</strong>
+                        <span>{{ cliente.telefone }}</span>
+                        <span>{{ cliente.pedidos_count }}</span>
+                        <span>{% if cliente.ultimo_pedido_em %}{{ cliente.ultimo_pedido_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</span>
+                        <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:cliente_detalhe_admin' cliente.id %}">Abrir perfil</a>
+                    </div>
+                {% empty %}
+                    <div class="empty-state">
+                        <h2>Nenhum cliente encontrado.</h2>
+                        <p>Clientes serão criados automaticamente quando pedidos com telefone forem salvos.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

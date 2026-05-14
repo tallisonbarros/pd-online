@@ -26,7 +26,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 from .order_services import (
     create_order_items_from_payload,
     money_decimal,
@@ -34,6 +34,7 @@ from .order_services import (
     recalculate_order_totals,
     replace_order_items,
     serialize_editor_catalog,
+    sync_customer_from_order,
     validar_cupom,
 )
 
@@ -1360,6 +1361,7 @@ def criar_pedido(request):
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
+    sync_customer_from_order(pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1415,6 +1417,7 @@ def criar_retirada(request):
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
+    sync_customer_from_order(pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -2032,6 +2035,63 @@ def pedidos_concluidos_admin(request):
     )
 
 
+@staff_member_required(login_url="/admin/login/")
+def clientes_admin(request):
+    clientes = (
+        Cliente.objects.annotate(pedidos_count=Count("pedidos"))
+        .filter(pedidos_count__gt=0)
+        .order_by("-ultimo_pedido_em", "nome")
+    )
+    return render(
+        request,
+        "pedidos/clientes_admin.html",
+        {
+            "active": "clientes",
+            "clientes": clientes,
+            **_pedidos_base_counts(Pedido.objects.all()),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+@transaction.atomic
+def cliente_detalhe_admin(request, cliente_id):
+    cliente = get_object_or_404(Cliente.objects.prefetch_related("enderecos"), id=cliente_id)
+    feedback = None
+    feedback_kind = "success"
+    if request.method == "POST":
+        if not _user_can_manage_order_payment(request.user):
+            feedback = "Usuario sem permissao para editar cliente."
+            feedback_kind = "error"
+        else:
+            nome = _safe_text(request.POST.get("nome"))
+            if nome:
+                cliente.nome = nome
+                cliente.nome_editado_manualmente = True
+                cliente.save(update_fields=["nome", "nome_editado_manualmente", "atualizado_em"])
+                feedback = "Cliente atualizado."
+            else:
+                feedback = "Informe um nome para o cliente."
+                feedback_kind = "error"
+
+    pedidos = cliente.pedidos.prefetch_related("itens").exclude(status=Pedido.Status.RASCUNHO).order_by("-criado_em", "-id")
+    tokens = [pedido.public_token for pedido in pedidos if pedido.public_token]
+    return render(
+        request,
+        "pedidos/cliente_detalhe_admin.html",
+        {
+            "active": "clientes",
+            "cliente": cliente,
+            "pedidos": pedidos,
+            "tokens": tokens,
+            "feedback": feedback,
+            "feedback_kind": feedback_kind,
+            "can_edit_client": _user_can_manage_order_payment(request.user),
+            **_pedidos_base_counts(Pedido.objects.all()),
+        },
+    )
+
+
 def _tempo_producao_pedido(pedido):
     if not pedido.producao_iniciada_em:
         return "--"
@@ -2233,6 +2293,7 @@ def finalizar_pedido_novo_admin(request, pedido_id):
         return HttpResponseBadRequest(str(exc))
     pedido.status = Pedido.Status.EM_PREPARO
     pedido.save(update_fields=["status"])
+    sync_customer_from_order(pedido)
     return JsonResponse(
         {
             "ok": True,
@@ -2317,9 +2378,11 @@ def atualizar_dados_pedido(request, pedido_id):
     if field == "nome_cliente":
         pedido.nome_cliente = _safe_text(request.POST.get("value")) or pedido.nome_cliente
         pedido.save(update_fields=["nome_cliente"])
+        sync_customer_from_order(pedido)
     elif field == "telefone":
         pedido.telefone = _safe_text(request.POST.get("value"))
         pedido.save(update_fields=["telefone"])
+        sync_customer_from_order(pedido)
     elif field == "enviar_talheres":
         pedido.enviar_talheres = request.POST.get("value") == "sim"
         pedido.save(update_fields=["enviar_talheres"])
@@ -2365,6 +2428,7 @@ def atualizar_dados_pedido(request, pedido_id):
             "status",
         ])
         recalculate_order_totals(pedido)
+        sync_customer_from_order(pedido)
     elif field == "observacao_geral":
         pedido.observacao_geral = _safe_text(request.POST.get("value"))
         pedido.save(update_fields=["observacao_geral"])
@@ -2406,6 +2470,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         for field, value in common_fields.items():
             setattr(pedido, field, value)
         pedido.save(update_fields=list(common_fields.keys()))
+        sync_customer_from_order(pedido)
         return JsonResponse({
             "ok": True,
             "frete_recalculado": False,
@@ -2451,6 +2516,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         "valor_frete",
     ])
     recalculate_order_totals(pedido)
+    sync_customer_from_order(pedido)
     return JsonResponse({"ok": True, "frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","), "total": f"R$ {pedido.total:.2f}".replace(".", ",")})
 
 

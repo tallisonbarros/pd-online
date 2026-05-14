@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cliente.nome }} | Clientes | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Perfil do cliente</p>
+                <h1>{{ cliente.nome }}</h1>
+            </div>
+            <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:clientes_admin' %}">Voltar</a>
+        </header>
+
+        {% if feedback %}
+            <div class="ajustes-feedback {% if feedback_kind == 'error' %}is-error{% endif %}">{{ feedback }}</div>
+        {% endif %}
+
+        <section class="cliente-profile-grid">
+            <article class="ops-card">
+                <p class="ops-kicker">Dados principais</p>
+                <dl class="cliente-facts">
+                    <div><dt>Telefone</dt><dd>{{ cliente.telefone }}</dd></div>
+                    <div><dt>Primeiro pedido</dt><dd>{% if cliente.primeiro_pedido_em %}{{ cliente.primeiro_pedido_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</dd></div>
+                    <div><dt>Último pedido</dt><dd>{% if cliente.ultimo_pedido_em %}{{ cliente.ultimo_pedido_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</dd></div>
+                    <div><dt>Total de pedidos</dt><dd>{{ pedidos|length }}</dd></div>
+                </dl>
+                {% if can_edit_client %}
+                    <form method="post" class="cliente-name-form">
+                        {% csrf_token %}
+                        <label class="field ajustes-field">
+                            <span>Nome do cliente</span>
+                            <input type="text" name="nome" value="{{ cliente.nome }}" required>
+                        </label>
+                        <button class="ped-btn ped-btn-primary" type="submit">Salvar nome</button>
+                    </form>
+                {% endif %}
+            </article>
+
+            <article class="ops-card">
+                <p class="ops-kicker">Tokens vinculados</p>
+                <div class="cliente-token-list">
+                    {% for token in tokens %}
+                        <code>{{ token }}</code>
+                    {% empty %}
+                        <span>Nenhum token vinculado.</span>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <section class="ops-card">
+            <p class="ops-kicker">Endereços utilizados</p>
+            <div class="cliente-address-list">
+                {% for endereco in cliente.enderecos.all %}
+                    <article class="cliente-address-item">
+                        <strong>{{ endereco.endereco }}</strong>
+                        {% if endereco.complemento or endereco.lote_quadra or endereco.ponto_referencia %}
+                            <small>
+                                {% if endereco.complemento %}{{ endereco.complemento }}{% endif %}
+                                {% if endereco.lote_quadra %}{% if endereco.complemento %} · {% endif %}{{ endereco.lote_quadra }}{% endif %}
+                                {% if endereco.ponto_referencia %}{% if endereco.complemento or endereco.lote_quadra %} · {% endif %}{{ endereco.ponto_referencia }}{% endif %}
+                            </small>
+                        {% endif %}
+                        <span>Último uso: {% if endereco.ultimo_uso_em %}{{ endereco.ultimo_uso_em|date:"d/m/Y H:i" }}{% else %}-{% endif %}</span>
+                    </article>
+                {% empty %}
+                    <p>Nenhum endereço registrado.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ops-card">
+            <p class="ops-kicker">Histórico de pedidos</p>
+            <div class="clientes-table">
+                <div class="clientes-table-row clientes-table-head">
+                    <span>Pedido</span>
+                    <span>Status</span>
+                    <span>Data</span>
+                    <span>Total</span>
+                    <span></span>
+                </div>
+                {% for pedido in pedidos %}
+                    <div class="clientes-table-row">
+                        <strong>#{{ pedido.numero }}</strong>
+                        <span>{{ pedido.status_label_contextual }}</span>
+                        <span>{{ pedido.criado_em|date:"d/m/Y H:i" }}</span>
+                        <span>R$ {{ pedido.total|floatformat:2 }}</span>
+                        <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}">Abrir pedido</a>
+                    </div>
+                {% empty %}
+                    <p>Nenhum pedido vinculado.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

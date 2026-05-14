@@ -5726,6 +5726,120 @@ fieldset.field {
     color: var(--text-soft);
 }
 
+.clientes-list-card {
+    overflow-x: auto;
+}
+
+.clientes-table {
+    display: grid;
+    gap: 8px;
+}
+
+.clientes-table-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 0.8fr) minmax(80px, 0.45fr) minmax(150px, 0.8fr) auto;
+    gap: 12px;
+    align-items: center;
+    min-width: 760px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eaded6;
+    color: #5f4b42;
+}
+
+.clientes-table-row:last-child {
+    border-bottom: 0;
+}
+
+.clientes-table-row strong {
+    color: #221311;
+    font-weight: 900;
+}
+
+.clientes-table-head {
+    padding-top: 0;
+    color: #8b756b;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.cliente-profile-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.6fr);
+    gap: 16px;
+}
+
+.cliente-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0 0;
+}
+
+.cliente-facts div,
+.cliente-address-item {
+    border: 1px solid #eaded6;
+    border-radius: 14px;
+    background: #fffdfa;
+    padding: 12px;
+}
+
+.cliente-facts dt {
+    color: #8b756b;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.cliente-facts dd {
+    margin: 4px 0 0;
+    color: #221311;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.cliente-name-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+    margin-top: 16px;
+}
+
+.cliente-token-list,
+.cliente-address-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.cliente-token-list code {
+    display: block;
+    overflow-wrap: anywhere;
+    border-radius: 10px;
+    background: #f8f0ec;
+    padding: 8px 10px;
+    color: #4e342e;
+    font-size: 12px;
+}
+
+.cliente-address-item {
+    display: grid;
+    gap: 4px;
+}
+
+.cliente-address-item strong {
+    color: #221311;
+    font-weight: 900;
+}
+
+.cliente-address-item small,
+.cliente-address-item span {
+    color: #6f5a50;
+}
+
 .ops-period-pill {
     border: 1px solid var(--line-strong);
     border-radius: 16px;

@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cupom, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
 
 
 def safe_text(value):
@@ -19,6 +19,90 @@ def money_decimal(value):
 
 def normalize_coupon_code(value):
     return safe_text(value).upper()
+
+
+def normalize_phone(value):
+    digits = "".join(char for char in str(value or "") if char.isdigit())
+    if len(digits) > 11 and digits.startswith("55"):
+        digits = digits[2:]
+    return digits
+
+
+def _address_defaults_from_order(pedido):
+    return {
+        "endereco_formatado": safe_text(pedido.endereco_formatado),
+        "rua": safe_text(pedido.rua),
+        "numero_endereco": safe_text(pedido.numero_endereco),
+        "bairro": safe_text(pedido.bairro),
+        "cidade": safe_text(pedido.cidade) or "Rio Verde",
+        "estado": safe_text(pedido.estado) or "GO",
+        "latitude": pedido.latitude,
+        "longitude": pedido.longitude,
+        "primeiro_uso_em": pedido.criado_em,
+        "ultimo_uso_em": pedido.criado_em,
+        "ultimo_pedido": pedido,
+    }
+
+
+def sync_customer_from_order(pedido):
+    telefone_normalizado = normalize_phone(pedido.telefone)
+    if not telefone_normalizado or pedido.status == Pedido.Status.RASCUNHO:
+        if not telefone_normalizado and pedido.cliente_id:
+            pedido.cliente = None
+            pedido.save(update_fields=["cliente"])
+        return None
+
+    nome_cliente = safe_text(pedido.nome_cliente) or "Cliente"
+    cliente, created = Cliente.objects.get_or_create(
+        telefone_normalizado=telefone_normalizado,
+        defaults={
+            "telefone": safe_text(pedido.telefone),
+            "nome": nome_cliente,
+            "primeiro_pedido_em": pedido.criado_em,
+            "ultimo_pedido_em": pedido.criado_em,
+        },
+    )
+
+    update_fields = []
+    if safe_text(pedido.telefone) and cliente.telefone != safe_text(pedido.telefone):
+        cliente.telefone = safe_text(pedido.telefone)
+        update_fields.append("telefone")
+    if not cliente.nome_editado_manualmente and nome_cliente and cliente.nome != nome_cliente:
+        cliente.nome = nome_cliente
+        update_fields.append("nome")
+    if pedido.criado_em and (not cliente.primeiro_pedido_em or pedido.criado_em < cliente.primeiro_pedido_em):
+        cliente.primeiro_pedido_em = pedido.criado_em
+        update_fields.append("primeiro_pedido_em")
+    if pedido.criado_em and (not cliente.ultimo_pedido_em or pedido.criado_em > cliente.ultimo_pedido_em):
+        cliente.ultimo_pedido_em = pedido.criado_em
+        update_fields.append("ultimo_pedido_em")
+    if update_fields:
+        cliente.save(update_fields=list(set(update_fields)))
+
+    if pedido.cliente_id != cliente.id:
+        pedido.cliente = cliente
+        pedido.save(update_fields=["cliente"])
+
+    endereco = safe_text(pedido.endereco)
+    if endereco:
+        endereco_cliente, created = EnderecoCliente.objects.get_or_create(
+            cliente=cliente,
+            endereco=endereco,
+            complemento=safe_text(pedido.complemento),
+            lote_quadra=safe_text(pedido.lote_quadra),
+            ponto_referencia=safe_text(pedido.ponto_referencia),
+            defaults=_address_defaults_from_order(pedido),
+        )
+        endereco_updates = []
+        for field, value in _address_defaults_from_order(pedido).items():
+            current = getattr(endereco_cliente, field)
+            if current != value:
+                setattr(endereco_cliente, field, value)
+                endereco_updates.append(field)
+        if endereco_updates:
+            endereco_cliente.save(update_fields=list(set(endereco_updates)))
+
+    return cliente
 
 
 def create_order_items_from_payload(pedido, itens_payload, clear_existing=False):

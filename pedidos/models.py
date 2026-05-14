@@ -65,6 +65,25 @@ class Adicional(models.Model):
         return self.nome
 
 
+class Cliente(models.Model):
+    telefone_normalizado = models.CharField(max_length=20, unique=True)
+    telefone = models.CharField(max_length=30)
+    nome = models.CharField(max_length=120)
+    nome_editado_manualmente = models.BooleanField(default=False)
+    primeiro_pedido_em = models.DateTimeField(blank=True, null=True)
+    ultimo_pedido_em = models.DateTimeField(blank=True, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-ultimo_pedido_em", "nome"]
+        verbose_name = "Cliente"
+        verbose_name_plural = "Clientes"
+
+    def __str__(self):
+        return f"{self.nome} - {self.telefone}"
+
+
 class Pedido(models.Model):
     class FormaPagamento(models.TextChoices):
         PIX = "pix", "Online Pix"
@@ -88,6 +107,7 @@ class Pedido(models.Model):
     numero = models.PositiveIntegerField(unique=True, blank=True, null=True)
     nome_cliente = models.CharField(max_length=120)
     telefone = models.CharField(max_length=30)
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos")
     rua = models.CharField(max_length=180, blank=True)
     numero_endereco = models.CharField(max_length=20, blank=True)
     bairro = models.CharField(max_length=120, blank=True)
@@ -231,6 +251,41 @@ class ItemPedido(models.Model):
     def save(self, *args, **kwargs):
         self.subtotal = Decimal(self.preco_snapshot) * self.quantidade
         super().save(*args, **kwargs)
+
+
+class EnderecoCliente(models.Model):
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="enderecos")
+    endereco = models.CharField(max_length=255)
+    endereco_formatado = models.CharField(max_length=255, blank=True)
+    rua = models.CharField(max_length=180, blank=True)
+    numero_endereco = models.CharField(max_length=20, blank=True)
+    bairro = models.CharField(max_length=120, blank=True)
+    cidade = models.CharField(max_length=120, blank=True, default="Rio Verde")
+    estado = models.CharField(max_length=60, blank=True, default="GO")
+    complemento = models.CharField(max_length=255, blank=True)
+    lote_quadra = models.CharField(max_length=120, blank=True)
+    ponto_referencia = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
+    primeiro_uso_em = models.DateTimeField(blank=True, null=True)
+    ultimo_uso_em = models.DateTimeField(blank=True, null=True)
+    ultimo_pedido = models.ForeignKey(Pedido, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-ultimo_uso_em", "endereco"]
+        verbose_name = "Endereço do cliente"
+        verbose_name_plural = "Endereços do cliente"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cliente", "endereco", "complemento", "lote_quadra", "ponto_referencia"],
+                name="unique_cliente_endereco_usado",
+            )
+        ]
+
+    def __str__(self):
+        return self.endereco
 
 
 class Cupom(models.Model):
