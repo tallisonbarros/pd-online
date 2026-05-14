@@ -444,6 +444,21 @@
         }
     }
 
+    function getKnownOrderTokens() {
+        try {
+            const key = (window.PRATO_CONFIG && window.PRATO_CONFIG.orderHistoryKey) || "prato_delivery_orders";
+            const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .map((item) => String(item?.token || "").trim())
+                .filter(Boolean)
+                .filter((token, index, list) => list.indexOf(token) === index)
+                .slice(0, 30);
+        } catch (error) {
+            return [];
+        }
+    }
+
     function syncCartCount() {
         const count = getCart().reduce((total, item) => total + Number(item.quantidade || 0), 0);
         document.querySelectorAll("[data-cart-count]").forEach((element) => {
@@ -2698,6 +2713,7 @@
         const talheresPayloadInput = document.getElementById("checkout-talheres-payload");
         const payloadInput = document.getElementById("carrinho-payload");
         const couponPayloadInput = document.getElementById("checkout-coupon-code-payload");
+        const knownOrderTokensInput = document.getElementById("checkout-known-order-tokens");
         const mealPromoReview = document.getElementById("checkout-meal-promo-review");
         const mealPromoReviewValue = document.getElementById("checkout-meal-promo-review-value");
         const couponReview = document.getElementById("checkout-coupon-review");
@@ -2755,6 +2771,12 @@
         function syncTalheresPayload() {
             if (talheresToggleInput && talheresPayloadInput) {
                 talheresPayloadInput.value = talheresToggleInput?.checked ? "sim" : "nao";
+            }
+        }
+
+        function syncKnownOrderTokensPayload() {
+            if (knownOrderTokensInput) {
+                knownOrderTokensInput.value = JSON.stringify(getKnownOrderTokens());
             }
         }
 
@@ -2931,6 +2953,7 @@
             syncOrderNotePayload();
             syncCheckoutNamePayload();
             syncTalheresPayload();
+            syncKnownOrderTokensPayload();
             if (!cart.length) {
                 redirectToCardapio();
                 return;
@@ -2995,6 +3018,7 @@
         checkoutAddressSummary?.addEventListener("click", clearCheckoutFieldHighlights);
         talheresToggleInput?.addEventListener("change", syncTalheresPayload);
         syncTalheresPayload();
+        syncKnownOrderTokensPayload();
         const savedCoupon = getCheckoutCouponCode();
 
         function setPaymentSelection(paymentType, paymentMethod, options = {}) {
@@ -3119,6 +3143,7 @@
             syncOrderNotePayload();
             syncCheckoutNamePayload();
             syncTalheresPayload();
+            syncKnownOrderTokensPayload();
             persistCheckoutProfileFromForm(form);
             if (!whatsappSubmitInProgress) {
                 event.preventDefault();
@@ -3167,6 +3192,7 @@
         const pickupNoteInput = document.getElementById("pickup-order-note-payload");
         const pickupTalheresInput = document.getElementById("pickup-talheres-payload");
         const pickupCouponInput = document.getElementById("pickup-coupon-code-payload");
+        const pickupKnownOrderTokensInput = document.getElementById("pickup-known-order-tokens");
         const cartCouponInput = document.getElementById("cart-coupon-code");
         const cartCouponApplyButton = document.getElementById("cart-coupon-apply");
         const cartCouponRemoveButton = document.getElementById("cart-coupon-remove");
@@ -3208,6 +3234,7 @@
             if (pickupNoteInput) pickupNoteInput.value = String(draftPayload.observacao_geral || "").trim();
             if (pickupTalheresInput) pickupTalheresInput.value = draftPayload.enviar_talheres === "nao" ? "nao" : "sim";
             if (pickupCouponInput) pickupCouponInput.value = getCheckoutCouponCode();
+            if (pickupKnownOrderTokensInput) pickupKnownOrderTokensInput.value = JSON.stringify(getKnownOrderTokens());
         }
 
         function cartItemsTotal() {

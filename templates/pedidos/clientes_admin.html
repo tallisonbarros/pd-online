@@ -12,6 +12,11 @@
                 <p class="ops-session-kicker">Relacionamento</p>
                 <h1>Clientes</h1>
             </div>
+            {% if conflitos_abertos_count %}
+                <a class="ped-btn ped-btn-danger" href="{% url 'pedidos:clientes_conflitos_admin' %}">
+                    {{ conflitos_abertos_count }} conflito(s)
+                </a>
+            {% endif %}
         </header>
 
         <section class="ops-card clientes-list-card">

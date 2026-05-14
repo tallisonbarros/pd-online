@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Conflitos de clientes | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Clientes</p>
+                <h1>Conflitos por token</h1>
+            </div>
+            <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:clientes_admin' %}">Voltar</a>
+        </header>
+
+        <section class="ops-card">
+            <p class="ops-kicker">Pendências</p>
+            <div class="cliente-conflict-list">
+                {% for conflito in conflitos %}
+                    <article class="cliente-conflict-card">
+                        <div>
+                            <strong>Pedido #{{ conflito.pedido.numero }}</strong>
+                            <span>{{ conflito.criado_em|date:"d/m/Y H:i" }}</span>
+                            <small>Pedido sem telefone encontrou mais de um cliente nos tokens salvos.</small>
+                        </div>
+                        <div class="cliente-conflict-customers">
+                            {% for cliente in conflito.clientes.all %}
+                                <a href="{% url 'pedidos:cliente_detalhe_admin' cliente.id %}">{{ cliente.nome }} · {{ cliente.telefone }}</a>
+                            {% endfor %}
+                        </div>
+                        <a class="ped-btn ped-btn-soft" href="{% url 'pedidos:pedido_detalhe_admin' conflito.pedido.id %}">Abrir pedido</a>
+                    </article>
+                {% empty %}
+                    <p>Nenhum conflito aberto.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}

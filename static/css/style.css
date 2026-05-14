@@ -5854,6 +5854,40 @@ fieldset.field {
     color: #6f5a50;
 }
 
+.cliente-conflict-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.cliente-conflict-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid #eaded6;
+    border-radius: 16px;
+    background: #fffdfa;
+    padding: 14px;
+}
+
+.cliente-conflict-card strong,
+.cliente-conflict-customers a {
+    color: #221311;
+    font-weight: 900;
+}
+
+.cliente-conflict-card span,
+.cliente-conflict-card small {
+    display: block;
+    color: #6f5a50;
+}
+
+.cliente-conflict-customers {
+    display: grid;
+    gap: 6px;
+}
+
 .ops-period-pill {
     border: 1px solid var(--line-strong);
     border-radius: 16px;

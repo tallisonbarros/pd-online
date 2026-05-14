@@ -12,8 +12,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, Prato
-from .order_services import create_order_items_from_payload, sync_customer_from_order
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, Prato
+from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import _calcular_frete_por_distancia
 
@@ -877,6 +877,89 @@ class PedidoDetalheAdminTests(TestCase):
         cliente.refresh_from_db()
         self.assertEqual(cliente.nome, "Nome Manual")
         self.assertTrue(cliente.nome_editado_manualmente)
+
+    def test_order_without_phone_inherits_customer_from_known_token(self):
+        previous = Pedido.objects.create(
+            nome_cliente="Cliente Token",
+            telefone="64966665555",
+            endereco="Rua Token, 10 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("22.00"),
+        )
+        cliente = sync_customer_from_order(previous)
+        current = Pedido.objects.create(
+            nome_cliente="Cliente Sem Telefone",
+            telefone="",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("18.00"),
+        )
+
+        inherited = inherit_customer_from_known_tokens(current, [previous.public_token])
+
+        current.refresh_from_db()
+        self.assertEqual(inherited.id, cliente.id)
+        self.assertEqual(current.cliente_id, cliente.id)
+        self.assertEqual(current.telefone, cliente.telefone)
+        self.assertEqual(ClienteTokenConflito.objects.count(), 0)
+
+    def test_order_without_phone_registers_conflict_for_multiple_token_customers(self):
+        first = Pedido.objects.create(
+            nome_cliente="Cliente Um",
+            telefone="64911110000",
+            endereco="Rua Um, 1 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("22.00"),
+        )
+        second = Pedido.objects.create(
+            nome_cliente="Cliente Dois",
+            telefone="64922220000",
+            endereco="Rua Dois, 2 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("25.00"),
+        )
+        first_customer = sync_customer_from_order(first)
+        second_customer = sync_customer_from_order(second)
+        current = Pedido.objects.create(
+            nome_cliente="Cliente Sem Telefone",
+            telefone="",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("18.00"),
+        )
+
+        result = inherit_customer_from_known_tokens(current, [first.public_token, second.public_token])
+
+        current.refresh_from_db()
+        conflito = ClienteTokenConflito.objects.get()
+        self.assertIsNone(result)
+        self.assertIsNone(current.cliente_id)
+        self.assertEqual(set(conflito.clientes.values_list("id", flat=True)), {first_customer.id, second_customer.id})
+
+    def test_customer_conflicts_page_lists_open_conflicts(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Pedido Conflito",
+            telefone="",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("18.00"),
+        )
+        cliente = Cliente.objects.create(telefone_normalizado="64912340000", telefone="64912340000", nome="Cliente Conflito")
+        conflito = ClienteTokenConflito.objects.create(pedido=pedido, tokens=["abc"])
+        conflito.clientes.add(cliente)
+
+        response = self.client.get("/controle/clientes/conflitos/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Pedido #{pedido.numero}")
+        self.assertContains(response, "Cliente Conflito")
 
     def test_completed_orders_admin_shows_closed_orders(self):
         self.client.force_login(self.staff_user)

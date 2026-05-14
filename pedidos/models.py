@@ -288,6 +288,27 @@ class EnderecoCliente(models.Model):
         return self.endereco
 
 
+class ClienteTokenConflito(models.Model):
+    class Status(models.TextChoices):
+        ABERTO = "aberto", "Aberto"
+        RESOLVIDO = "resolvido", "Resolvido"
+
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="conflitos_cliente")
+    tokens = models.JSONField(default=list, blank=True)
+    clientes = models.ManyToManyField(Cliente, related_name="conflitos_token")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ABERTO)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "Conflito de cliente por token"
+        verbose_name_plural = "Conflitos de clientes por token"
+
+    def __str__(self):
+        return f"Conflito do pedido #{self.pedido.numero or self.pedido_id}"
+
+
 class Cupom(models.Model):
     class TipoDesconto(models.TextChoices):
         PERCENTUAL = "percentual", "Percentual"

@@ -26,9 +26,10 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, Cliente, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 from .order_services import (
     create_order_items_from_payload,
+    inherit_customer_from_known_tokens,
     money_decimal,
     normalize_coupon_code,
     recalculate_order_totals,
@@ -1225,6 +1226,15 @@ def api_validar_cupom(request):
     )
 
 
+def _known_order_tokens_from_request(request):
+    raw = request.POST.get("known_order_tokens") or "[]"
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload = []
+    return payload if isinstance(payload, list) else []
+
+
 @require_POST
 @transaction.atomic
 def criar_pedido(request):
@@ -1361,7 +1371,7 @@ def criar_pedido(request):
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
-    sync_customer_from_order(pedido)
+    inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1417,7 +1427,7 @@ def criar_retirada(request):
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
-    sync_customer_from_order(pedido)
+    inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -2048,6 +2058,26 @@ def clientes_admin(request):
         {
             "active": "clientes",
             "clientes": clientes,
+            "conflitos_abertos_count": ClienteTokenConflito.objects.filter(status=ClienteTokenConflito.Status.ABERTO).count(),
+            **_pedidos_base_counts(Pedido.objects.all()),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def clientes_conflitos_admin(request):
+    conflitos = (
+        ClienteTokenConflito.objects.select_related("pedido")
+        .prefetch_related("clientes")
+        .filter(status=ClienteTokenConflito.Status.ABERTO)
+        .order_by("-criado_em")
+    )
+    return render(
+        request,
+        "pedidos/clientes_conflitos_admin.html",
+        {
+            "active": "clientes",
+            "conflitos": conflitos,
             **_pedidos_base_counts(Pedido.objects.all()),
         },
     )

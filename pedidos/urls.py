@@ -27,6 +27,7 @@ urlpatterns = [
     path("controle/pedidos/<int:pedido_id>/", views.pedido_detalhe_admin, name="pedido_detalhe_admin"),
     path("controle/clientes/", views.clientes_admin, name="clientes_admin"),
     path("controle/clientes/<int:cliente_id>/", views.cliente_detalhe_admin, name="cliente_detalhe_admin"),
+    path("controle/clientes/conflitos/", views.clientes_conflitos_admin, name="clientes_conflitos_admin"),
     path("controle/ajustes/", views.ajustes_admin, name="ajustes_admin"),
     path("controle/pratos/", views.gestao_pratos, name="gestao_pratos"),
     path("controle/bebidas/", views.gestao_bebidas, name="gestao_bebidas"),

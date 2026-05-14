@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
 
 
 def safe_text(value):
@@ -103,6 +103,52 @@ def sync_customer_from_order(pedido):
             endereco_cliente.save(update_fields=list(set(endereco_updates)))
 
     return cliente
+
+
+def normalize_known_order_tokens(tokens):
+    normalized = []
+    for raw_token in tokens or []:
+        token = safe_text(raw_token)
+        if not token or len(token) > 120 or token in normalized:
+            continue
+        normalized.append(token)
+        if len(normalized) >= 30:
+            break
+    return normalized
+
+
+def inherit_customer_from_known_tokens(pedido, tokens):
+    if normalize_phone(pedido.telefone) or pedido.cliente_id or pedido.status == Pedido.Status.RASCUNHO:
+        return sync_customer_from_order(pedido)
+
+    known_tokens = normalize_known_order_tokens(tokens)
+    if not known_tokens:
+        return None
+
+    matched_orders = (
+        Pedido.objects.select_related("cliente")
+        .exclude(pk=pedido.pk)
+        .filter(public_token__in=known_tokens)
+    )
+    customers = []
+    for matched_order in matched_orders:
+        customer = matched_order.cliente
+        if not customer and normalize_phone(matched_order.telefone):
+            customer = sync_customer_from_order(matched_order)
+        if customer and normalize_phone(customer.telefone) and customer.id not in [item.id for item in customers]:
+            customers.append(customer)
+
+    if len(customers) == 1:
+        customer = customers[0]
+        pedido.telefone = customer.telefone
+        pedido.cliente = customer
+        pedido.save(update_fields=["telefone", "cliente"])
+        return sync_customer_from_order(pedido)
+
+    if len(customers) > 1:
+        conflito = ClienteTokenConflito.objects.create(pedido=pedido, tokens=known_tokens)
+        conflito.clientes.set(customers)
+    return None
 
 
 def create_order_items_from_payload(pedido, itens_payload, clear_existing=False):
