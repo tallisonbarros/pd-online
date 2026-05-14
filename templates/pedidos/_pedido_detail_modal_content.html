@@ -127,7 +127,25 @@
         <div class="ped-modal-section-head">
             <h3>Cliente e entrega</h3>
         </div>
-        <dl class="ped-modal-facts">
+        <dl class="ped-modal-facts {% if pedido.tipo_coleta == 'retirada' %}is-pickup{% endif %}">
+            <div>
+                <dt>Tipo</dt>
+                <dd>
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="tipo_coleta"
+                            data-type="select"
+                            data-value="{{ pedido.tipo_coleta }}"
+                            data-options="entrega:Entrega|retirada:Retirada"
+                            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                        >{{ pedido.get_tipo_coleta_display }}</span>
+                    {% else %}
+                        {{ pedido.get_tipo_coleta_display }}
+                    {% endif %}
+                </dd>
+            </div>
             <div>
                 <dt>Telefone</dt>
                 <dd>
@@ -212,7 +230,7 @@
                 </div>
             {% endif %}
         </dl>
-        <a class="ped-btn ped-btn-soft ped-modal-route" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">Abrir rota</a>
+        <a class="ped-btn ped-btn-soft ped-modal-route {% if pedido.tipo_coleta == 'retirada' %}hidden{% endif %}" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">Abrir rota</a>
         {% if can_edit_payment %}
             <template data-delivery-editor-template>
                 <section class="profile-selector-panel" data-delivery-selector-panel>
@@ -245,6 +263,7 @@
                     <div class="profile-editor-head"></div>
                     <form id="profile-form" class="profile-form" method="post" action="{% url 'pedidos:atualizar_entrega_pedido' pedido.id %}" data-delivery-editor novalidate>
                         {% csrf_token %}
+                        <input type="hidden" name="tipo_coleta" value="entrega">
                         <div class="address-flow-steps" aria-label="Etapas do endereco">
                             <span class="address-flow-step is-active" aria-label="Etapa 1"></span>
                             <span id="address-step-marker-details" class="address-flow-step" aria-label="Etapa 2"></span>

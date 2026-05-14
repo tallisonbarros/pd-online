@@ -2268,6 +2268,48 @@ def atualizar_dados_pedido(request, pedido_id):
     elif field == "enviar_talheres":
         pedido.enviar_talheres = request.POST.get("value") == "sim"
         pedido.save(update_fields=["enviar_talheres"])
+    elif field == "tipo_coleta":
+        tipo_coleta = _safe_text(request.POST.get("value"))
+        if tipo_coleta not in dict(Pedido.TipoColeta.choices):
+            return HttpResponseBadRequest("Tipo de coleta invalido.")
+        if tipo_coleta == Pedido.TipoColeta.ENTREGA:
+            return HttpResponseBadRequest("Informe o endereco de entrega para alterar o tipo.")
+        pedido.tipo_coleta = Pedido.TipoColeta.RETIRADA
+        pedido.rua = ""
+        pedido.numero_endereco = ""
+        pedido.bairro = ""
+        pedido.cidade = "Rio Verde"
+        pedido.estado = "GO"
+        pedido.endereco_formatado = "Retirada no local"
+        pedido.endereco = "Retirada no local"
+        pedido.latitude = None
+        pedido.longitude = None
+        pedido.complemento = ""
+        pedido.lote_quadra = ""
+        pedido.ponto_referencia = ""
+        pedido.distancia_km = Decimal("0.00")
+        pedido.valor_frete = Decimal("0.00")
+        if pedido.status == Pedido.Status.SAIU_ENTREGA:
+            pedido.status = Pedido.Status.FINALIZADO
+        pedido.save(update_fields=[
+            "tipo_coleta",
+            "rua",
+            "numero_endereco",
+            "bairro",
+            "cidade",
+            "estado",
+            "endereco_formatado",
+            "endereco",
+            "latitude",
+            "longitude",
+            "complemento",
+            "lote_quadra",
+            "ponto_referencia",
+            "distancia_km",
+            "valor_frete",
+            "status",
+        ])
+        recalculate_order_totals(pedido)
     elif field == "observacao_geral":
         pedido.observacao_geral = _safe_text(request.POST.get("value"))
         pedido.save(update_fields=["observacao_geral"])
@@ -2293,6 +2335,7 @@ def atualizar_entrega_pedido(request, pedido_id):
     endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
     endereco = f"{endereco_base}, {cidade} - {estado}" if cidade and estado and endereco_base else endereco_base
     common_fields = {
+        "tipo_coleta": Pedido.TipoColeta.ENTREGA,
         "rua": rua,
         "numero_endereco": numero,
         "bairro": bairro,
@@ -2348,6 +2391,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         "complemento",
         "lote_quadra",
         "ponto_referencia",
+        "tipo_coleta",
         "distancia_km",
         "valor_frete",
     ])

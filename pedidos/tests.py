@@ -478,6 +478,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(detail_response, "data-field=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-param=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-field=\"enviar_talheres\"")
+        self.assertContains(detail_response, "data-field=\"tipo_coleta\"")
         self.assertContains(detail_response, "data-field=\"observacao_geral\"")
         self.assertContains(detail_response, "data-open-delivery-editor")
         self.assertContains(detail_response, "data-delivery-editor-template")
@@ -545,6 +546,79 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro, Rio Verde - GO")
         self.assertEqual(pedido.valor_frete, Decimal("12.00"))
         self.assertEqual(pedido.complemento, "Casa")
+        self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.ENTREGA)
+
+    def test_manager_can_change_order_to_pickup_and_zero_delivery(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            rua="Rua Teste",
+            numero_endereco="100",
+            bairro="Centro",
+            latitude=Decimal("-17.7700000"),
+            longitude=Decimal("-50.9000000"),
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.SAIU_ENTREGA,
+            valor_frete=Decimal("12.00"),
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Prato",
+            preco_snapshot=Decimal("23.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "tipo_coleta", "value": Pedido.TipoColeta.RETIRADA},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.RETIRADA)
+        self.assertEqual(pedido.endereco, "Retirada no local")
+        self.assertEqual(pedido.valor_frete, Decimal("0.00"))
+        self.assertEqual(pedido.distancia_km, Decimal("0.00"))
+        self.assertIsNone(pedido.latitude)
+        self.assertIsNone(pedido.longitude)
+        self.assertEqual(pedido.status, Pedido.Status.FINALIZADO)
+        self.assertEqual(pedido.total, Decimal("23.00"))
+
+    def test_delivery_address_change_sets_order_to_delivery(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_ENTREGADOR,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entrega/",
+            {
+                "rua": "Rua Nova",
+                "numero": "55",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "endereco_formatado": "Rua Nova, 55 - Centro, Rio Verde - GO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.ENTREGA)
+        self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro, Rio Verde - GO")
 
     def test_manager_can_replace_order_items_and_recalculate_total(self):
         self.client.force_login(self.staff_user)

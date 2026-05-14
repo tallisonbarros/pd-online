@@ -5115,15 +5115,18 @@ fieldset.field {
 }
 
 .ops-brand {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-bottom: 18px;
     padding: 8px 8px 12px;
 }
 
 .ops-brand img {
-    width: 208px;
+    width: 96px;
     max-width: 100%;
-    filter: brightness(0) invert(1);
+    height: auto;
+    object-fit: contain;
 }
 
 .ops-nav {
@@ -6797,7 +6800,7 @@ fieldset.field {
 }
 
 .ops-shell--cozinha .ops-brand img {
-    width: 188px;
+    width: 96px;
     max-width: 100%;
     height: auto;
 }
@@ -8501,6 +8504,9 @@ fieldset.field {
 .ped-icon-edit:focus-visible {
     border-color: #c39f90;
     background: #f8f0ec;
+}
+.ped-modal-facts.is-pickup > div:has(.ped-address-row) {
+    display: none;
 }
 .ped-delivery-modal-form {
     display: grid;

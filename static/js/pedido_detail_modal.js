@@ -90,7 +90,7 @@
             confirmBackdrop.innerHTML = `
                 <div class="modal-card ped-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="ped-confirm-title">
                     <div class="modal-content ped-confirm-content">
-                        <strong id="ped-confirm-title">Confirmar cancelamento</strong>
+                        <strong id="ped-confirm-title">Confirmar</strong>
                         <p>${escapeHtml(message || "Deseja continuar?")}</p>
                         <div class="ped-confirm-actions">
                             <button type="button" class="ped-btn ped-btn-soft" data-confirm-cancel>Voltar</button>
@@ -220,7 +220,7 @@
         if (itemsEditorHost) itemsEditorHost.innerHTML = "";
     }
 
-    function openDeliveryEditor() {
+    function openDeliveryEditor(clearFields) {
         const template = content.querySelector("[data-delivery-editor-template]");
         if (!template || !deliveryEditorHost) return;
         deliveryEditorHost.innerHTML = "";
@@ -250,6 +250,9 @@
             }
         }
         setDeliveryEditorOpen(true);
+        if (clearFields) {
+            showDeliveryEditorForm(deliveryEditorHost, true);
+        }
     }
 
     function closeDeliveryEditor() {
@@ -266,6 +269,10 @@
         if (clearFields && form) {
             form.querySelectorAll("input").forEach((input) => {
                 if (input.name === "csrfmiddlewaretoken") {
+                    return;
+                }
+                if (input.name === "tipo_coleta") {
+                    input.value = "entrega";
                     return;
                 }
                 if (input.name === "cidade") {
@@ -386,6 +393,7 @@
                     return;
                 }
                 await openDetail({ dataset: { orderDetailUrl: currentDetailUrl } });
+                notifyOrdersChanged();
             }
         } catch (error) {
             if (content) {
@@ -430,7 +438,7 @@
             return;
         }
         if (event.target.closest("[data-open-delivery-editor]")) {
-            openDeliveryEditor();
+            openDeliveryEditor(false);
             return;
         }
         if (event.target.closest("[data-delivery-use-current]")) {
@@ -487,12 +495,24 @@
         const inlineForm = event.target.closest("[data-inline-edit-form]");
         if (inlineForm) {
             event.preventDefault();
+            const inlineValue = inlineForm.querySelector("[name='value']")?.value || "";
+            if (inlineForm.dataset.field === "tipo_coleta" && inlineValue === "entrega") {
+                openDeliveryEditor(true);
+                return;
+            }
+            if (
+                inlineForm.dataset.field === "tipo_coleta"
+                && inlineValue === "retirada"
+                && !(await confirmModal("Alterar este pedido para retirada? O frete sera zerado e o endereco virara Retirada no local."))
+            ) {
+                return;
+            }
             const formData = new URLSearchParams();
             const param = inlineForm.dataset.param || "value";
             if (param === "value") {
                 formData.set("field", inlineForm.dataset.field);
             }
-            formData.set(param, inlineForm.querySelector("[name='value']")?.value || "");
+            formData.set(param, inlineValue);
             submitAjaxForm(inlineForm, () => {
                 inlineForm.__body = formData.toString();
             });
