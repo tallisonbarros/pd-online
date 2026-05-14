@@ -5,5 +5,5 @@
         <span class="ped-action-badge {% if not aprovacao_count %}is-hidden{% endif %}" data-approval-badge>{{ aprovacao_count|default:0 }}</span>
     </a>
     <a class="ped-btn ped-btn-soft {% if pedidos_nav_active == 'concluidos' %}is-active{% endif %}" href="{% url 'pedidos:pedidos_concluidos_admin' %}">Concluídos</a>
-    <a class="ped-add-btn" href="{% url 'pedidos:cardapio' %}" target="_blank" rel="noopener noreferrer">+ Adicionar pedido</a>
+    <button class="ped-add-btn" type="button" data-new-order-url="{% url 'pedidos:pedido_novo_admin' %}">+ Adicionar pedido</button>
 </nav>

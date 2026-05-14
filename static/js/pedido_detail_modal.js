@@ -75,6 +75,37 @@
         }
     }
 
+    async function openCreateOrder(button) {
+        const url = button.dataset.newOrderUrl;
+        if (!url) return;
+        currentDetailUrl = "";
+        lastFocus = document.activeElement;
+        if (content) content.innerHTML = "";
+        if (loading) loading.classList.remove("hidden");
+        setOpen(true);
+
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                credentials: "same-origin",
+            });
+            if (!response.ok) throw new Error(`Falha ao carregar novo pedido (${response.status})`);
+            if (content) {
+                content.innerHTML = await response.text();
+                currentDetailUrl = content.querySelector("[data-current-detail-url]")?.dataset.currentDetailUrl || "";
+            }
+        } catch (error) {
+            if (content) {
+                content.innerHTML = '<div class="ped-modal-error">Não foi possível carregar o novo pedido.</div>';
+            }
+            console.error(error);
+        } finally {
+            if (loading) loading.classList.add("hidden");
+        }
+    }
+
     function closeDetail() {
         setOpen(false);
     }
@@ -308,7 +339,7 @@
         const payload = await response.json();
         select.innerHTML = (payload.items || []).map((item) => {
             const variations = encodeURIComponent(JSON.stringify(item.variacoes || []));
-            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(item.preco).replace(".", ",")}</option>`;
+            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(item.preco)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(item.preco).replace(".", ",")}</option>`;
         }).join("");
         select.dataset.loaded = "true";
         updateVariationSelect(form);
@@ -352,8 +383,10 @@
         row.dataset.variacao = variation;
         row.dataset.quantidade = String(qty);
         row.dataset.observacao = note;
+        row.dataset.preco = option.dataset.price || "0";
         row.innerHTML = `<span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span><button type="button" data-editor-remove-item>Remover</button>`;
         form.querySelector("[data-editor-items]")?.appendChild(row);
+        updateCreateOrderTotal(form);
     }
 
     function buildItemsPayload(form) {
@@ -384,6 +417,12 @@
                 credentials: "same-origin",
             });
             if (!response.ok) throw new Error(await response.text());
+            if (form.matches("[data-new-order-finalize-form]")) {
+                await response.json();
+                closeDetail();
+                notifyOrdersChanged();
+                return;
+            }
             if (currentDetailUrl) {
                 if (form.matches("[data-items-editor]")) closeItemsEditor();
                 if (form.matches("[data-delivery-editor]")) closeDeliveryEditor();
@@ -406,6 +445,13 @@
     }
 
     document.addEventListener("click", (event) => {
+        const createButton = event.target.closest("[data-new-order-url]");
+        if (createButton) {
+            event.preventDefault();
+            openCreateOrder(createButton);
+            return;
+        }
+
         const closeButton = event.target.closest("[data-close-pedido-detail-modal]");
         if (closeButton || event.target === modal) {
             closeDetail();
@@ -429,6 +475,7 @@
         const form = event.target.closest("[data-items-editor]");
         if (form && event.target.matches("[data-editor-catalog]")) {
             updateVariationSelect(form);
+            return;
         }
     });
 
@@ -465,6 +512,7 @@
         }
         const removeButton = event.target.closest("[data-editor-remove-item]");
         if (removeButton) {
+            const form = removeButton.closest("[data-items-editor]");
             removeButton.closest("[data-editor-row]")?.remove();
         }
     });
@@ -522,6 +570,12 @@
         if (couponForm) {
             event.preventDefault();
             submitAjaxForm(couponForm);
+            return;
+        }
+        const newOrderFinalizeForm = event.target.closest("[data-new-order-finalize-form]");
+        if (newOrderFinalizeForm) {
+            event.preventDefault();
+            submitAjaxForm(newOrderFinalizeForm);
             return;
         }
         const simpleForm = event.target.closest("[data-delivery-editor]");

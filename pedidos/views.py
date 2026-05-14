@@ -1842,7 +1842,7 @@ def api_order_heatmap(request):
     period = request.GET.get("period", "7d")
     start_date, end_date = _heatmap_period_window(period)
 
-    queryset = Pedido.objects.exclude(status=Pedido.Status.CANCELADO).filter(
+    queryset = Pedido.objects.exclude(status__in=[Pedido.Status.CANCELADO, Pedido.Status.RASCUNHO]).filter(
         latitude__isnull=False,
         longitude__isnull=False,
     )
@@ -1982,7 +1982,7 @@ def api_cozinha_operacao(request):
 def pedidos_admin(request):
     base = Pedido.objects.prefetch_related("itens")
     pedidos_ativos = base.exclude(
-        status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+        status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
     ).order_by("-criado_em", "-id")[:20]
     return render(
         request,
@@ -1991,7 +1991,7 @@ def pedidos_admin(request):
             "pedidos_ativos": pedidos_ativos,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "pedidos_badge": base.exclude(
-                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+                status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
         },
     )
@@ -2007,7 +2007,7 @@ def pedidos_aprovacao_admin(request):
             "pedidos_aprovacao": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20],
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "pedidos_badge": base.exclude(
-                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+                status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
         },
     )
@@ -2026,7 +2026,7 @@ def pedidos_concluidos_admin(request):
             "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
             "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),
             "pedidos_badge": base.exclude(
-                status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+                status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
         },
     )
@@ -2087,7 +2087,7 @@ def _pedidos_base_counts(base):
     return {
         "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
         "pedidos_badge": base.exclude(
-            status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+            status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
         ).count(),
     }
 
@@ -2095,7 +2095,7 @@ def _pedidos_base_counts(base):
 def _pedidos_admin_payload():
     base = Pedido.objects.prefetch_related("itens")
     pedidos = base.exclude(
-        status__in=[Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+        status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
     ).order_by("-criado_em", "-id")[:20]
     return {
         "pedidos": [_pedido_admin_summary(pedido) for pedido in pedidos],
@@ -2158,6 +2158,13 @@ def api_pedido_copias(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def pedido_detalhe_admin(request, pedido_id):
     pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
+    context = _pedido_detail_context(request, pedido, is_new_order=pedido.status == Pedido.Status.RASCUNHO)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return render(request, "pedidos/_pedido_detail_modal_content.html", context)
+    return render(request, "pedidos/pedido_detalhe_admin.html", context)
+
+
+def _pedido_detail_context(request, pedido, *, is_new_order=False):
     itens_subtotal = pedido.itens.aggregate(total=Sum("subtotal")).get("total") or Decimal("0.00")
     frete_esperado, faixa_frete_atual = _calcular_frete_por_distancia(pedido.distancia_km)
     total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
@@ -2166,7 +2173,7 @@ def pedido_detalhe_admin(request, pedido_id):
     context = {
         "active": "pedidos",
         "pedidos_badge": Pedido.objects.exclude(
-            status__in=[Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+            status__in=[Pedido.Status.RASCUNHO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
         ).count(),
         "pedido": pedido,
         "itens_subtotal": itens_subtotal,
@@ -2179,10 +2186,60 @@ def pedido_detalhe_admin(request, pedido_id):
         "can_edit_payment": _user_can_manage_order_payment(request.user),
         "payment_choices": Pedido.FormaPagamento.choices,
         "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
+        "is_new_order": is_new_order,
     }
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return render(request, "pedidos/_pedido_detail_modal_content.html", context)
-    return render(request, "pedidos/pedido_detalhe_admin.html", context)
+    return context
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def pedido_novo_admin(request):
+    pedido = Pedido.objects.create(
+        nome_cliente="Cliente",
+        telefone="",
+        rua="",
+        numero_endereco="",
+        bairro="",
+        cidade="Rio Verde",
+        estado="GO",
+        endereco_formatado="Retirada no local",
+        endereco="Retirada no local",
+        tipo_coleta=Pedido.TipoColeta.RETIRADA,
+        forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+        enviar_talheres=True,
+        status=Pedido.Status.RASCUNHO,
+        valor_frete=Decimal("0.00"),
+        distancia_km=Decimal("0.00"),
+    )
+    context = _pedido_detail_context(request, pedido, is_new_order=True)
+    return render(request, "pedidos/_pedido_detail_modal_content.html", context)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def finalizar_pedido_novo_admin(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para criar pedido.")
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id, status=Pedido.Status.RASCUNHO)
+    if not pedido.itens.exists():
+        return HttpResponseBadRequest("Adicione pelo menos um item.")
+    if pedido.tipo_coleta == Pedido.TipoColeta.ENTREGA and not _safe_text(pedido.endereco):
+        return HttpResponseBadRequest("Informe o endereco de entrega.")
+    try:
+        recalculate_order_totals(pedido, cupom_codigo=pedido.cupom_codigo)
+    except ValueError as exc:
+        transaction.set_rollback(True)
+        return HttpResponseBadRequest(str(exc))
+    pedido.status = Pedido.Status.EM_PREPARO
+    pedido.save(update_fields=["status"])
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": pedido.id,
+            "detail_url": reverse("pedidos:pedido_detalhe_admin", args=[pedido.id]),
+        }
+    )
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -2226,8 +2283,6 @@ def atualizar_cupom_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_catalogo_editor_pedido(request):
-    if not _user_can_manage_order_payment(request.user):
-        return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
     return JsonResponse(serialize_editor_catalog())
 
 
@@ -2574,7 +2629,7 @@ def ajustes_admin(request):
             "active": "ajustes",
             "ajustes_aba": ajustes_aba,
             "pedidos_badge": Pedido.objects.exclude(
-                status__in=[Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+                status__in=[Pedido.Status.RASCUNHO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
             "origem": origem,
             "origem_resolution": origem_resolution,

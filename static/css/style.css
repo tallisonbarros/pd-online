@@ -7653,10 +7653,14 @@ fieldset.field {
 .ped-add-btn {
     background: #4e342e;
     color: #fffdfa;
+    border: 0;
     border-radius: 14px;
     padding: 10px 14px;
+    font-family: inherit;
     font-weight: 800;
     font-size: 14px;
+    text-decoration: none;
+    cursor: pointer;
     box-shadow: 0 10px 22px rgba(34, 19, 17, 0.16);
 }
 .ped-action-btn {
@@ -8146,6 +8150,11 @@ fieldset.field {
     font-size: 30px;
     line-height: 1.05;
 }
+.ped-new-finalize-form {
+    display: flex;
+    justify-content: flex-end;
+    margin: 14px 38px 0 0;
+}
 .ped-items-editor-form {
     display: grid;
     gap: 14px;
@@ -8470,6 +8479,17 @@ fieldset.field {
 .ped-modal-observation {
     margin-top: 12px;
 }
+.ped-modal-side-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: stretch;
+    margin-top: 12px;
+}
+.ped-modal-side-row .ped-modal-observation,
+.ped-modal-side-row .ped-modal-coupon {
+    margin-top: 0;
+}
 .ped-modal-route {
     margin-top: 12px;
     width: 100%;
@@ -8572,7 +8592,7 @@ fieldset.field {
 .ped-coupon-box {
     display: grid;
     gap: 10px;
-    margin-top: 12px;
+    margin-top: 0;
     border: 1px solid #efe4de;
     border-radius: 14px;
     background: #fffdfa;
@@ -8630,6 +8650,9 @@ fieldset.field {
     .pedidos-content-panel {
         min-height: 0;
     }
+    .ped-modal-grid--create {
+        grid-template-columns: 1fr;
+    }
     .ped-route-nav {
         justify-content: flex-start;
         gap: 10px;
@@ -8680,6 +8703,7 @@ fieldset.field {
         text-align: left;
     }
     .ped-modal-grid,
+    .ped-modal-side-row,
     .ped-modal-audit-list {
         grid-template-columns: 1fr;
     }
@@ -9719,4 +9743,8 @@ fieldset.field {
     margin: auto;
     object-fit: cover;
     object-position: center center;
+}
+
+[data-page="cardapio"] {
+    padding-bottom: 220px;
 }

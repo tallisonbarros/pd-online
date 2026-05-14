@@ -1,8 +1,8 @@
-<div class="ped-modal-head">
+<div class="ped-modal-head" data-current-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}">
     <div>
         <div class="ped-modal-kicker-row">
-            <span class="ped-modal-kicker">Pedido #{{ pedido.numero }}</span>
-            {% if pedido.status != "cancelado" and pedido.status != "finalizado" %}
+            <span class="ped-modal-kicker">{% if is_new_order %}Novo pedido{% else %}Pedido #{{ pedido.numero }}{% endif %}</span>
+            {% if not is_new_order and pedido.status != "cancelado" and pedido.status != "finalizado" %}
                 <form class="ped-modal-status-form" method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}" data-modal-status-form data-confirm="Tem certeza que deseja cancelar este pedido?">
                     {% csrf_token %}
                     <input type="hidden" name="status" value="cancelado">
@@ -360,6 +360,39 @@
     </section>
 </div>
 
+<div class="ped-modal-side-row">
+    <section class="ped-modal-section ped-modal-coupon">
+        <div class="ped-modal-section-head">
+            <h3>Cupom</h3>
+        </div>
+        <div class="ped-coupon-box">
+            <div>
+                <span>Cupom</span>
+                <strong>
+                    {% if pedido.cupom_codigo %}
+                        {{ pedido.cupom_codigo }} - R$ {{ pedido.cupom_desconto|floatformat:2 }}
+                    {% else %}
+                        Nenhum cupom aplicado
+                    {% endif %}
+                </strong>
+            </div>
+            {% if can_edit_payment %}
+                <form class="ped-coupon-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
+                    {% csrf_token %}
+                    <input type="text" name="cupom_codigo" value="{{ pedido.cupom_codigo }}" placeholder="Codigo do cupom" aria-label="Codigo do cupom">
+                    <button class="ped-btn ped-btn-primary" type="submit">Aplicar</button>
+                </form>
+                {% if pedido.cupom_codigo %}
+                    <form class="ped-coupon-remove-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
+                        {% csrf_token %}
+                        <input type="hidden" name="cupom_codigo" value="">
+                        <button class="ped-modal-cancel-link" type="submit">Remover cupom</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
+    </section>
+
 <section class="ped-modal-section ped-modal-observation">
     <div class="ped-modal-section-head">
         <h3>Observação geral</h3>
@@ -377,6 +410,7 @@
         <p>{{ pedido.observacao_geral|default:"Sem observação." }}</p>
     {% endif %}
 </section>
+</div>
 
 <section class="ped-modal-section ped-modal-audit">
     <div class="ped-modal-audit-head">
@@ -384,32 +418,6 @@
         <span class="ped-audit-badge {% if frete_confere and total_confere %}is-ok{% else %}is-warn{% endif %}">
             {% if frete_confere and total_confere %}Conferido{% else %}Revisar{% endif %}
         </span>
-    </div>
-    <div class="ped-coupon-box">
-        <div>
-            <span>Cupom</span>
-            <strong>
-                {% if pedido.cupom_codigo %}
-                    {{ pedido.cupom_codigo }} - R$ {{ pedido.cupom_desconto|floatformat:2 }}
-                {% else %}
-                    Nenhum cupom aplicado
-                {% endif %}
-            </strong>
-        </div>
-        {% if can_edit_payment %}
-            <form class="ped-coupon-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
-                {% csrf_token %}
-                <input type="text" name="cupom_codigo" value="{{ pedido.cupom_codigo }}" placeholder="Codigo do cupom" aria-label="Codigo do cupom">
-                <button class="ped-btn ped-btn-primary" type="submit">Aplicar</button>
-            </form>
-            {% if pedido.cupom_codigo %}
-                <form class="ped-coupon-remove-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
-                    {% csrf_token %}
-                    <input type="hidden" name="cupom_codigo" value="">
-                    <button class="ped-modal-cancel-link" type="submit">Remover cupom</button>
-                </form>
-            {% endif %}
-        {% endif %}
     </div>
     <dl class="ped-modal-audit-list">
         <div><dt>Subtotal</dt><dd>R$ {{ itens_subtotal|floatformat:2 }}</dd></div>
@@ -423,4 +431,11 @@
         <div><dt>Total</dt><dd>R$ {{ pedido.total|floatformat:2 }}</dd></div>
     </dl>
 </section>
+
+{% if is_new_order %}
+    <form class="ped-new-finalize-form" method="post" action="{% url 'pedidos:finalizar_pedido_novo_admin' pedido.id %}" data-new-order-finalize-form>
+        {% csrf_token %}
+        <button class="ped-btn ped-btn-primary" type="submit">Finalizar e salvar novo pedido</button>
+    </form>
+{% endif %}
 

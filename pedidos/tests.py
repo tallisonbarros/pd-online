@@ -13,6 +13,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .order_services import create_order_items_from_payload
 from .utils import build_google_maps_route_url
 from .views import _calcular_frete_por_distancia
 
@@ -737,17 +738,65 @@ class PedidoDetalheAdminTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_editor_catalog_requires_manager(self):
+    def test_staff_can_load_editor_catalog(self):
         self.client.force_login(self.staff_user)
-        response = self.client.get("/controle/api/catalogo-editor/")
-        self.assertEqual(response.status_code, 400)
-
-        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
-        self.staff_user.groups.add(gerente_group)
         Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+
         response = self.client.get("/controle/api/catalogo-editor/")
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"][0]["nome"], "Carreteiro")
+
+    def test_new_order_modal_uses_detail_modal_context(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+
+        response = self.client.get(
+            "/controle/pedidos/novo/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-new-order-finalize-form")
+        self.assertContains(response, "data-items-editor")
+        self.assertContains(response, "/controle/api/catalogo-editor/")
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.status, Pedido.Status.RASCUNHO)
+
+    def test_manager_can_finalize_new_order_from_detail_modal_context(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Balcao",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            endereco_formatado="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.RASCUNHO,
+        )
+        create_order_items_from_payload(
+            pedido,
+            [
+                {"tipo": "prato", "item_id": prato.id, "quantidade": 2},
+            ],
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/finalizar-novo/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.nome_cliente, "Cliente Balcao")
+        self.assertEqual(pedido.status, Pedido.Status.EM_PREPARO)
+        self.assertIsNotNone(pedido.producao_iniciada_em)
+        self.assertEqual(pedido.total, Decimal("50.00"))
+        self.assertEqual(response.json()["detail_url"], f"/controle/pedidos/{pedido.id}/")
 
     def test_completed_orders_admin_shows_closed_orders(self):
         self.client.force_login(self.staff_user)

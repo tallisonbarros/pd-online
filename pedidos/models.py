@@ -76,6 +76,7 @@ class Pedido(models.Model):
         RETIRADA = "retirada", "Retirada"
 
     class Status(models.TextChoices):
+        RASCUNHO = "rascunho", "Rascunho"
         AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovação"
         NOVO = "novo", "Novo"
         EM_PREPARO = "em_preparo", "Em preparo"
