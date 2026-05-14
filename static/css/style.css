@@ -837,6 +837,15 @@ textarea {
     transition: width 260ms ease;
 }
 
+.meal-promo-auto-note {
+    display: block;
+    color: rgba(107, 84, 74, 0.78);
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: right;
+}
+
 .meal-promo-progress.is-applied .meal-promo-progress-head strong,
 .cart-promo-progress.is-applied .meal-promo-progress-head strong {
     color: #2f7b57;
@@ -2464,6 +2473,11 @@ body.modal-open {
     color: #8b6b60;
     font-size: 0.66rem;
     line-height: 1.2;
+}
+
+.cart-promo-progress .meal-promo-auto-note {
+    margin-top: -2px;
+    font-size: 0.6rem;
 }
 
 .cart-coupon-inline input {
