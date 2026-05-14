@@ -888,11 +888,17 @@ textarea {
 
 [data-page="cardapio"] .bebidas-grid .dish-media {
     aspect-ratio: 1 / 0.62;
+    display: block;
+    width: 100%;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-media img {
-    object-fit: contain;
-    padding: 6px 5px;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    object-fit: cover;
+    object-position: center center;
 }
 
 [data-page="cardapio"] .bebidas-grid .dish-top-badges {
