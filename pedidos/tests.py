@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
@@ -313,6 +313,15 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(pedido["cupom"]["id"], self.cupom.id)
         self.assertEqual(pedido["cupom"]["codigo"], "API10")
 
+    def test_authenticated_detail_can_lookup_by_public_token(self):
+        response = self.client.get(
+            f"/api/pedidos/token/{self.pedido.public_token}/",
+            HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["pedido"]["id"], self.pedido.id)
+
     def test_includes_order_items(self):
         response = self.client.get(f"/api/pedidos/{self.pedido.id}/", HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}")
 
@@ -340,6 +349,107 @@ class PedidosReadOnlyApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+
+    def test_print_queue_requires_api_key(self):
+        response = self.client.get("/api/lista-impressao/")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"], "invalid_api_key")
+
+    def test_print_queue_returns_order_entries_in_insertion_order(self):
+        PedidoListaImpressao.objects.all().delete()
+        first = Pedido.objects.create(
+            nome_cliente="Primeiro",
+            telefone="64911110000",
+            endereco="Rua 1",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("20.00"),
+        )
+        second = Pedido.objects.create(
+            nome_cliente="Segundo",
+            telefone="64922220000",
+            endereco="Rua 2",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("25.00"),
+        )
+        first.status = Pedido.Status.EM_PREPARO
+        first.save(update_fields=["status"])
+        second.status = Pedido.Status.EM_PREPARO
+        second.save(update_fields=["status"])
+
+        response = self.client.get("/api/lista-impressao/", HTTP_X_API_KEY=self.raw_api_key)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual([item["nome_cliente"] for item in payload["itens"]], ["Primeiro", "Segundo"])
+        self.assertEqual(payload["itens"][0]["public_token"], first.public_token)
+
+    def test_print_queue_supports_cursor_and_limit(self):
+        PedidoListaImpressao.objects.all().delete()
+        first = PedidoListaImpressao.objects.create(
+            pedido=self.pedido,
+            numero=self.pedido.numero,
+            nome_cliente="Primeiro cursor",
+            public_token=self.pedido.public_token,
+        )
+        second = PedidoListaImpressao.objects.create(
+            pedido=self.pedido,
+            numero=self.pedido.numero,
+            nome_cliente="Segundo cursor",
+            public_token=self.pedido.public_token,
+        )
+
+        response = self.client.get(
+            f"/api/lista-impressao/?desde_id={first.id}&limit=1",
+            HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}",
+        )
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["itens"][0]["id"], second.id)
+
+    def test_entering_production_registers_print_queue_without_duplicate_on_same_status(self):
+        PedidoListaImpressao.objects.all().delete()
+        pedido = Pedido.objects.create(
+            nome_cliente="Fila Producao",
+            telefone="64933330000",
+            endereco="Rua Fila",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("22.00"),
+        )
+
+        pedido.status = Pedido.Status.EM_PREPARO
+        pedido.save(update_fields=["status"])
+        pedido.observacao_geral = "Atualizacao sem trocar status"
+        pedido.save(update_fields=["observacao_geral"])
+
+        entry = PedidoListaImpressao.objects.get()
+        self.assertEqual(entry.nome_cliente, "Fila Producao")
+        self.assertEqual(entry.public_token, pedido.public_token)
+
+    def test_returning_to_production_registers_new_print_queue_history_entry(self):
+        PedidoListaImpressao.objects.all().delete()
+        pedido = Pedido.objects.create(
+            nome_cliente="Fila Historico",
+            telefone="64944440000",
+            endereco="Rua Historico",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("22.00"),
+        )
+
+        pedido.status = Pedido.Status.EM_PREPARO
+        pedido.save(update_fields=["status"])
+        pedido.status = Pedido.Status.NOVO
+        pedido.save(update_fields=["status"])
+        pedido.status = Pedido.Status.EM_PREPARO
+        pedido.save(update_fields=["status"])
+
+        self.assertEqual(PedidoListaImpressao.objects.filter(pedido=pedido).count(), 2)
 
 
 class PublicFlowCacheTests(TestCase):
@@ -1483,6 +1593,26 @@ class AjustesAdminTests(TestCase):
         self.assertContains(response, "GET /api/pedidos/&lt;id&gt;/")
         self.assertContains(response, "Authorization: Bearer SUA_CHAVE")
         self.assertContains(response, "?status=em_preparo")
+
+    def test_print_queue_tab_displays_history_and_endpoint(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Impressao",
+            telefone="64955550000",
+            endereco="Rua Impressao",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("20.00"),
+        )
+
+        response = self.client.get("/controle/ajustes/?aba=lista_impressao")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Historico da lista de impressao")
+        self.assertContains(response, "GET /api/lista-impressao/")
+        self.assertContains(response, "GET /api/pedidos/token/&lt;public_token&gt;/")
+        self.assertContains(response, "Cliente Impressao")
+        self.assertContains(response, pedido.public_token)
 
     def test_manager_can_create_and_delete_api_key_from_settings(self):
         gerente_group, _created = Group.objects.get_or_create(name="Gerente")

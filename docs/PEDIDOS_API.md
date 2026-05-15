@@ -69,6 +69,56 @@ Internamente, o sistema armazena somente o hash SHA-256 da chave. A chave comple
 
 ## Endpoints
 
+### Lista de Impressão
+
+```http
+GET /api/lista-impressao/
+Authorization: Bearer SUA_CHAVE
+```
+
+Retorna o histórico da lista de impressão, na ordem em que os pedidos entraram em produção.
+
+Cada registro leva o nome do cliente e o token público do pedido. O campo `id` funciona como cursor para o consumidor não reler itens já processados.
+
+Resposta:
+
+```json
+{
+  "count": 2,
+  "itens": [
+    {
+      "id": 10,
+      "nome_cliente": "Maria",
+      "public_token": "token-do-pedido",
+      "criado_em": "2026-05-15T12:00:00Z"
+    },
+    {
+      "id": 11,
+      "nome_cliente": "Joao",
+      "public_token": "outro-token",
+      "criado_em": "2026-05-15T12:05:00Z"
+    }
+  ]
+}
+```
+
+Filtros opcionais:
+
+| Query string | Exemplo | Descrição |
+| --- | --- | --- |
+| `desde_id` | `/api/lista-impressao/?desde_id=10` | Retorna apenas registros com `id` maior que o informado. |
+| `limit` | `/api/lista-impressao/?limit=50` | Limita a quantidade retornada. Valor padrão: `100`. Máximo: `500`. |
+
+Fluxo recomendado para o agente de impressão:
+
+1. Consultar `GET /api/lista-impressao/?desde_id=<ultimo_id_processado>`.
+2. Ler cada item em ordem.
+3. Usar `public_token` em `GET /api/pedidos/token/<public_token>/`.
+4. Imprimir no app consumidor.
+5. Guardar o maior `id` processado localmente no consumidor.
+
+Um pedido é registrado nessa lista sempre que entra em produção (`status = em_preparo`). Se o pedido sair de produção e entrar novamente, um novo registro é criado para preservar o histórico da fila.
+
 ### Listar Pedidos
 
 ```http
@@ -181,6 +231,33 @@ Resposta:
     "id": 1,
     "numero": 2240,
     "nome_cliente": "Cliente API",
+    "itens": []
+  }
+}
+```
+
+Se o pedido não existir, retorna `404`.
+
+### Detalhar Pedido Por Token
+
+```http
+GET /api/pedidos/token/<public_token>/
+Authorization: Bearer SUA_CHAVE
+```
+
+Retorna um pedido específico pelo `public_token`, com o mesmo formato do detalhe por ID.
+
+Esse endpoint existe para integração com a lista de impressão, que expõe o token do pedido para o app consumidor buscar os dados completos antes de imprimir.
+
+Resposta:
+
+```json
+{
+  "pedido": {
+    "id": 1,
+    "numero": 2240,
+    "nome_cliente": "Cliente API",
+    "public_token": "token-do-pedido",
     "itens": []
   }
 }
@@ -327,6 +404,8 @@ Consulte a API enviando a chave:
 ```text
 http://127.0.0.1:8000/api/pedidos/
 http://127.0.0.1:8000/api/pedidos/1/
+http://127.0.0.1:8000/api/pedidos/token/TOKEN_DO_PEDIDO/
+http://127.0.0.1:8000/api/lista-impressao/
 ```
 
 Rode os testes:

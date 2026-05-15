@@ -24,6 +24,7 @@
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
             <a class="ajustes-tab {% if ajustes_aba == 'api' %}is-active{% endif %}" {% if ajustes_aba == 'api' %}aria-current="page"{% endif %} href="?aba=api">API</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'lista_impressao' %}is-active{% endif %}" {% if ajustes_aba == 'lista_impressao' %}aria-current="page"{% endif %} href="?aba=lista_impressao">Lista de Impressao</a>
             <a class="ajustes-tab {% if ajustes_aba == 'usuarios' %}is-active{% endif %}" {% if ajustes_aba == 'usuarios' %}aria-current="page"{% endif %} href="?aba=usuarios">Usuários</a>
         </section>
 
@@ -584,6 +585,65 @@
 
                     <div class="ajustes-note">
                         <p>A listagem retorna <code>count</code> e <code>pedidos</code>. Cada pedido ja inclui dados do pedido, dados derivados, cupom relacionado e itens aninhados.</p>
+                    </div>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'lista_impressao' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Fila</p>
+                            <h2>Historico da lista de impressao</h2>
+                        </div>
+                    </header>
+
+                    <div class="ped-detail-audit-list">
+                        <div>
+                            <dt>Endpoint</dt>
+                            <dd>GET {% url 'pedidos:api_lista_impressao' %}</dd>
+                        </div>
+                        <div>
+                            <dt>Consulta do pedido</dt>
+                            <dd>GET /api/pedidos/token/&lt;public_token&gt;/</dd>
+                        </div>
+                        <div>
+                            <dt>Ordem</dt>
+                            <dd>Os registros sao mantidos na ordem em que os pedidos entraram em producao.</dd>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Ultimos registros</p>
+                            <h2>Pedidos enviados para a lista</h2>
+                        </div>
+                    </header>
+
+                    <div class="clientes-table">
+                        <div class="clientes-table-row clientes-table-head">
+                            <span>ID</span>
+                            <span>Pedido</span>
+                            <span>Nome</span>
+                            <span>Token</span>
+                            <span>Entrada</span>
+                        </div>
+                        {% for item in lista_impressao_rows %}
+                            <div class="clientes-table-row">
+                                <strong>{{ item.id }}</strong>
+                                <span>#{% if item.numero %}{{ item.numero }}{% else %}{{ item.pedido_id }}{% endif %}</span>
+                                <span>{{ item.nome_cliente }}</span>
+                                <code>{{ item.public_token }}</code>
+                                <span>{{ item.criado_em|date:"d/m/Y H:i" }}</span>
+                            </div>
+                        {% empty %}
+                            <div class="empty-state">
+                                <h2>Nenhum pedido enviado para a lista.</h2>
+                                <p>Pedidos aparecem aqui automaticamente quando entram em producao.</p>
+                            </div>
+                        {% endfor %}
                     </div>
                 </article>
             </section>

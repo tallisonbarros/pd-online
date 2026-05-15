@@ -206,8 +206,9 @@ class Pedido(models.Model):
         if self.pk:
             old_status = Pedido.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
+        entering_production = self.status == self.Status.EM_PREPARO and old_status != self.Status.EM_PREPARO
         production_start_changed = False
-        if self.status == self.Status.EM_PREPARO and old_status != self.Status.EM_PREPARO and not self.producao_iniciada_em:
+        if entering_production and not self.producao_iniciada_em:
             self.producao_iniciada_em = timezone.now()
             production_start_changed = True
         update_fields = kwargs.get("update_fields")
@@ -228,6 +229,13 @@ class Pedido(models.Model):
         if not self.public_token:
             self.public_token = secrets.token_urlsafe(24)
         super().save(*args, **kwargs)
+        if entering_production:
+            PedidoListaImpressao.objects.create(
+                pedido=self,
+                numero=self.numero,
+                nome_cliente=self.nome_cliente,
+                public_token=self.public_token,
+            )
 
 
 class ItemPedido(models.Model):
@@ -353,6 +361,22 @@ class PedidoApiKey(models.Model):
         if not raw_key:
             return None
         return cls.objects.filter(chave_hash=cls.hash_key(raw_key)).first()
+
+
+class PedidoListaImpressao(models.Model):
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="lista_impressao")
+    numero = models.PositiveIntegerField(blank=True, null=True)
+    nome_cliente = models.CharField(max_length=120)
+    public_token = models.CharField(max_length=64, db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["criado_em", "id"]
+        verbose_name = "Item da lista de impressao"
+        verbose_name_plural = "Lista de impressao"
+
+    def __str__(self):
+        return f"Pedido #{self.numero or self.pedido_id} - {self.nome_cliente}"
 
 
 class Cupom(models.Model):

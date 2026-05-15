@@ -27,7 +27,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -871,6 +871,10 @@ def _serialize_pedido_api_keys():
     return PedidoApiKey.objects.select_related("criado_por").order_by("-criado_em")
 
 
+def _serialize_lista_impressao_admin():
+    return PedidoListaImpressao.objects.select_related("pedido").order_by("-criado_em", "-id")[:100]
+
+
 def _require_superuser_for_user_admin(request):
     if not request.user.is_superuser:
         raise PermissionError("Somente superusuarios podem administrar usuarios e classes.")
@@ -1636,10 +1640,23 @@ def _require_pedidos_api_key(request):
     return api_key
 
 
+def _invalid_api_key_response():
+    return JsonResponse({"ok": False, "error": "invalid_api_key"}, status=401)
+
+
+def _serialize_print_queue_item(item):
+    return {
+        "id": item.id,
+        "nome_cliente": item.nome_cliente,
+        "public_token": item.public_token,
+        "criado_em": item.criado_em,
+    }
+
+
 @require_GET
 def api_pedidos(request):
     if not _require_pedidos_api_key(request):
-        return JsonResponse({"ok": False, "error": "invalid_api_key"}, status=401)
+        return _invalid_api_key_response()
     pedidos = _pedidos_api_queryset(request.GET)
     return JsonResponse(
         {
@@ -1652,12 +1669,46 @@ def api_pedidos(request):
 @require_GET
 def api_pedido_detalhe(request, pedido_id):
     if not _require_pedidos_api_key(request):
-        return JsonResponse({"ok": False, "error": "invalid_api_key"}, status=401)
+        return _invalid_api_key_response()
     pedido = get_object_or_404(
         Pedido.objects.select_related("cupom").prefetch_related("itens"),
         id=pedido_id,
     )
     return JsonResponse({"pedido": serialize_pedido_api(pedido)})
+
+
+@require_GET
+def api_pedido_detalhe_token(request, public_token):
+    if not _require_pedidos_api_key(request):
+        return _invalid_api_key_response()
+    pedido = get_object_or_404(
+        Pedido.objects.select_related("cupom").prefetch_related("itens"),
+        public_token=public_token,
+    )
+    return JsonResponse({"pedido": serialize_pedido_api(pedido)})
+
+
+@require_GET
+def api_lista_impressao(request):
+    if not _require_pedidos_api_key(request):
+        return _invalid_api_key_response()
+    itens = PedidoListaImpressao.objects.all()
+
+    desde_id = _safe_text(request.GET.get("desde_id"))
+    if desde_id:
+        try:
+            itens = itens.filter(id__gt=int(desde_id))
+        except (TypeError, ValueError):
+            itens = itens.none()
+
+    try:
+        limit = min(max(int(request.GET.get("limit", 100)), 1), 500)
+    except (TypeError, ValueError):
+        limit = 100
+
+    itens = itens.order_by("criado_em", "id")[:limit]
+    data = [_serialize_print_queue_item(item) for item in itens]
+    return JsonResponse({"count": len(data), "itens": data})
 
 
 def _dashboard_periodo(period):
@@ -2685,7 +2736,7 @@ def atualizar_entrega_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api", "lista_impressao"}:
         ajustes_aba = "geral"
 
     _ensure_default_user_groups()
@@ -2901,6 +2952,7 @@ def ajustes_admin(request):
             "can_manage_users": request.user.is_superuser,
             "pedido_api_keys": _serialize_pedido_api_keys(),
             "can_manage_api_keys": _user_can_manage_order_payment(request.user),
+            "lista_impressao_rows": _serialize_lista_impressao_admin(),
         },
     )
 
