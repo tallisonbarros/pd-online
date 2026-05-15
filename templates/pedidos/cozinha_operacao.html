@@ -15,6 +15,9 @@
             </article>
 
             <article class="coz-live-clock">
+                <button class="coz-fullscreen-toggle" type="button" data-cozinha-fullscreen-toggle aria-label="Expandir cozinha para tela cheia" aria-pressed="false">
+                    <span aria-hidden="true"></span>
+                </button>
                 <p id="coz-dia">{{ weekday_label }}, {{ date_label }}</p>
                 <strong id="coz-hora">--:--:--</strong>
             </article>
@@ -31,21 +34,20 @@
                     <div class="coz-live-orders-grid">
                         {% for pedido in pedidos_cards %}
                             <article class="coz-prod-card">
-                                <div class="coz-prod-top">
-                                    <div class="coz-prod-title-wrap">
-                                        <div class="coz-prod-icon" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                                <div class="ped-card-top coz-prod-card-head">
+                                    <div class="ped-client">
+                                        <div class="ped-icon" aria-hidden="true">
+                                            <img src="{{ pedido.icone_url }}" alt="">
                                         </div>
-                                        <h3>{{ pedido.cliente }}</h3>
+                                        <div>
+                                            <h2>{{ pedido.cliente }} <span>#{{ pedido.pedido_numero }}</span></h2>
+                                            <p class="ped-time">{{ pedido.criado_em }}</p>
+                                        </div>
                                     </div>
-                                    <div class="coz-prod-pratos">
-                                        <span>Pratos</span>
-                                        <strong>{{ pedido.pratos_total }}</strong>
-                                    </div>
+
                                 </div>
                                 <div class="coz-prod-priority-head">
                                     <span>Prioridade</span>
-                                    <strong>{{ pedido.elapsed_min }} min</strong>
                                 </div>
                                 <div class="coz-prod-priority-track">
                                     <i class="is-active"></i><i></i><i></i><i></i><i></i><i></i>
@@ -54,7 +56,11 @@
                                     <span>10m</span><span>20m</span><span>30m</span><span>40m</span><span>50m</span><span>60m</span>
                                 </div>
                                 <p class="coz-prod-stage">Estágio atual: {{ pedido.elapsed_min }}m</p>
-                                <p class="coz-prod-number">#{{ pedido.pedido_numero }}</p>
+                                <ul class="ped-item-list coz-prod-item-list coz-prod-item-list--stage" data-auto-scroll-list>
+                                    {% for item_line in pedido.item_lines %}
+                                        <li>{{ item_line }}</li>
+                                    {% endfor %}
+                                </ul>
                             </article>
                         {% endfor %}
                     </div>

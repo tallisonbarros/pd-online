@@ -7452,6 +7452,49 @@ fieldset.field {
     text-align: center;
     padding: 10px 18px;
     overflow: hidden;
+    position: relative;
+}
+
+.coz-fullscreen-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid #dfd3cc;
+    background: #f8f2ef;
+    color: #4e342e;
+    cursor: pointer;
+}
+
+.coz-fullscreen-toggle span,
+.coz-fullscreen-toggle span::before,
+.coz-fullscreen-toggle span::after {
+    position: absolute;
+    inset: 9px;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+    content: "";
+}
+
+.coz-fullscreen-toggle span::before,
+.coz-fullscreen-toggle span::after {
+    inset: 3px;
+    border-width: 0;
+    background: currentColor;
+}
+
+.coz-fullscreen-toggle span::before {
+    height: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.coz-fullscreen-toggle span::after {
+    width: 2px;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .coz-live-clock p {
@@ -7513,8 +7556,9 @@ fieldset.field {
 
 .coz-live-orders-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+    align-items: start;
 }
 
 .coz-prod-card {
@@ -7523,6 +7567,56 @@ fieldset.field {
     background: #fffdfa;
     box-shadow: 0 14px 34px rgba(34, 19, 17, 0.08);
     padding: 20px;
+}
+
+.coz-prod-card-head {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.coz-prod-card-head .ped-client {
+    min-width: 0;
+}
+
+.coz-prod-card-head .ped-client h2 {
+    margin-top: 0;
+    font-size: clamp(21px, 1.6vw, 32px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.coz-prod-card-head .ped-time {
+    font-size: 12px;
+}
+
+.coz-prod-card-head .ped-icon {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+}
+
+.coz-prod-item-list {
+    padding-right: 4px;
+}
+
+.coz-prod-item-list li {
+    font-size: 11px;
+}
+
+.coz-prod-item-list--stage {
+    max-height: 28px;
+    margin-top: 6px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+    row-gap: 0;
+    scrollbar-width: none;
+}
+
+.coz-prod-item-list--stage::-webkit-scrollbar {
+    display: none;
 }
 
 .coz-prod-top {
@@ -7646,12 +7740,32 @@ fieldset.field {
 }
 
 .coz-prod-stage {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     color: #9f8a7f;
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    font-size: 13px;
+    font-size: 6.5px;
     font-weight: 800;
+}
+
+.ops-shell--cozinha.is-kitchen-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: block;
+    height: 100vh;
+    background: #f8f2ef;
+}
+
+.ops-shell--cozinha.is-kitchen-fullscreen .ops-sidebar {
+    display: none;
+}
+
+.ops-shell--cozinha.is-kitchen-fullscreen .ops-main {
+    width: 100%;
+    height: 100vh;
+    overflow: auto;
+    padding: 18px;
 }
 
 .coz-prod-number {
@@ -7697,8 +7811,6 @@ fieldset.field {
     font-size: 16px;
     max-width: 760px;
 }
-
-
 @media (max-width: 1180px) {
     .coz-live-top {
         grid-template-columns: 1fr;
@@ -7707,6 +7819,10 @@ fieldset.field {
 
     .coz-live-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .coz-live-orders-grid {
+        grid-template-columns: 1fr;
     }
 
     .coz-prod-title-wrap h3 { font-size: clamp(24px, 4vw, 34px); }
@@ -8604,6 +8720,16 @@ fieldset.field {
 .ped-modal-inline-form .ped-btn {
     min-height: 38px;
     padding: 7px 12px;
+}
+.ped-linked-client-name {
+    display: block;
+    margin: 0 0 3px;
+    color: #8d776c;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
 }
 .ped-inline-edit {
     cursor: pointer;

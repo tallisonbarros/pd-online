@@ -40,6 +40,8 @@ from .order_services import (
 )
 
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+ORDER_HISTORY_COOKIE = "prato_delivery_orders"
+ORDER_HISTORY_COOKIE_MAX_AGE = 60 * 60 * 24 * 180
 WEEKDAY_LABELS = {
     "seg": "SEGUNDA",
     "ter": "TERCA",
@@ -1226,13 +1228,41 @@ def api_validar_cupom(request):
     )
 
 
-def _known_order_tokens_from_request(request):
-    raw = request.POST.get("known_order_tokens") or "[]"
+def _tokens_from_history_payload(payload):
+    tokens = []
+    if not isinstance(payload, list):
+        return tokens
+    for item in payload:
+        if isinstance(item, dict):
+            token = str(item.get("token") or "").strip()
+        else:
+            token = str(item or "").strip()
+        if token and token not in tokens:
+            tokens.append(token)
+        if len(tokens) >= 30:
+            break
+    return tokens
+
+
+def _parse_order_history_tokens(raw):
     try:
         payload = json.loads(raw)
-    except json.JSONDecodeError:
-        payload = []
-    return payload if isinstance(payload, list) else []
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return _tokens_from_history_payload(payload)
+
+
+def _known_order_tokens_from_request(request):
+    tokens = []
+    for token in _parse_order_history_tokens(request.POST.get("known_order_tokens") or "[]"):
+        if token not in tokens:
+            tokens.append(token)
+    for token in _parse_order_history_tokens(request.COOKIES.get(ORDER_HISTORY_COOKIE) or "[]"):
+        if token not in tokens:
+            tokens.append(token)
+        if len(tokens) >= 30:
+            break
+    return tokens
 
 
 @require_POST
@@ -1436,7 +1466,7 @@ def sucesso(request, public_token):
     pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), public_token=public_token)
     mensagem = montar_mensagem_whatsapp(pedido)
     whatsapp_url = _build_whatsapp_order_url(pedido)
-    return render(
+    response = render(
         request,
         "pedidos/sucesso.html",
         {
@@ -1444,6 +1474,24 @@ def sucesso(request, public_token):
             "whatsapp_url": whatsapp_url,
         },
     )
+    history = [
+        {
+            "token": pedido.public_token,
+            "numero": pedido.numero,
+        }
+    ]
+    for token in _known_order_tokens_from_request(request):
+        if token != pedido.public_token:
+            history.append({"token": token})
+        if len(history) >= 30:
+            break
+    response.set_cookie(
+        ORDER_HISTORY_COOKIE,
+        json.dumps(history),
+        max_age=ORDER_HISTORY_COOKIE_MAX_AGE,
+        samesite="Lax",
+    )
+    return response
 
 
 def _pedido_public_payload(pedido, include_items=False):
@@ -1931,7 +1979,12 @@ def _cozinha_operacao_payload():
     now = timezone.localtime()
     entregues_hoje = Pedido.objects.filter(status=Pedido.Status.FINALIZADO, criado_em__date=today).count()
 
-    pedidos_em_producao = Pedido.objects.filter(status=Pedido.Status.EM_PREPARO).prefetch_related("itens")
+    pedidos_em_producao_qs = Pedido.objects.filter(status=Pedido.Status.EM_PREPARO)
+    pedidos_em_producao = (
+        pedidos_em_producao_qs
+        .prefetch_related("itens")
+        .order_by("-criado_em", "-id")[:12]
+    )
     pratos_em_producao = (
         ItemPedido.objects.filter(pedido__status=Pedido.Status.EM_PREPARO)
         .values("nome_prato_snapshot")
@@ -1952,11 +2005,16 @@ def _cozinha_operacao_payload():
     pedidos_cards = []
     for pedido in pedidos_em_producao:
         pratos_total = sum(int(item.quantidade or 0) for item in pedido.itens.all())
-        elapsed_min = max(0, int((now - timezone.localtime(pedido.criado_em)).total_seconds() // 60))
+        tempo_base = pedido.producao_iniciada_em or pedido.criado_em
+        elapsed_min = max(0, int((now - timezone.localtime(tempo_base)).total_seconds() // 60))
         pedidos_cards.append(
             {
                 "pedido_numero": pedido.numero,
                 "cliente": pedido.nome_cliente,
+                "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
+                "icone_url": pedido.icone_pedido_url,
+                "item_lines": _pedido_item_lines(pedido),
+                "tempo_producao": _tempo_producao_pedido(pedido),
                 "pratos_total": pratos_total,
                 "elapsed_min": elapsed_min,
             }
@@ -1967,7 +2025,7 @@ def _cozinha_operacao_payload():
         "total_para_producao": total_para_producao,
         "pratos_em_producao": pratos,
         "pedidos_cards": pedidos_cards,
-        "pedidos_em_producao": pedidos_em_producao.count(),
+        "pedidos_em_producao": pedidos_em_producao_qs.count(),
         "weekday_label": _weekday_label_pt(today),
         "date_label": today.strftime("%d/%m"),
     }

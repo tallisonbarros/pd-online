@@ -149,6 +149,9 @@
             <div>
                 <dt>Telefone</dt>
                 <dd>
+                    {% if pedido.telefone and pedido.cliente and pedido.cliente.nome %}
+                        <small class="ped-linked-client-name">{{ pedido.cliente.nome }}</small>
+                    {% endif %}
                     {% if can_edit_payment %}
                         <span
                             class="ped-inline-edit"

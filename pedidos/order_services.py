@@ -28,6 +28,11 @@ def normalize_phone(value):
     return digits
 
 
+def _order_name_is_placeholder(value):
+    normalized = safe_text(value).casefold()
+    return normalized in {"", "cliente"}
+
+
 def _address_defaults_from_order(pedido):
     return {
         "endereco_formatado": safe_text(pedido.endereco_formatado),
@@ -53,6 +58,7 @@ def sync_customer_from_order(pedido):
         return None
 
     nome_cliente = safe_text(pedido.nome_cliente) or "Cliente"
+    should_inherit_customer_name = _order_name_is_placeholder(pedido.nome_cliente)
     cliente, created = Cliente.objects.get_or_create(
         telefone_normalizado=telefone_normalizado,
         defaults={
@@ -67,7 +73,7 @@ def sync_customer_from_order(pedido):
     if safe_text(pedido.telefone) and cliente.telefone != safe_text(pedido.telefone):
         cliente.telefone = safe_text(pedido.telefone)
         update_fields.append("telefone")
-    if not cliente.nome_editado_manualmente and nome_cliente and cliente.nome != nome_cliente:
+    if not should_inherit_customer_name and not cliente.nome_editado_manualmente and nome_cliente and cliente.nome != nome_cliente:
         cliente.nome = nome_cliente
         update_fields.append("nome")
     if pedido.criado_em and (not cliente.primeiro_pedido_em or pedido.criado_em < cliente.primeiro_pedido_em):
@@ -79,9 +85,15 @@ def sync_customer_from_order(pedido):
     if update_fields:
         cliente.save(update_fields=list(set(update_fields)))
 
+    order_update_fields = []
+    if should_inherit_customer_name and safe_text(cliente.nome):
+        pedido.nome_cliente = safe_text(cliente.nome)
+        order_update_fields.append("nome_cliente")
     if pedido.cliente_id != cliente.id:
         pedido.cliente = cliente
-        pedido.save(update_fields=["cliente"])
+        order_update_fields.append("cliente")
+    if order_update_fields:
+        pedido.save(update_fields=list(set(order_update_fields)))
 
     endereco = safe_text(pedido.endereco)
     if endereco:

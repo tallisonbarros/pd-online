@@ -8,6 +8,9 @@
     const diaNode = document.getElementById("coz-dia");
     const horaNode = document.getElementById("coz-hora");
     const listaNode = document.getElementById("coz-lista");
+    const shellNode = root.closest(".ops-shell--cozinha");
+    const fullscreenButton = document.querySelector("[data-cozinha-fullscreen-toggle]");
+    const autoScrollTimers = [];
 
     function pad(value) {
         return String(value).padStart(2, "0");
@@ -37,6 +40,62 @@
         return html;
     }
 
+    function buildItemLines(lines) {
+        const safeLines = Array.isArray(lines) && lines.length ? lines : ["Sem itens"];
+        return safeLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+    }
+
+    function stopAutoScrollLists() {
+        while (autoScrollTimers.length) {
+            window.clearInterval(autoScrollTimers.pop());
+        }
+    }
+
+    function startAutoScrollLists() {
+        stopAutoScrollLists();
+        document.querySelectorAll("[data-auto-scroll-list]").forEach((list) => {
+            if (list.scrollHeight <= list.clientHeight + 2) return;
+            let pauseTicks = 0;
+            const timer = window.setInterval(() => {
+                if (pauseTicks > 0) {
+                    pauseTicks -= 1;
+                    return;
+                }
+                if (list.scrollTop + list.clientHeight >= list.scrollHeight - 1) {
+                    list.scrollTop = 0;
+                    pauseTicks = 8;
+                    return;
+                }
+                list.scrollTop += 1;
+            }, 90);
+            autoScrollTimers.push(timer);
+        });
+    }
+
+    async function toggleFullscreen() {
+        if (!shellNode) return;
+        const isActive = shellNode.classList.toggle("is-kitchen-fullscreen");
+        fullscreenButton?.setAttribute("aria-pressed", isActive ? "true" : "false");
+        fullscreenButton?.setAttribute("aria-label", isActive ? "Sair da tela cheia da cozinha" : "Expandir cozinha para tela cheia");
+        try {
+            if (isActive && document.fullscreenEnabled && !document.fullscreenElement) {
+                await shellNode.requestFullscreen();
+            } else if (!isActive && document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+        } catch (error) {
+            // A classe visual cobre navegadores que bloqueiam fullscreen.
+        }
+    }
+
+    function syncFullscreenState() {
+        if (!shellNode || !fullscreenButton) return;
+        const isActive = Boolean(document.fullscreenElement);
+        shellNode.classList.toggle("is-kitchen-fullscreen", isActive);
+        fullscreenButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+        fullscreenButton.setAttribute("aria-label", isActive ? "Sair da tela cheia da cozinha" : "Expandir cozinha para tela cheia");
+    }
+
     function renderList(pedidosCards) {
         if (!Array.isArray(pedidosCards) || !pedidosCards.length) {
             listaNode.innerHTML = `
@@ -55,21 +114,20 @@
             .map(
                 (pedido) => `
                     <article class="coz-prod-card">
-                        <div class="coz-prod-top">
-                            <div class="coz-prod-title-wrap">
-                                <div class="coz-prod-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24"><path d="M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"/></svg>
+                        <div class="ped-card-top coz-prod-card-head">
+                            <div class="ped-client">
+                                <div class="ped-icon" aria-hidden="true">
+                                    <img src="${escapeHtml(pedido.icone_url || "")}" alt="">
                                 </div>
-                                <h3>${escapeHtml(pedido.cliente)}</h3>
+                                <div>
+                                    <h2>${escapeHtml(pedido.cliente)} <span>#${escapeHtml(pedido.pedido_numero)}</span></h2>
+                                    <p class="ped-time">${escapeHtml(pedido.criado_em || "")}</p>
+                                </div>
                             </div>
-                            <div class="coz-prod-pratos">
-                                <span>Pratos</span>
-                                <strong>${escapeHtml(pedido.pratos_total ?? 0)}</strong>
-                            </div>
+
                         </div>
                         <div class="coz-prod-priority-head">
                             <span>Prioridade</span>
-                            <strong>${escapeHtml(pedido.elapsed_min ?? 0)} min</strong>
                         </div>
                         <div class="coz-prod-priority-track">
                             ${buildPrioritySegments(pedido.elapsed_min ?? 0)}
@@ -78,12 +136,15 @@
                             <span>10m</span><span>20m</span><span>30m</span><span>40m</span><span>50m</span><span>60m</span>
                         </div>
                         <p class="coz-prod-stage">Estágio atual: ${escapeHtml(pedido.elapsed_min ?? 0)}m</p>
-                        <p class="coz-prod-number">#${escapeHtml(pedido.pedido_numero)}</p>
+                        <ul class="ped-item-list coz-prod-item-list coz-prod-item-list--stage" data-auto-scroll-list>
+                            ${buildItemLines(pedido.item_lines)}
+                        </ul>
                     </article>
                 `
             )
             .join("");
         listaNode.innerHTML = `<div class="coz-live-orders-grid">${html}</div>`;
+        startAutoScrollLists();
     }
 
     async function syncOperação() {
@@ -108,6 +169,9 @@
 
     tickClock();
     window.setInterval(tickClock, 1000);
+    startAutoScrollLists();
+    fullscreenButton?.addEventListener("click", toggleFullscreen);
+    document.addEventListener("fullscreenchange", syncFullscreenState);
     syncOperação();
     window.setInterval(syncOperação, 5000);
 })();

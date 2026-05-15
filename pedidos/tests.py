@@ -15,7 +15,7 @@ from django.utils import timezone
 from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, Prato
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
-from .views import _calcular_frete_por_distancia
+from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
 
 
 class GoogleMapsRouteUrlTests(TestCase):
@@ -904,6 +904,62 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(current.cliente_id, cliente.id)
         self.assertEqual(current.telefone, cliente.telefone)
         self.assertEqual(ClienteTokenConflito.objects.count(), 0)
+
+    def test_order_with_placeholder_name_inherits_customer_name_from_phone(self):
+        previous = Pedido.objects.create(
+            nome_cliente="Beth",
+            telefone="64999168848",
+            endereco="Rua Beth, 10 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("22.00"),
+        )
+        cliente = sync_customer_from_order(previous)
+        current = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="64999168848",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("18.00"),
+        )
+
+        sync_customer_from_order(current)
+
+        current.refresh_from_db()
+        self.assertEqual(current.cliente_id, cliente.id)
+        self.assertEqual(current.nome_cliente, "Beth")
+
+    def test_order_without_phone_inherits_customer_from_history_cookie(self):
+        previous = Pedido.objects.create(
+            nome_cliente="Cliente Cookie",
+            telefone="64977778888",
+            endereco="Rua Cookie, 10 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("22.00"),
+        )
+        cliente = sync_customer_from_order(previous)
+        config = ConfiguracaoEntrega.get_solo()
+        config.whatsapp_numero = "5564999999999"
+        config.save()
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("24.90"), ativo=True)
+        self.client.cookies[ORDER_HISTORY_COOKIE] = json.dumps([{"token": previous.public_token}])
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % prato.id,
+                "nome_cliente": "Cliente Sem Telefone",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        current = Pedido.objects.order_by("-id").first()
+        self.assertEqual(current.cliente_id, cliente.id)
+        self.assertEqual(current.telefone, cliente.telefone)
 
     def test_order_without_phone_registers_conflict_for_multiple_token_customers(self):
         first = Pedido.objects.create(
