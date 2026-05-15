@@ -8871,6 +8871,38 @@ fieldset.field {
 .ped-modal-audit {
     margin-top: 12px;
 }
+.ped-modal-footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+.ped-modal-footer-actions form {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.ped-print-queue-link {
+    border: 0;
+    background: transparent;
+    color: #8d776c;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: line-through;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.ped-print-queue-link:hover,
+.ped-print-queue-link:focus-visible {
+    color: #4e342e;
+    outline: none;
+}
+.ped-print-queue-feedback {
+    color: #6a554b;
+    font-size: 12px;
+    font-weight: 700;
+}
 .ped-modal-audit-head {
     display: flex;
     justify-content: space-between;

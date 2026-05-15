@@ -2429,6 +2429,19 @@ def api_pedido_copias(request, pedido_id):
 
 
 @staff_member_required(login_url="/admin/login/")
+@require_POST
+def registrar_pedido_lista_impressao(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    item = PedidoListaImpressao.objects.create(
+        pedido=pedido,
+        numero=pedido.numero,
+        nome_cliente=pedido.nome_cliente,
+        public_token=pedido.public_token,
+    )
+    return JsonResponse({"ok": True, "id": item.id})
+
+
+@staff_member_required(login_url="/admin/login/")
 def pedido_detalhe_admin(request, pedido_id):
     pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
     context = _pedido_detail_context(request, pedido, is_new_order=pedido.status == Pedido.Status.RASCUNHO)

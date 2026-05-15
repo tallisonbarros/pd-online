@@ -186,6 +186,32 @@
         }
     }
 
+    async function submitPrintQueueForm(form) {
+        const button = form.querySelector("button");
+        const feedback = form.querySelector("[data-print-queue-feedback]");
+        if (button) button.disabled = true;
+        if (feedback) feedback.textContent = "";
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": csrfToken,
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                },
+                body: new URLSearchParams(new FormData(form)).toString(),
+                credentials: "same-origin",
+            });
+            if (!response.ok) throw new Error(`Falha ao registrar rotulo (${response.status})`);
+            if (feedback) feedback.textContent = "Adicionado a lista.";
+        } catch (error) {
+            if (feedback) feedback.textContent = "Nao foi possivel adicionar.";
+            console.error(error);
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
     function openInlineEditor(node) {
         if (node.dataset.editing === "true") return;
         node.dataset.editing = "true";
@@ -570,6 +596,12 @@
         if (couponForm) {
             event.preventDefault();
             submitAjaxForm(couponForm);
+            return;
+        }
+        const printQueueForm = event.target.closest("[data-print-queue-form]");
+        if (printQueueForm) {
+            event.preventDefault();
+            submitPrintQueueForm(printQueueForm);
             return;
         }
         const newOrderFinalizeForm = event.target.closest("[data-new-order-finalize-form]");

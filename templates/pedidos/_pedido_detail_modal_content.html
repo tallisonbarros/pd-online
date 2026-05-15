@@ -413,6 +413,16 @@
         <p>{{ pedido.observacao_geral|default:"Sem observação." }}</p>
     {% endif %}
 </section>
+
+{% if not is_new_order %}
+    <footer class="ped-modal-footer-actions">
+        <form method="post" action="{% url 'pedidos:registrar_pedido_lista_impressao' pedido.id %}" data-print-queue-form>
+            {% csrf_token %}
+            <button class="ped-print-queue-link" type="submit">Imprimir rotulo</button>
+            <span class="ped-print-queue-feedback" data-print-queue-feedback aria-live="polite"></span>
+        </form>
+    </footer>
+{% endif %}
 </div>
 
 <section class="ped-modal-section ped-modal-audit">

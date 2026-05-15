@@ -293,6 +293,7 @@ class PedidosReadOnlyApiTests(TestCase):
             "latitude",
             "longitude",
             "tipo_coleta",
+            "icone_pedido_numero",
             "forma_pagamento",
             "status",
             "valor_frete",
@@ -308,6 +309,7 @@ class PedidosReadOnlyApiTests(TestCase):
         ]:
             self.assertIn(field, pedido)
         self.assertEqual(pedido["nome_cliente"], "Cliente API")
+        self.assertIsInstance(pedido["icone_pedido_numero"], int)
         self.assertEqual(pedido["valor_frete"], "10.00")
         self.assertEqual(pedido["total"], "30.00")
         self.assertEqual(pedido["cupom"]["id"], self.cupom.id)
@@ -1418,6 +1420,47 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn("Complemento: Casa 2", payload["entregador"])
         self.assertNotIn("Telefone", payload["entregador"])
 
+    def test_order_detail_modal_has_discreet_label_print_queue_button(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Botao",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.get(
+            f"/controle/pedidos/{pedido.id}/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-print-queue-form")
+        self.assertContains(response, "Imprimir rotulo")
+        self.assertContains(response, f"/controle/api/pedido/{pedido.id}/lista-impressao/")
+
+    def test_manual_print_queue_button_registers_order(self):
+        self.client.force_login(self.staff_user)
+        PedidoListaImpressao.objects.all().delete()
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Manual",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(f"/controle/api/pedido/{pedido.id}/lista-impressao/")
+
+        self.assertEqual(response.status_code, 200)
+        entry = PedidoListaImpressao.objects.get()
+        self.assertEqual(response.json()["id"], entry.id)
+        self.assertEqual(entry.nome_cliente, "Cliente Manual")
+        self.assertEqual(entry.public_token, pedido.public_token)
+
     def test_approval_orders_admin_api_returns_realtime_queue(self):
         self.client.force_login(self.staff_user)
         approval = Pedido.objects.create(
@@ -1608,7 +1651,7 @@ class AjustesAdminTests(TestCase):
         response = self.client.get("/controle/ajustes/?aba=lista_impressao")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Historico da lista de impressao")
+        self.assertContains(response, "Historico da lista de rotulos")
         self.assertContains(response, "GET /api/lista-impressao/")
         self.assertContains(response, "GET /api/pedidos/token/&lt;public_token&gt;/")
         self.assertContains(response, "Cliente Impressao")

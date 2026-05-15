@@ -52,6 +52,7 @@ urlpatterns = [
     path("controle/api/pedidos-aprovacao/", views.api_pedidos_aprovacao_admin, name="api_pedidos_aprovacao_admin"),
     path("controle/api/pedidos-concluidos/", views.api_pedidos_concluidos_admin, name="api_pedidos_concluidos_admin"),
     path("controle/api/pedido/<int:pedido_id>/copias/", views.api_pedido_copias, name="api_pedido_copias"),
+    path("controle/api/pedido/<int:pedido_id>/lista-impressao/", views.registrar_pedido_lista_impressao, name="registrar_pedido_lista_impressao"),
     path("controle/api/catalogo-editor/", views.api_catalogo_editor_pedido, name="api_catalogo_editor_pedido"),
     path("controle/api/operacao/", views.api_cozinha_operacao, name="api_cozinha_operacao"),
     path("controle/pedidos/novo/", views.pedido_novo_admin, name="pedido_novo_admin"),

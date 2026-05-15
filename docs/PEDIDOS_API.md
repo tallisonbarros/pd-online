@@ -69,14 +69,14 @@ Internamente, o sistema armazena somente o hash SHA-256 da chave. A chave comple
 
 ## Endpoints
 
-### Lista de Impressão
+### Lista de Rótulos
 
 ```http
 GET /api/lista-impressao/
 Authorization: Bearer SUA_CHAVE
 ```
 
-Retorna o histórico da lista de impressão, na ordem em que os pedidos entraram em produção.
+Retorna o histórico da lista de rótulos, na ordem em que os pedidos entraram em produção ou foram enviados manualmente para rótulo.
 
 Cada registro leva o nome do cliente e o token público do pedido. O campo `id` funciona como cursor para o consumidor não reler itens já processados.
 
@@ -109,15 +109,15 @@ Filtros opcionais:
 | `desde_id` | `/api/lista-impressao/?desde_id=10` | Retorna apenas registros com `id` maior que o informado. |
 | `limit` | `/api/lista-impressao/?limit=50` | Limita a quantidade retornada. Valor padrão: `100`. Máximo: `500`. |
 
-Fluxo recomendado para o agente de impressão:
+Fluxo recomendado para o agente de rótulos:
 
 1. Consultar `GET /api/lista-impressao/?desde_id=<ultimo_id_processado>`.
 2. Ler cada item em ordem.
 3. Usar `public_token` em `GET /api/pedidos/token/<public_token>/`.
-4. Imprimir no app consumidor.
+4. Imprimir o rótulo no app consumidor.
 5. Guardar o maior `id` processado localmente no consumidor.
 
-Um pedido é registrado nessa lista sempre que entra em produção (`status = em_preparo`). Se o pedido sair de produção e entrar novamente, um novo registro é criado para preservar o histórico da fila.
+Um pedido é registrado nessa lista sempre que entra em produção (`status = em_preparo`) ou quando a equipe usa o botão `Imprimir rotulo` no modal do pedido. Se o pedido sair de produção e entrar novamente, um novo registro é criado para preservar o histórico da fila.
 
 ### Listar Pedidos
 
@@ -155,6 +155,7 @@ Resposta:
       "tipo_coleta": "entrega",
       "tipo_coleta_label": "Entrega",
       "icone_pedido": "img/Icones_pedidos/1.svg",
+      "icone_pedido_numero": 1,
       "forma_pagamento": "pix",
       "forma_pagamento_label": "Online Pix",
       "enviar_talheres": false,
@@ -247,7 +248,7 @@ Authorization: Bearer SUA_CHAVE
 
 Retorna um pedido específico pelo `public_token`, com o mesmo formato do detalhe por ID.
 
-Esse endpoint existe para integração com a lista de impressão, que expõe o token do pedido para o app consumidor buscar os dados completos antes de imprimir.
+Esse endpoint existe para integração com a lista de rótulos, que expõe o token do pedido para o app consumidor buscar os dados completos antes de imprimir o rótulo.
 
 Resposta:
 
@@ -307,6 +308,7 @@ GET /api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999
 | `tipo_coleta` | string | Valor persistido, como `entrega` ou `retirada`. |
 | `tipo_coleta_label` | string | Label do choice do Django. |
 | `icone_pedido` | string | Caminho persistido do ícone. |
+| `icone_pedido_numero` | number/null | Número do arquivo SVG usado pelo pedido, extraído de `icone_pedido`. Ex.: `1` para `1.svg`. |
 | `forma_pagamento` | string | Valor persistido da forma de pagamento. |
 | `forma_pagamento_label` | string | Label do choice do Django. |
 | `enviar_talheres` | boolean | Preferência do cliente. |

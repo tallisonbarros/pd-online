@@ -1,4 +1,5 @@
 from decimal import Decimal
+from pathlib import PurePosixPath
 
 
 def _decimal_payload(value, places="0.01"):
@@ -36,6 +37,15 @@ def serialize_cupom_pedido_api(cupom):
     }
 
 
+def _icone_pedido_numero(pedido):
+    icon_path = pedido.icone_pedido or pedido.icon_path_for_number(pedido.numero or pedido.pk or 1)
+    stem = PurePosixPath(str(icon_path).replace("\\", "/")).stem
+    try:
+        return int(stem)
+    except (TypeError, ValueError):
+        return None
+
+
 def serialize_pedido_api(pedido):
     return {
         "id": pedido.id,
@@ -58,6 +68,7 @@ def serialize_pedido_api(pedido):
         "tipo_coleta": pedido.tipo_coleta,
         "tipo_coleta_label": pedido.get_tipo_coleta_display(),
         "icone_pedido": pedido.icone_pedido,
+        "icone_pedido_numero": _icone_pedido_numero(pedido),
         "forma_pagamento": pedido.forma_pagamento,
         "forma_pagamento_label": pedido.get_forma_pagamento_display(),
         "enviar_talheres": pedido.enviar_talheres,
