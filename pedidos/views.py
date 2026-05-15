@@ -20,11 +20,12 @@ from django.http import HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.utils.dateparse import parse_time
+from django.utils.dateparse import parse_date, parse_time
 from django.utils.timesince import timesince
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
+from .api_serializers import serialize_pedido_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
 from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 from .order_services import (
@@ -1586,6 +1587,58 @@ def api_meus_pedidos(request):
     return JsonResponse({"pedidos": [_pedido_public_payload(pedido) for pedido in pedidos]})
 
 
+def _pedidos_api_queryset(params):
+    pedidos = Pedido.objects.select_related("cupom").prefetch_related("itens").all()
+
+    status = _safe_text(params.get("status"))
+    if status:
+        pedidos = pedidos.filter(status=status)
+
+    tipo_coleta = _safe_text(params.get("tipo_coleta"))
+    if tipo_coleta:
+        pedidos = pedidos.filter(tipo_coleta=tipo_coleta)
+
+    criado_em = _safe_text(params.get("criado_em"))
+    if criado_em:
+        parsed_date = parse_date(criado_em)
+        pedidos = pedidos.filter(criado_em__date=parsed_date) if parsed_date else pedidos.none()
+
+    numero = _safe_text(params.get("numero"))
+    if numero:
+        try:
+            pedidos = pedidos.filter(numero=int(numero))
+        except (TypeError, ValueError):
+            pedidos = pedidos.none()
+
+    telefone = _safe_text(params.get("telefone"))
+    if telefone:
+        pedidos = pedidos.filter(telefone__icontains=telefone)
+
+    return pedidos.order_by("-criado_em", "-id")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedidos(request):
+    pedidos = _pedidos_api_queryset(request.GET)
+    return JsonResponse(
+        {
+            "count": pedidos.count(),
+            "pedidos": [serialize_pedido_api(pedido) for pedido in pedidos],
+        }
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_pedido_detalhe(request, pedido_id):
+    pedido = get_object_or_404(
+        Pedido.objects.select_related("cupom").prefetch_related("itens"),
+        id=pedido_id,
+    )
+    return JsonResponse({"pedido": serialize_pedido_api(pedido)})
+
+
 def _dashboard_periodo(period):
     hoje = timezone.localdate()
     if period == "month":
@@ -2611,7 +2664,7 @@ def atualizar_entrega_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api"}:
         ajustes_aba = "geral"
 
     _ensure_default_user_groups()

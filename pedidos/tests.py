@@ -192,6 +192,158 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class PedidosReadOnlyApiTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="api_pedidos_staff",
+            password="12345678",
+            is_staff=True,
+        )
+        self.regular_user = User.objects.create_user(
+            username="api_pedidos_regular",
+            password="12345678",
+            is_staff=False,
+        )
+        self.cupom = Cupom.objects.create(
+            codigo="API10",
+            descricao="Desconto API",
+            tipo_desconto=Cupom.TipoDesconto.VALOR_FIXO,
+            valor=Decimal("10.00"),
+            valor_minimo_pedido=Decimal("30.00"),
+            ativo=True,
+        )
+        self.pedido = Pedido.objects.create(
+            nome_cliente="Cliente API",
+            telefone="64999999999",
+            rua="Rua API",
+            numero_endereco="123",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            endereco_formatado="Rua API, 123, Centro, Rio Verde - GO",
+            latitude=Decimal("-17.7923000"),
+            longitude=Decimal("-50.9192000"),
+            endereco="Rua API, 123 - Centro, Rio Verde - GO",
+            complemento="Casa",
+            lote_quadra="Qd. 1 Lt. 2",
+            ponto_referencia="Portao azul",
+            tipo_coleta=Pedido.TipoColeta.ENTREGA,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            enviar_talheres=False,
+            observacao_geral="Sem cebola",
+            status=Pedido.Status.EM_PREPARO,
+            distancia_km=Decimal("4.20"),
+            valor_frete=Decimal("10.00"),
+            total_sem_desconto=Decimal("45.00"),
+            promocao_descricao="Promocao teste",
+            promocao_desconto=Decimal("5.00"),
+            cupom=self.cupom,
+            cupom_codigo=self.cupom.codigo,
+            cupom_desconto=Decimal("10.00"),
+            total=Decimal("30.00"),
+            entregador_solicitado=True,
+        )
+        ItemPedido.objects.create(
+            pedido=self.pedido,
+            nome_prato_snapshot="Marmita API",
+            variacao_nome_snapshot="Grande",
+            preco_snapshot=Decimal("35.00"),
+            quantidade=1,
+            observacao="Arroz extra",
+            subtotal=Decimal("35.00"),
+        )
+
+    def test_requires_staff_authentication(self):
+        response = self.client.get("/api/pedidos/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_rejects_authenticated_user_without_staff_permission(self):
+        self.client.force_login(self.regular_user)
+
+        response = self.client.get("/api/pedidos/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_authenticated_list_returns_orders(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/api/pedidos/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+
+    def test_authenticated_detail_returns_main_fields_and_coupon(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(f"/api/pedidos/{self.pedido.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        pedido = response.json()["pedido"]
+        for field in [
+            "id",
+            "numero",
+            "nome_cliente",
+            "telefone",
+            "endereco_formatado",
+            "latitude",
+            "longitude",
+            "tipo_coleta",
+            "forma_pagamento",
+            "status",
+            "valor_frete",
+            "total",
+            "public_token",
+            "criado_em",
+            "status_label_contextual",
+            "has_coordinates",
+            "google_maps_route_url",
+            "icone_pedido_url",
+            "is_retirada",
+            "stage_labels",
+        ]:
+            self.assertIn(field, pedido)
+        self.assertEqual(pedido["nome_cliente"], "Cliente API")
+        self.assertEqual(pedido["valor_frete"], "10.00")
+        self.assertEqual(pedido["total"], "30.00")
+        self.assertEqual(pedido["cupom"]["id"], self.cupom.id)
+        self.assertEqual(pedido["cupom"]["codigo"], "API10")
+
+    def test_includes_order_items(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(f"/api/pedidos/{self.pedido.id}/")
+
+        item = response.json()["pedido"]["itens"][0]
+        self.assertEqual(item["nome_prato_snapshot"], "Marmita API")
+        self.assertEqual(item["variacao_nome_snapshot"], "Grande")
+        self.assertEqual(item["preco_snapshot"], "35.00")
+        self.assertEqual(item["subtotal"], "35.00")
+
+    def test_basic_filters(self):
+        Pedido.objects.create(
+            nome_cliente="Outro Cliente",
+            telefone="64888888888",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("20.00"),
+        )
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999")
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+
+
 class PublicFlowCacheTests(TestCase):
     def test_cart_checkout_and_menu_are_not_browser_cached(self):
         for path in ["/", "/carrinho/", "/checkout/"]:
@@ -1321,6 +1473,17 @@ class AjustesAdminTests(TestCase):
         self.assertContains(response, "Horário de funcionamento")
         self.assertContains(response, 'value="10:30"')
         self.assertContains(response, 'value="14:45"')
+
+    def test_api_tab_displays_read_only_order_endpoints(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/controle/ajustes/?aba=api")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "API somente leitura")
+        self.assertContains(response, "GET /api/pedidos/")
+        self.assertContains(response, "GET /api/pedidos/&lt;id&gt;/")
+        self.assertContains(response, "?status=em_preparo")
 
     def test_general_settings_can_be_saved_from_ajustes(self):
         self.client.force_login(self.staff_user)

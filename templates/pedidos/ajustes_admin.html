@@ -23,6 +23,7 @@
             <a class="ajustes-tab {% if ajustes_aba == 'google' %}is-active{% endif %}" {% if ajustes_aba == 'google' %}aria-current="page"{% endif %} href="?aba=google">Google Maps</a>
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'api' %}is-active{% endif %}" {% if ajustes_aba == 'api' %}aria-current="page"{% endif %} href="?aba=api">API</a>
             <a class="ajustes-tab {% if ajustes_aba == 'usuarios' %}is-active{% endif %}" {% if ajustes_aba == 'usuarios' %}aria-current="page"{% endif %} href="?aba=usuarios">Usuários</a>
         </section>
 
@@ -473,6 +474,62 @@
                             <button type="submit" class="ped-btn ped-btn-primary">Salvar WhatsApp</button>
                         </div>
                     </form>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'api' %}
+            <section class="ajustes-guide-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Pedidos</p>
+                            <h2>API somente leitura</h2>
+                        </div>
+                    </header>
+
+                    <div class="ped-detail-audit-list">
+                        <div>
+                            <dt>Listagem</dt>
+                            <dd><a href="{% url 'pedidos:api_pedidos' %}">GET {% url 'pedidos:api_pedidos' %}</a></dd>
+                        </div>
+                        <div>
+                            <dt>Detalhe</dt>
+                            <dd>GET /api/pedidos/&lt;id&gt;/</dd>
+                        </div>
+                        <div>
+                            <dt>Autenticacao</dt>
+                            <dd>Requer usuario autenticado com acesso de equipe, seguindo a mesma protecao das telas internas.</dd>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Filtros</p>
+                            <h2>Consultas por query string</h2>
+                        </div>
+                    </header>
+
+                    <ol class="ajustes-guide-list">
+                        <li><code>?status=em_preparo</code></li>
+                        <li><code>?tipo_coleta=entrega</code></li>
+                        <li><code>?criado_em=2026-05-15</code></li>
+                        <li><code>?numero=2240</code></li>
+                        <li><code>?telefone=64999999999</code></li>
+                    </ol>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Formato</p>
+                            <h2>Campos retornados</h2>
+                        </div>
+                    </header>
+
+                    <div class="ajustes-note">
+                        <p>A listagem retorna <code>count</code> e <code>pedidos</code>. Cada pedido ja inclui dados do pedido, dados derivados, cupom relacionado e itens aninhados.</p>
+                    </div>
                 </article>
             </section>
         {% elif ajustes_aba == 'usuarios' %}
