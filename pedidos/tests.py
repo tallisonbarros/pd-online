@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, Prato
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
@@ -205,6 +205,7 @@ class PedidosReadOnlyApiTests(TestCase):
             password="12345678",
             is_staff=False,
         )
+        self.api_key, self.raw_api_key = PedidoApiKey.create_key("Teste API", self.staff_user)
         self.cupom = Cupom.objects.create(
             codigo="API10",
             descricao="Desconto API",
@@ -254,34 +255,32 @@ class PedidosReadOnlyApiTests(TestCase):
             subtotal=Decimal("35.00"),
         )
 
-    def test_requires_staff_authentication(self):
+    def test_requires_api_key(self):
         response = self.client.get("/api/pedidos/")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/admin/login/", response.url)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"], "invalid_api_key")
 
-    def test_rejects_authenticated_user_without_staff_permission(self):
+    def test_rejects_invalid_api_key_even_when_user_is_logged_in(self):
         self.client.force_login(self.regular_user)
 
-        response = self.client.get("/api/pedidos/")
+        response = self.client.get("/api/pedidos/", HTTP_AUTHORIZATION="Bearer invalida")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/admin/login/", response.url)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"], "invalid_api_key")
 
     def test_authenticated_list_returns_orders(self):
-        self.client.force_login(self.staff_user)
-
-        response = self.client.get("/api/pedidos/")
+        response = self.client.get("/api/pedidos/", HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}")
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+        self.api_key.refresh_from_db()
+        self.assertIsNotNone(self.api_key.ultimo_uso_em)
 
     def test_authenticated_detail_returns_main_fields_and_coupon(self):
-        self.client.force_login(self.staff_user)
-
-        response = self.client.get(f"/api/pedidos/{self.pedido.id}/")
+        response = self.client.get(f"/api/pedidos/{self.pedido.id}/", HTTP_X_API_KEY=self.raw_api_key)
 
         self.assertEqual(response.status_code, 200)
         pedido = response.json()["pedido"]
@@ -315,9 +314,7 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(pedido["cupom"]["codigo"], "API10")
 
     def test_includes_order_items(self):
-        self.client.force_login(self.staff_user)
-
-        response = self.client.get(f"/api/pedidos/{self.pedido.id}/")
+        response = self.client.get(f"/api/pedidos/{self.pedido.id}/", HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}")
 
         item = response.json()["pedido"]["itens"][0]
         self.assertEqual(item["nome_prato_snapshot"], "Marmita API")
@@ -335,9 +332,10 @@ class PedidosReadOnlyApiTests(TestCase):
             status=Pedido.Status.FINALIZADO,
             total=Decimal("20.00"),
         )
-        self.client.force_login(self.staff_user)
-
-        response = self.client.get("/api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999")
+        response = self.client.get(
+            "/api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999",
+            HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}",
+        )
 
         payload = response.json()
         self.assertEqual(payload["count"], 1)
@@ -1483,7 +1481,44 @@ class AjustesAdminTests(TestCase):
         self.assertContains(response, "API somente leitura")
         self.assertContains(response, "GET /api/pedidos/")
         self.assertContains(response, "GET /api/pedidos/&lt;id&gt;/")
+        self.assertContains(response, "Authorization: Bearer SUA_CHAVE")
         self.assertContains(response, "?status=em_preparo")
+
+    def test_manager_can_create_and_delete_api_key_from_settings(self):
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=api",
+            {"action": "create_api_key", "nome": "Integracao teste"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chave criada. Copie agora: pd_")
+        api_key = PedidoApiKey.objects.get(nome="Integracao teste")
+        self.assertEqual(api_key.criado_por, self.staff_user)
+        self.assertNotIn("pd_", api_key.chave_hash)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=api",
+            {"action": "delete_api_key", "api_key_id": api_key.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PedidoApiKey.objects.filter(id=api_key.id).exists())
+
+    def test_non_manager_cannot_create_api_key_from_settings(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=api",
+            {"action": "create_api_key", "nome": "Sem permissao"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Usuario sem permissao para criar chaves da API.")
+        self.assertFalse(PedidoApiKey.objects.filter(nome="Sem permissao").exists())
 
     def test_general_settings_can_be_saved_from_ajustes(self):
         self.client.force_login(self.staff_user)

@@ -14,17 +14,58 @@ http://127.0.0.1:8000
 
 Em produção, use o domínio da aplicação.
 
-## Autenticação e Permissão
+## Autenticação
 
 A API não é pública.
 
-Os endpoints exigem usuário autenticado com acesso de equipe (`is_staff=True`), usando a mesma proteção das áreas internas do projeto.
-
-Sem autenticação ou sem permissão, a resposta segue o padrão interno do Django e redireciona para:
+Os endpoints exigem chave de acesso criada na guia:
 
 ```text
-/admin/login/
+/controle/ajustes/?aba=api
 ```
+
+O login do Django não autentica os endpoints JSON da API de pedidos. Mesmo um usuário logado precisa enviar uma chave válida.
+
+A chave pode ser enviada de duas formas:
+
+```http
+Authorization: Bearer SUA_CHAVE
+```
+
+ou:
+
+```text
+X-API-Key: SUA_CHAVE
+```
+
+Sem chave ou com chave inválida, a API retorna:
+
+```json
+{
+  "ok": false,
+  "error": "invalid_api_key"
+}
+```
+
+## Gerenciamento de Chaves
+
+As chaves são gerenciadas na guia API da tela de ajustes:
+
+```text
+/controle/ajustes/?aba=api
+```
+
+Na criação, informe um nome para identificar a integração. A chave completa é exibida apenas uma vez, logo após salvar.
+
+Depois disso, a tela mostra:
+
+- nome da chave;
+- prefixo da chave;
+- usuário que criou;
+- data do último uso;
+- botão para exclusão.
+
+Internamente, o sistema armazena somente o hash SHA-256 da chave. A chave completa não pode ser recuperada depois da criação. Se ela for perdida, exclua a antiga e crie uma nova.
 
 ## Endpoints
 
@@ -32,6 +73,7 @@ Sem autenticação ou sem permissão, a resposta segue o padrão interno do Djan
 
 ```http
 GET /api/pedidos/
+Authorization: Bearer SUA_CHAVE
 ```
 
 Retorna todos os pedidos ordenados do mais recente para o mais antigo.
@@ -126,6 +168,7 @@ Resposta:
 
 ```http
 GET /api/pedidos/<id>/
+Authorization: Bearer SUA_CHAVE
 ```
 
 Retorna um pedido específico com os mesmos campos da listagem.
@@ -273,12 +316,17 @@ Suba o servidor:
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Acesse com um usuário `is_staff=True`:
+Crie uma chave em Ajustes:
+
+```text
+http://127.0.0.1:8000/controle/ajustes/?aba=api
+```
+
+Consulte a API enviando a chave:
 
 ```text
 http://127.0.0.1:8000/api/pedidos/
 http://127.0.0.1:8000/api/pedidos/1/
-http://127.0.0.1:8000/controle/ajustes/?aba=api
 ```
 
 Rode os testes:

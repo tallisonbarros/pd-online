@@ -27,7 +27,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, Prato
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -867,6 +867,10 @@ def _serialize_groups_for_admin():
     return Group.objects.order_by("name")
 
 
+def _serialize_pedido_api_keys():
+    return PedidoApiKey.objects.select_related("criado_por").order_by("-criado_em")
+
+
 def _require_superuser_for_user_admin(request):
     if not request.user.is_superuser:
         raise PermissionError("Somente superusuarios podem administrar usuarios e classes.")
@@ -1617,9 +1621,25 @@ def _pedidos_api_queryset(params):
     return pedidos.order_by("-criado_em", "-id")
 
 
-@staff_member_required(login_url="/admin/login/")
+def _api_key_from_request(request):
+    authorization = _safe_text(request.headers.get("Authorization"))
+    if authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return _safe_text(request.headers.get("X-API-Key"))
+
+
+def _require_pedidos_api_key(request):
+    api_key = PedidoApiKey.authenticate(_api_key_from_request(request))
+    if not api_key:
+        return None
+    PedidoApiKey.objects.filter(pk=api_key.pk).update(ultimo_uso_em=timezone.now())
+    return api_key
+
+
 @require_GET
 def api_pedidos(request):
+    if not _require_pedidos_api_key(request):
+        return JsonResponse({"ok": False, "error": "invalid_api_key"}, status=401)
     pedidos = _pedidos_api_queryset(request.GET)
     return JsonResponse(
         {
@@ -1629,9 +1649,10 @@ def api_pedidos(request):
     )
 
 
-@staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_pedido_detalhe(request, pedido_id):
+    if not _require_pedidos_api_key(request):
+        return JsonResponse({"ok": False, "error": "invalid_api_key"}, status=401)
     pedido = get_object_or_404(
         Pedido.objects.select_related("cupom").prefetch_related("itens"),
         id=pedido_id,
@@ -2689,6 +2710,8 @@ def ajustes_admin(request):
             "save_google": "google",
             "save_whatsapp": "whatsapp",
             "save_pagamento": "pagamento",
+            "create_api_key": "api",
+            "delete_api_key": "api",
             "create_user": "usuarios",
             "update_user": "usuarios",
             "create_group": "usuarios",
@@ -2753,6 +2776,29 @@ def ajustes_admin(request):
             config.pix_chave = _safe_text(request.POST.get("pix_chave"))
             config.save()
             return redirect(f"{request.path}?saved=1&aba=pagamento")
+
+        if action == "create_api_key":
+            if not _user_can_manage_order_payment(request.user):
+                feedback = "Usuario sem permissao para criar chaves da API."
+                feedback_kind = "error"
+            else:
+                nome = _safe_text(request.POST.get("nome"))
+                if not nome:
+                    feedback = "Informe um nome para a chave."
+                    feedback_kind = "error"
+                else:
+                    _api_key, raw_key = PedidoApiKey.create_key(nome, request.user)
+                    feedback = f"Chave criada. Copie agora: {raw_key}"
+                    feedback_kind = "success"
+
+        if action == "delete_api_key":
+            if not _user_can_manage_order_payment(request.user):
+                feedback = "Usuario sem permissao para excluir chaves da API."
+                feedback_kind = "error"
+            else:
+                PedidoApiKey.objects.filter(id=request.POST.get("api_key_id")).delete()
+                feedback = "Chave excluida."
+                feedback_kind = "success"
 
         if action in {"create_user", "update_user", "create_group", "update_group", "delete_group"}:
             try:
@@ -2853,6 +2899,8 @@ def ajustes_admin(request):
             "usuarios_admin_rows": _serialize_users_for_admin(),
             "usuarios_classes": _serialize_groups_for_admin(),
             "can_manage_users": request.user.is_superuser,
+            "pedido_api_keys": _serialize_pedido_api_keys(),
+            "can_manage_api_keys": _user_can_manage_order_payment(request.user),
         },
     )
 

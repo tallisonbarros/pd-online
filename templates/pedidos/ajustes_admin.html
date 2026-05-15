@@ -497,8 +497,63 @@
                         </div>
                         <div>
                             <dt>Autenticacao</dt>
-                            <dd>Requer usuario autenticado com acesso de equipe, seguindo a mesma protecao das telas internas.</dd>
+                            <dd>Requer chave de acesso enviada em <code>Authorization: Bearer SUA_CHAVE</code> ou <code>X-API-Key: SUA_CHAVE</code>.</dd>
                         </div>
+                    </div>
+                </article>
+
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Acesso</p>
+                            <h2>Chaves da API</h2>
+                        </div>
+                    </header>
+
+                    {% if can_manage_api_keys %}
+                        <form method="post" class="ajustes-form-grid">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="create_api_key">
+                            <label class="field ajustes-field ajustes-field--wide">
+                                <span>Nome da chave</span>
+                                <input type="text" name="nome" placeholder="Ex.: Integracao app externo" required>
+                                <small class="field-help">A chave completa sera exibida apenas uma vez apos a criacao.</small>
+                            </label>
+                            <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                                <button type="submit" class="ped-btn ped-btn-primary">Criar chave</button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="ajustes-feedback is-error">
+                            Somente gerente ou superusuario pode criar e excluir chaves da API.
+                        </div>
+                    {% endif %}
+
+                    <div class="clientes-table">
+                        <div class="clientes-table-row clientes-table-head">
+                            <span>Nome</span>
+                            <span>Prefixo</span>
+                            <span>Criada por</span>
+                            <span>Ultimo uso</span>
+                            <span></span>
+                        </div>
+                        {% for api_key in pedido_api_keys %}
+                            <form method="post" class="clientes-table-row">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete_api_key">
+                                <input type="hidden" name="api_key_id" value="{{ api_key.id }}">
+                                <strong>{{ api_key.nome }}</strong>
+                                <span><code>{{ api_key.prefixo }}...</code></span>
+                                <span>{% if api_key.criado_por %}{{ api_key.criado_por.username }}{% else %}-{% endif %}</span>
+                                <span>{% if api_key.ultimo_uso_em %}{{ api_key.ultimo_uso_em|date:"d/m/Y H:i" }}{% else %}Nunca usada{% endif %}</span>
+                                <button type="submit" class="ped-btn ped-btn-danger" {% if not can_manage_api_keys %}disabled{% endif %}>Excluir</button>
+                            </form>
+                        {% empty %}
+                            <div class="empty-state">
+                                <h2>Nenhuma chave criada.</h2>
+                                <p>Crie uma chave para liberar o consumo externo da API de pedidos.</p>
+                            </div>
+                        {% endfor %}
                     </div>
                 </article>
 

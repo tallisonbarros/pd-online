@@ -1,4 +1,5 @@
 from decimal import Decimal
+import hashlib
 import secrets
 
 from django.conf import settings
@@ -307,6 +308,51 @@ class ClienteTokenConflito(models.Model):
 
     def __str__(self):
         return f"Conflito do pedido #{self.pedido.numero or self.pedido_id}"
+
+
+class PedidoApiKey(models.Model):
+    nome = models.CharField(max_length=120)
+    prefixo = models.CharField(max_length=12, db_index=True)
+    chave_hash = models.CharField(max_length=64, unique=True)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pedido_api_keys",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    ultimo_uso_em = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "Chave da API de pedidos"
+        verbose_name_plural = "Chaves da API de pedidos"
+
+    def __str__(self):
+        return f"{self.nome} ({self.prefixo}...)"
+
+    @staticmethod
+    def hash_key(raw_key):
+        return hashlib.sha256(str(raw_key).encode("utf-8")).hexdigest()
+
+    @classmethod
+    def create_key(cls, nome, user=None):
+        raw_key = f"pd_{secrets.token_urlsafe(32)}"
+        instance = cls.objects.create(
+            nome=nome,
+            prefixo=raw_key[:12],
+            chave_hash=cls.hash_key(raw_key),
+            criado_por=user if getattr(user, "is_authenticated", False) else None,
+        )
+        return instance, raw_key
+
+    @classmethod
+    def authenticate(cls, raw_key):
+        raw_key = str(raw_key or "").strip()
+        if not raw_key:
+            return None
+        return cls.objects.filter(chave_hash=cls.hash_key(raw_key)).first()
 
 
 class Cupom(models.Model):
