@@ -201,6 +201,19 @@ class Pedido(models.Model):
             {"status": self.Status.FINALIZADO, "number": "5", "label": "Entregue"},
         ]
 
+    @property
+    def item_type_counts(self):
+        counts = {"pratos": 0, "adicionais": 0, "bebidas": 0}
+        for item in self.itens.all():
+            quantidade = max(item.quantidade or 0, 0)
+            if item.prato_id:
+                counts["pratos"] += quantidade
+            elif item.adicional_id:
+                counts["adicionais"] += quantidade
+            elif item.bebida_id:
+                counts["bebidas"] += quantidade
+        return counts
+
     def save(self, *args, **kwargs):
         old_status = None
         if self.pk:

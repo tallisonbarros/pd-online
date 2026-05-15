@@ -53,6 +53,26 @@
         `).join("");
     }
 
+    function buildKitchenTypeCounts(pedido) {
+        const counts = pedido.item_type_counts || {};
+        const pratos = Number(counts.pratos || 0);
+        const adicionais = Number(counts.adicionais || 0);
+        const bebidas = Number(counts.bebidas || 0);
+        return `
+            <div class="kitchen-type-counts" aria-label="Resumo de itens do pedido">
+                <span title="Pratos">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></svg>
+                    ${pratos}
+                </span>
+                <span title="Adicionais"><i aria-hidden="true">+</i>${adicionais}</span>
+                <span title="Bebidas">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h10l-1 7v10a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V9L7 2zm2.3 2 .5 4h4.4l.5-4H9.3zM10 10v9a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-9h-4z"/></svg>
+                    ${bebidas}
+                </span>
+            </div>
+        `;
+    }
+
     function buildOrderCard(pedido, statusChoices) {
         const endereco = [pedido.endereco, pedido.complemento].filter(Boolean).join(", ");
         const routeHint = pedido.has_coordinates ? "" : '<span class="ops-order-hint">Rota aproximada pelo endereço digitado.</span>';
@@ -61,7 +81,10 @@
             <article class="ops-order-card" data-order-id="${pedido.id}">
                 <div class="ops-order-topline">
                     <p class="ops-order-code">Pedido #${escapeHtml(pedido.numero)}</p>
-                    <span class="status-badge">${escapeHtml(pedido.status_label)}</span>
+                    <div class="ops-order-topline-right">
+                        ${buildKitchenTypeCounts(pedido)}
+                        <span class="status-badge">${escapeHtml(pedido.status_label)}</span>
+                    </div>
                 </div>
 
                 <div class="ops-order-header">

@@ -1323,6 +1323,29 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["pedidos_badge"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [active.id])
 
+    def test_kitchen_api_returns_item_type_counts(self):
+        self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Marmita", preco=Decimal("25.00"), ativo=True)
+        adicional = Adicional.objects.create(nome="Farofa", preco=Decimal("4.00"), ativo=True)
+        bebida = Bebida.objects.create(nome="Suco", preco=Decimal("7.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Contadores",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(pedido=pedido, prato=prato, nome_prato_snapshot="Marmita", preco_snapshot=Decimal("25.00"), quantidade=2)
+        ItemPedido.objects.create(pedido=pedido, adicional=adicional, nome_prato_snapshot="Farofa", preco_snapshot=Decimal("4.00"), quantidade=3)
+        ItemPedido.objects.create(pedido=pedido, bebida=bebida, nome_prato_snapshot="Suco", preco_snapshot=Decimal("7.00"), quantidade=4)
+
+        payload = self.client.get("/controle/api/pedidos/").json()
+        operacao_payload = self.client.get("/controle/api/operacao/").json()
+
+        self.assertEqual(payload["pedidos"][0]["item_type_counts"], {"pratos": 2, "adicionais": 3, "bebidas": 4})
+        self.assertEqual(operacao_payload["pedidos_cards"][0]["item_type_counts"], {"pratos": 2, "adicionais": 3, "bebidas": 4})
+
     def test_order_apis_display_created_time_in_local_timezone(self):
         self.client.force_login(self.staff_user)
         pedido = Pedido.objects.create(
@@ -1372,6 +1395,33 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertTrue(payload["pedidos"][0]["entregador_solicitado"])
         self.assertEqual(payload["pedidos"][0]["copy_url"], f"/controle/api/pedido/{pedido.id}/copias/")
         self.assertEqual(payload["pedidos"][0]["icone_url"], pedido.icone_pedido_url)
+
+    def test_kitchen_card_displays_discreet_item_type_counts(self):
+        self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Marmita", preco=Decimal("25.00"), ativo=True)
+        adicional = Adicional.objects.create(nome="Farofa", preco=Decimal("4.00"), ativo=True)
+        bebida = Bebida.objects.create(nome="Suco", preco=Decimal("7.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Contadores",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(pedido=pedido, prato=prato, nome_prato_snapshot="Marmita", preco_snapshot=Decimal("25.00"), quantidade=2)
+        ItemPedido.objects.create(pedido=pedido, adicional=adicional, nome_prato_snapshot="Farofa", preco_snapshot=Decimal("4.00"), quantidade=3)
+        ItemPedido.objects.create(pedido=pedido, bebida=bebida, nome_prato_snapshot="Suco", preco_snapshot=Decimal("7.00"), quantidade=4)
+
+        response = self.client.get("/controle/operacao/")
+
+        self.assertContains(response, 'class="kitchen-type-counts"')
+        self.assertContains(response, 'title="Pratos"')
+        self.assertContains(response, 'title="Adicionais"')
+        self.assertContains(response, 'title="Bebidas"')
+        self.assertContains(response, "2")
+        self.assertContains(response, "3")
+        self.assertContains(response, "4")
 
     def test_order_icons_are_assigned_by_order_number_sequence(self):
         first = Pedido.objects.create(

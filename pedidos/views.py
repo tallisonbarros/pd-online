@@ -2138,6 +2138,7 @@ def _cozinha_operacao_payload():
                 "cliente": pedido.nome_cliente,
                 "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
                 "icone_url": pedido.icone_pedido_url,
+                "item_type_counts": pedido.item_type_counts,
                 "item_lines": _pedido_item_lines(pedido),
                 "tempo_producao": _tempo_producao_pedido(pedido),
                 "pratos_total": pratos_total,
@@ -3290,6 +3291,7 @@ def api_pedidos_cozinha(request):
                 "status_label": pedido.status_label_contextual,
                 "tipo_coleta": pedido.tipo_coleta,
                 "stage_labels": pedido.stage_labels,
+                "item_type_counts": pedido.item_type_counts,
                 "horario": _format_local_datetime(pedido.criado_em, "%H:%M"),
                 "total": f"R$ {pedido.total:.2f}".replace(".", ","),
                 "itens": [

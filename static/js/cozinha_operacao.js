@@ -10,7 +10,6 @@
     const listaNode = document.getElementById("coz-lista");
     const shellNode = root.closest(".ops-shell--cozinha");
     const fullscreenButton = document.querySelector("[data-cozinha-fullscreen-toggle]");
-    const autoScrollTimers = [];
 
     function pad(value) {
         return String(value).padStart(2, "0");
@@ -45,31 +44,24 @@
         return safeLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
     }
 
-    function stopAutoScrollLists() {
-        while (autoScrollTimers.length) {
-            window.clearInterval(autoScrollTimers.pop());
-        }
-    }
-
-    function startAutoScrollLists() {
-        stopAutoScrollLists();
-        document.querySelectorAll("[data-auto-scroll-list]").forEach((list) => {
-            if (list.scrollHeight <= list.clientHeight + 2) return;
-            let pauseTicks = 0;
-            const timer = window.setInterval(() => {
-                if (pauseTicks > 0) {
-                    pauseTicks -= 1;
-                    return;
-                }
-                if (list.scrollTop + list.clientHeight >= list.scrollHeight - 1) {
-                    list.scrollTop = 0;
-                    pauseTicks = 8;
-                    return;
-                }
-                list.scrollTop += 1;
-            }, 90);
-            autoScrollTimers.push(timer);
-        });
+    function buildKitchenTypeCounts(pedido) {
+        const counts = pedido.item_type_counts || {};
+        const pratos = Number(counts.pratos || 0);
+        const adicionais = Number(counts.adicionais || 0);
+        const bebidas = Number(counts.bebidas || 0);
+        return `
+            <div class="kitchen-type-counts" aria-label="Resumo de itens do pedido">
+                <span title="Pratos">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></svg>
+                    ${pratos}
+                </span>
+                <span title="Adicionais"><i aria-hidden="true">+</i>${adicionais}</span>
+                <span title="Bebidas">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h10l-1 7v10a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V9L7 2zm2.3 2 .5 4h4.4l.5-4H9.3zM10 10v9a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-9h-4z"/></svg>
+                    ${bebidas}
+                </span>
+            </div>
+        `;
     }
 
     async function toggleFullscreen() {
@@ -120,14 +112,12 @@
                                     <img src="${escapeHtml(pedido.icone_url || "")}" alt="">
                                 </div>
                                 <div>
-                                    <h2>${escapeHtml(pedido.cliente)} <span>#${escapeHtml(pedido.pedido_numero)}</span></h2>
+                                    <h2>${escapeHtml(pedido.cliente)}</h2>
                                     <p class="ped-time">${escapeHtml(pedido.criado_em || "")}</p>
                                 </div>
                             </div>
+                            ${buildKitchenTypeCounts(pedido)}
 
-                        </div>
-                        <div class="coz-prod-priority-head">
-                            <span>Prioridade</span>
                         </div>
                         <div class="coz-prod-priority-track">
                             ${buildPrioritySegments(pedido.elapsed_min ?? 0)}
@@ -135,16 +125,18 @@
                         <div class="coz-prod-priority-scale">
                             <span>10m</span><span>20m</span><span>30m</span><span>40m</span><span>50m</span><span>60m</span>
                         </div>
-                        <p class="coz-prod-stage">Estágio atual: ${escapeHtml(pedido.elapsed_min ?? 0)}m</p>
-                        <ul class="ped-item-list coz-prod-item-list coz-prod-item-list--stage" data-auto-scroll-list>
+                        <ul class="ped-item-list coz-prod-item-list coz-prod-item-list--stage">
                             ${buildItemLines(pedido.item_lines)}
                         </ul>
+                        <div class="coz-prod-card-footer">
+                            <span class="coz-prod-stage">${escapeHtml(pedido.elapsed_min ?? 0)}m</span>
+                            <span class="coz-prod-order-number">#${escapeHtml(pedido.pedido_numero)}</span>
+                        </div>
                     </article>
                 `
             )
             .join("");
         listaNode.innerHTML = `<div class="coz-live-orders-grid">${html}</div>`;
-        startAutoScrollLists();
     }
 
     async function syncOperação() {
@@ -169,7 +161,6 @@
 
     tickClock();
     window.setInterval(tickClock, 1000);
-    startAutoScrollLists();
     fullscreenButton?.addEventListener("click", toggleFullscreen);
     document.addEventListener("fullscreenchange", syncFullscreenState);
     syncOperação();

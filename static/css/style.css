@@ -5989,6 +5989,7 @@ fieldset.field {
     padding: 18px;
     display: grid;
     gap: 16px;
+    position: relative;
 }
 
 .ops-order-topline,
@@ -5999,6 +6000,15 @@ fieldset.field {
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+}
+
+.ops-order-topline-right {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+    padding-right: 260px;
 }
 
 .ops-order-code {
@@ -7567,11 +7577,14 @@ fieldset.field {
     background: #fffdfa;
     box-shadow: 0 14px 34px rgba(34, 19, 17, 0.08);
     padding: 20px;
+    position: relative;
 }
 
 .coz-prod-card-head {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
+    align-items: start;
+    padding-right: 270px;
 }
 
 .coz-prod-card-head .ped-client {
@@ -7597,26 +7610,20 @@ fieldset.field {
 }
 
 .coz-prod-item-list {
-    padding-right: 4px;
+    padding-right: 2px;
 }
 
 .coz-prod-item-list li {
-    font-size: 11px;
+    font-size: 13px;
+    line-height: 1.25;
 }
 
 .coz-prod-item-list--stage {
-    max-height: 28px;
-    margin-top: 6px;
-    overflow: hidden;
+    margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 12px;
-    row-gap: 0;
-    scrollbar-width: none;
-}
-
-.coz-prod-item-list--stage::-webkit-scrollbar {
-    display: none;
+    column-gap: 14px;
+    row-gap: 3px;
 }
 
 .coz-prod-top {
@@ -7708,7 +7715,7 @@ fieldset.field {
 }
 
 .coz-prod-priority-track {
-    margin-top: 8px;
+    margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 7px;
@@ -7725,6 +7732,22 @@ fieldset.field {
     background: #11b777;
 }
 
+.coz-prod-priority-track i.is-active:nth-child(3) {
+    background: #8dcf4f;
+}
+
+.coz-prod-priority-track i.is-active:nth-child(4) {
+    background: #f2c94c;
+}
+
+.coz-prod-priority-track i.is-active:nth-child(5) {
+    background: #f08a24;
+}
+
+.coz-prod-priority-track i.is-active:nth-child(6) {
+    background: #d94b3d;
+}
+
 .coz-prod-priority-scale {
     margin-top: 4px;
     display: grid;
@@ -7735,17 +7758,31 @@ fieldset.field {
 .coz-prod-priority-scale span {
     text-align: center;
     color: #a38f83;
-    font-size: 14px;
+    font-size: 9px;
     font-weight: 700;
 }
 
 .coz-prod-stage {
-    margin: 8px 0 0;
-    color: #9f8a7f;
+    color: #7c675c;
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    font-size: 6.5px;
+    font-size: 12px;
     font-weight: 800;
+}
+
+.coz-prod-card-footer {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.coz-prod-order-number {
+    color: #7c675c;
+    letter-spacing: 0.12em;
+    font-size: 12px;
+    font-weight: 900;
 }
 
 .ops-shell--cozinha.is-kitchen-fullscreen {
@@ -7849,6 +7886,25 @@ fieldset.field {
     }
 
     .coz-prod-card { padding: 14px; border-radius: 18px; }
+    .coz-prod-card-head { padding-right: 212px; }
+    .kitchen-type-counts { gap: 6px; }
+    .kitchen-type-counts span {
+        min-width: 62px;
+        height: 48px;
+        border-radius: 15px;
+        font-size: 23px;
+    }
+    .kitchen-type-counts svg {
+        width: 24px;
+        height: 24px;
+    }
+    .kitchen-type-counts i { font-size: 29px; }
+    .coz-prod-card .kitchen-type-counts,
+    .ops-order-card .kitchen-type-counts {
+        top: 12px;
+        right: 12px;
+    }
+    .ops-order-topline-right { padding-right: 212px; }
     .coz-prod-top { align-items: flex-start; }
     .coz-prod-icon { width: 56px; height: 56px; border-radius: 16px; }
     .coz-prod-icon svg { width: 28px; height: 28px; }
@@ -7856,7 +7912,7 @@ fieldset.field {
     .coz-prod-pratos { min-width: 74px; border-radius: 14px; padding: 8px 8px 6px; }
     .coz-prod-pratos strong { font-size: 28px; }
     .coz-prod-priority-head strong { font-size: 20px; }
-    .coz-prod-priority-scale span { font-size: 11px; }
+    .coz-prod-priority-scale span { font-size: 8px; }
     .coz-prod-stage { font-size: 11px; }
     .coz-prod-number { font-size: 24px; }
 }
@@ -8000,6 +8056,51 @@ fieldset.field {
 .ped-client { display: flex; gap: 12px; }
 .ped-card-tools { display: grid; justify-items: end; gap: 10px; }
 .ped-card-tools--approval { padding-top: 0; align-content: start; }
+.kitchen-type-counts {
+    display: inline-flex;
+    justify-content: flex-end;
+    gap: 8px;
+    opacity: 0.84;
+    pointer-events: none;
+    z-index: 2;
+}
+.kitchen-type-counts span {
+    min-width: 76px;
+    height: 58px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 1px solid #eadfd9;
+    border-radius: 18px;
+    background: #fbf7f4;
+    color: #6a554b;
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1;
+}
+.kitchen-type-counts svg {
+    width: 30px;
+    height: 30px;
+    fill: currentColor;
+}
+.kitchen-type-counts i {
+    font-style: normal;
+    font-size: 34px;
+    line-height: 1;
+}
+
+.coz-prod-card .kitchen-type-counts {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+}
+
+.ops-order-card .kitchen-type-counts {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+}
 .ped-card-more {
     position: absolute;
     top: 14px;
