@@ -30,6 +30,15 @@
                 {% for pedido in pedidos_concluidos %}
             <article
                 class="ped-card ped-card--clickable"
+                data-context-menu
+                data-context-edit-mode="order-modal"
+                data-context-edit-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+                data-context-duplicate-url="{% url 'pedidos:duplicar_pedido_admin' pedido.id %}"
+                data-context-cancel-url="{% url 'pedidos:atualizar_status_pedido' pedido.id %}"
+                data-context-cancel-body="status=cancelado"
+                data-context-cancel-message="Cancelar pedido #{{ pedido.numero }}?"
+                data-context-delete-url="{% url 'pedidos:excluir_pedido_admin' pedido.id %}"
+                data-context-delete-message="Excluir pedido #{{ pedido.numero }} definitivamente?"
                 data-order-id="{{ pedido.id }}"
                 data-order-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
                 role="button"
@@ -86,6 +95,15 @@
                 {% for pedido in pedidos_cancelados %}
             <article
                 class="ped-card ped-card--clickable"
+                data-context-menu
+                data-context-edit-mode="order-modal"
+                data-context-edit-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+                data-context-duplicate-url="{% url 'pedidos:duplicar_pedido_admin' pedido.id %}"
+                data-context-cancel-url="{% url 'pedidos:atualizar_status_pedido' pedido.id %}"
+                data-context-cancel-body="status=cancelado"
+                data-context-cancel-message="Cancelar pedido #{{ pedido.numero }}?"
+                data-context-delete-url="{% url 'pedidos:excluir_pedido_admin' pedido.id %}"
+                data-context-delete-message="Excluir pedido #{{ pedido.numero }} definitivamente?"
                 data-order-id="{{ pedido.id }}"
                 data-order-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
                 role="button"
@@ -163,4 +181,5 @@
 {% block extra_js %}
 <script src="{% static 'js/pedidos_admin.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/pedido_detail_modal.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/context_actions.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

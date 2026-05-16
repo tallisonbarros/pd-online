@@ -34,32 +34,54 @@
             <article class="ops-kpi-card">
                 <p>Cardapio</p>
                 <strong data-metric-value="total_cardapio">{{ total_cardapio }}</strong>
-                <span>Acessos no periodo</span>
+                <span>Acessos unicos no periodo</span>
             </article>
             <article class="ops-kpi-card">
                 <p>Carrinho</p>
                 <strong data-metric-value="total_carrinho">{{ total_carrinho }}</strong>
-                <span><span data-metric-value="cart_conversion">{{ cart_conversion }}</span> dos visitantes chegaram aqui</span>
+                <span>Visitantes que chegaram ao carrinho</span>
             </article>
             <article class="ops-kpi-card">
-                <p>Checkout</p>
+                <p>Caixa</p>
                 <strong data-metric-value="total_checkout">{{ total_checkout }}</strong>
-                <span><span data-metric-value="checkout_conversion">{{ checkout_conversion }}</span> a partir do carrinho</span>
+                <span>Visitantes que chegaram ao caixa</span>
             </article>
             <article class="ops-kpi-card">
                 <p>Pedidos criados</p>
                 <strong data-metric-value="total_pedidos_metricas">{{ total_pedidos_metricas }}</strong>
-                <span><span data-metric-value="order_conversion">{{ order_conversion }}</span> a partir do checkout</span>
+                <span>Pedidos reais no periodo</span>
             </article>
-            <article class="ops-kpi-card">
-                <p>Adicoes</p>
-                <strong data-metric-value="add_to_cart_total">{{ add_to_cart_total }}</strong>
-                <span>Cliques de adicionar ao carrinho</span>
+            <article class="ops-kpi-card ops-kpi-card--fulfillment ops-kpi-card--delivery">
+                <div class="metrics-fulfillment-head">
+                    <p>Envio</p>
+                    <span class="metrics-fulfillment-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M3 7h11v9H3V7Zm11 3h3.2l2.8 3.2V16h-6v-6ZM6.5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+                        </svg>
+                    </span>
+                </div>
+                <strong data-metric-value="envio_orders_total">{{ envio_orders_total }}</strong>
+                <span class="metrics-fulfillment-caption">Pedidos feitos para entrega</span>
+                <div class="metrics-fulfillment-share">
+                    <b data-metric-value="envio_orders_share">{{ envio_orders_share }}</b>
+                    <small>do total de pedidos</small>
+                </div>
             </article>
-            <article class="ops-kpi-card">
-                <p>Envios</p>
-                <strong data-metric-value="envios_total">{{ checkout_submit_total|add:pickup_submit_total }}</strong>
-                <span>Finalizacoes de entrega e retirada</span>
+            <article class="ops-kpi-card ops-kpi-card--fulfillment ops-kpi-card--pickup">
+                <div class="metrics-fulfillment-head">
+                    <p>Retirada</p>
+                    <span class="metrics-fulfillment-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M5 4h14l1 5H4l1-5Zm0 7h14v8H5v-8Zm4 2v4h6v-4H9Z"/>
+                        </svg>
+                    </span>
+                </div>
+                <strong data-metric-value="retirada_orders_total">{{ retirada_orders_total }}</strong>
+                <span class="metrics-fulfillment-caption">Pedidos feitos para retirada</span>
+                <div class="metrics-fulfillment-share">
+                    <b data-metric-value="retirada_orders_share">{{ retirada_orders_share }}</b>
+                    <small>do total de pedidos</small>
+                </div>
             </article>
         </section>
 

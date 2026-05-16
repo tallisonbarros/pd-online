@@ -16,7 +16,14 @@
                     <small>Cadastrar extra do pedido</small>
                 </button>
                 {% for adicional in adicionais %}
-                    <article class="dish-card management-card">
+                    <article
+                        class="dish-card management-card"
+                        data-context-menu
+                        data-context-edit-url="{% url 'pedidos:adicionais_admin' %}?edit={{ adicional.id }}"
+                        data-context-duplicate-url="{% url 'pedidos:duplicar_adicional' adicional.id %}"
+                        data-context-delete-url="{% url 'pedidos:excluir_adicional' adicional.id %}"
+                        data-context-delete-message="Excluir {{ adicional.nome }}?"
+                    >
                         <div class="dish-media">
                             {% if adicional.imagem %}
                                 <img src="{{ adicional.imagem.url }}" alt="{{ adicional.nome }}">
@@ -119,4 +126,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/context_actions.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

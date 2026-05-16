@@ -126,6 +126,15 @@
         return `
             <article
                 class="ped-card ped-card--clickable"
+                data-context-menu
+                data-context-edit-mode="order-modal"
+                data-context-edit-url="${detailUrl}"
+                data-context-duplicate-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/duplicar/"))}"
+                data-context-cancel-url="${escapeHtml(buildStatusUrl(pedido.id))}"
+                data-context-cancel-body="status=cancelado"
+                data-context-cancel-message="Cancelar pedido #${pedidoNumero}?"
+                data-context-delete-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/excluir/"))}"
+                data-context-delete-message="Excluir pedido #${pedidoNumero} definitivamente?"
                 data-order-id="${pedidoId}"
                 data-order-detail-url="${detailUrl}"
                 role="button"
@@ -187,6 +196,15 @@
         return `
             <article
                 class="ped-card ped-card--clickable"
+                data-context-menu
+                data-context-edit-mode="order-modal"
+                data-context-edit-url="${detailUrl}"
+                data-context-duplicate-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/duplicar/"))}"
+                data-context-cancel-url="${escapeHtml(buildStatusUrl(pedido.id))}"
+                data-context-cancel-body="status=cancelado"
+                data-context-cancel-message="Cancelar pedido #${pedidoNumero}?"
+                data-context-delete-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/excluir/"))}"
+                data-context-delete-message="Excluir pedido #${pedidoNumero} definitivamente?"
                 data-order-id="${pedidoId}"
                 data-order-detail-url="${detailUrl}"
                 role="button"
@@ -244,6 +262,15 @@
         return `
             <article
                 class="ped-card ped-card--clickable"
+                data-context-menu
+                data-context-edit-mode="order-modal"
+                data-context-edit-url="${detailUrl}"
+                data-context-duplicate-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/duplicar/"))}"
+                data-context-cancel-url="${escapeHtml(buildStatusUrl(pedido.id))}"
+                data-context-cancel-body="status=cancelado"
+                data-context-cancel-message="Cancelar pedido #${pedidoNumero}?"
+                data-context-delete-url="${escapeHtml(buildStatusUrl(pedido.id).replace("/status/", "/excluir/"))}"
+                data-context-delete-message="Excluir pedido #${pedidoNumero} definitivamente?"
                 data-order-id="${pedidoId}"
                 data-order-detail-url="${detailUrl}"
                 role="button"

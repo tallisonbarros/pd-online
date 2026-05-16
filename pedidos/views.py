@@ -280,7 +280,24 @@ def _record_access_event(request, event_type, **extra):
         return None
     event_path = _safe_text(extra.get("path") or request.path)[:160]
     session_key = _access_session_key(request)
-    dedupe_seconds = _safe_metric_int(extra.get("dedupe_seconds"))
+    metadata = extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {}
+    allowed_metadata = {"origem", "variacao", "tipo_coleta", "forma_pagamento", "pedido_id", "page_open_id"}
+    clean_metadata = {
+        str(key)[:40]: str(value)[:160]
+        for key, value in metadata.items()
+        if key in allowed_metadata and value not in (None, "")
+    }
+    dedupe_metadata_key = _safe_text(extra.get("dedupe_metadata_key"))
+    if dedupe_metadata_key and clean_metadata.get(dedupe_metadata_key):
+        metadata_filter = {f"metadata__{dedupe_metadata_key}": clean_metadata[dedupe_metadata_key]}
+        if AccessEvent.objects.filter(
+            event_type=event_type,
+            path=event_path,
+            session_key=session_key,
+            **metadata_filter,
+        ).exists():
+            return None
+    dedupe_seconds = 0 if (dedupe_metadata_key and clean_metadata.get(dedupe_metadata_key)) else _safe_metric_int(extra.get("dedupe_seconds"))
     if dedupe_seconds:
         recent_since = timezone.now() - timedelta(seconds=dedupe_seconds)
         if AccessEvent.objects.filter(
@@ -290,13 +307,6 @@ def _record_access_event(request, event_type, **extra):
             created_at__gte=recent_since,
         ).exists():
             return None
-    metadata = extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {}
-    allowed_metadata = {"origem", "variacao", "tipo_coleta", "forma_pagamento", "pedido_id"}
-    clean_metadata = {
-        str(key)[:40]: str(value)[:160]
-        for key, value in metadata.items()
-        if key in allowed_metadata and value not in (None, "")
-    }
     return AccessEvent.objects.create(
         event_type=event_type,
         path=event_path,
@@ -311,7 +321,6 @@ def _record_access_event(request, event_type, **extra):
 
 @never_cache
 def cardapio(request):
-    _record_access_event(request, AccessEvent.EventType.MENU_VIEW, dedupe_seconds=60)
     config = ConfiguracaoEntrega.get_solo()
     whatsapp_numero = _configured_whatsapp_number(config)
     whatsapp_cardapio_url = (
@@ -347,7 +356,6 @@ def cardapio(request):
 
 @never_cache
 def checkout(request):
-    _record_access_event(request, AccessEvent.EventType.CHECKOUT_VIEW, dedupe_seconds=60)
     config = ConfiguracaoEntrega.get_solo()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
     adicionais_lookup = {
@@ -372,7 +380,6 @@ def checkout(request):
 
 @never_cache
 def carrinho(request):
-    _record_access_event(request, AccessEvent.EventType.CART_VIEW, dedupe_seconds=60)
     return render(request, "pedidos/carrinho.html")
 
 
@@ -395,6 +402,11 @@ def api_metric_event(request):
         item_id = None
 
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    is_page_view_event = event_type in {
+        AccessEvent.EventType.MENU_VIEW,
+        AccessEvent.EventType.CART_VIEW,
+        AccessEvent.EventType.CHECKOUT_VIEW,
+    }
     event = _record_access_event(
         request,
         event_type,
@@ -404,8 +416,10 @@ def api_metric_event(request):
         cart_items_count=payload.get("cart_items_count"),
         cart_total=payload.get("cart_total"),
         metadata=metadata,
+        dedupe_metadata_key="page_open_id" if is_page_view_event else "",
+        dedupe_seconds=60 if is_page_view_event else 0,
     )
-    return JsonResponse({"ok": True, "event_id": event.id})
+    return JsonResponse({"ok": True, "event_id": event.id if event else None, "duplicate": event is None})
 
 
 def _safe_text(value):
@@ -2007,8 +2021,10 @@ def _build_access_metrics_context(period):
 
     menu_sessions = event_sessions.get(AccessEvent.EventType.MENU_VIEW, 0)
     cart_sessions = event_sessions.get(AccessEvent.EventType.CART_VIEW, 0)
+    pickup_sessions = event_sessions.get(AccessEvent.EventType.PICKUP_SUBMIT, 0)
     checkout_sessions = event_sessions.get(AccessEvent.EventType.CHECKOUT_VIEW, 0)
     order_sessions = event_sessions.get(AccessEvent.EventType.ORDER_CREATED, 0)
+    closing_sessions = pickup_sessions + checkout_sessions
 
     funnel_steps = [
         {
@@ -2024,7 +2040,13 @@ def _build_access_metrics_context(period):
             "width": _percent(cart_sessions, menu_sessions),
         },
         {
-            "label": "Checkout",
+            "label": "Retirada",
+            "count": pickup_sessions,
+            "rate": _rate_label(pickup_sessions, cart_sessions),
+            "width": _percent(pickup_sessions, menu_sessions),
+        },
+        {
+            "label": "Caixa",
             "count": checkout_sessions,
             "rate": _rate_label(checkout_sessions, cart_sessions),
             "width": _percent(checkout_sessions, menu_sessions),
@@ -2032,7 +2054,7 @@ def _build_access_metrics_context(period):
         {
             "label": "Pedido criado",
             "count": order_sessions,
-            "rate": _rate_label(order_sessions, checkout_sessions or cart_sessions),
+            "rate": _rate_label(order_sessions, closing_sessions or cart_sessions),
             "width": _percent(order_sessions, menu_sessions),
         },
     ]
@@ -2095,20 +2117,31 @@ def _build_access_metrics_context(period):
     pedidos_abertos = Pedido.objects.exclude(
         status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
     ).count()
+    pedidos_metricas = Pedido.objects.filter(criado_em__date__gte=inicio, criado_em__date__lte=fim).exclude(status=Pedido.Status.RASCUNHO)
+    envio_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.ENTREGA).count()
+    retirada_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.RETIRADA).count()
+    total_pedidos_metricas = pedidos_metricas.count()
+    envio_orders_share = _rate_label(envio_orders_total, total_pedidos_metricas)
+    retirada_orders_share = _rate_label(retirada_orders_total, total_pedidos_metricas)
 
     return {
         "periodo_key": periodo["key"],
         "periodo_label": periodo["label"],
         "total_cardapio": event_counts.get(AccessEvent.EventType.MENU_VIEW, 0),
         "total_carrinho": event_counts.get(AccessEvent.EventType.CART_VIEW, 0),
+        "total_retirada": event_counts.get(AccessEvent.EventType.PICKUP_SUBMIT, 0),
         "total_checkout": event_counts.get(AccessEvent.EventType.CHECKOUT_VIEW, 0),
-        "total_pedidos_metricas": event_counts.get(AccessEvent.EventType.ORDER_CREATED, 0),
-        "add_to_cart_total": event_counts.get(AccessEvent.EventType.ADD_TO_CART, 0),
+        "total_pedidos_metricas": total_pedidos_metricas,
+        "envio_orders_total": envio_orders_total,
+        "retirada_orders_total": retirada_orders_total,
+        "envio_orders_share": envio_orders_share,
+        "retirada_orders_share": retirada_orders_share,
         "checkout_submit_total": event_counts.get(AccessEvent.EventType.CHECKOUT_SUBMIT, 0),
         "pickup_submit_total": event_counts.get(AccessEvent.EventType.PICKUP_SUBMIT, 0),
         "cart_conversion": _rate_label(cart_sessions, menu_sessions),
+        "pickup_conversion": _rate_label(pickup_sessions, cart_sessions),
         "checkout_conversion": _rate_label(checkout_sessions, cart_sessions),
-        "order_conversion": _rate_label(order_sessions, checkout_sessions or cart_sessions),
+        "order_conversion": _rate_label(order_sessions, closing_sessions or cart_sessions),
         "funnel_steps": funnel_steps,
         "top_items": top_items,
         "peak_hour": peak_hour,
@@ -2126,11 +2159,15 @@ def _access_metrics_json(context):
         "kpis": {
             "total_cardapio": context["total_cardapio"],
             "total_carrinho": context["total_carrinho"],
+            "total_retirada": context["total_retirada"],
             "total_checkout": context["total_checkout"],
             "total_pedidos_metricas": context["total_pedidos_metricas"],
-            "add_to_cart_total": context["add_to_cart_total"],
-            "envios_total": context["checkout_submit_total"] + context["pickup_submit_total"],
+            "envio_orders_total": context["envio_orders_total"],
+            "retirada_orders_total": context["retirada_orders_total"],
+            "envio_orders_share": context["envio_orders_share"],
+            "retirada_orders_share": context["retirada_orders_share"],
             "cart_conversion": context["cart_conversion"],
+            "pickup_conversion": context["pickup_conversion"],
             "checkout_conversion": context["checkout_conversion"],
             "order_conversion": context["order_conversion"],
         },
@@ -2838,6 +2875,76 @@ def finalizar_pedido_novo_admin(request, pedido_id):
     )
 
 
+def _clone_order_as_draft(pedido):
+    clone = Pedido.objects.create(
+        nome_cliente=pedido.nome_cliente,
+        telefone=pedido.telefone,
+        cliente=pedido.cliente,
+        rua=pedido.rua,
+        numero_endereco=pedido.numero_endereco,
+        bairro=pedido.bairro,
+        cidade=pedido.cidade,
+        estado=pedido.estado,
+        endereco_formatado=pedido.endereco_formatado,
+        latitude=pedido.latitude,
+        longitude=pedido.longitude,
+        endereco=pedido.endereco,
+        complemento=pedido.complemento,
+        lote_quadra=pedido.lote_quadra,
+        ponto_referencia=pedido.ponto_referencia,
+        tipo_coleta=pedido.tipo_coleta,
+        forma_pagamento=pedido.forma_pagamento,
+        enviar_talheres=pedido.enviar_talheres,
+        observacao_geral=pedido.observacao_geral,
+        status=Pedido.Status.RASCUNHO,
+        distancia_km=pedido.distancia_km,
+        valor_frete=pedido.valor_frete,
+        cupom=pedido.cupom,
+        cupom_codigo=pedido.cupom_codigo,
+    )
+    for item in pedido.itens.all():
+        ItemPedido.objects.create(
+            pedido=clone,
+            prato=item.prato,
+            bebida=item.bebida,
+            adicional=item.adicional,
+            nome_prato_snapshot=item.nome_prato_snapshot,
+            variacao_nome_snapshot=item.variacao_nome_snapshot,
+            preco_snapshot=item.preco_snapshot,
+            quantidade=item.quantidade,
+            observacao=item.observacao,
+        )
+    recalculate_order_totals(clone, cupom_codigo=clone.cupom_codigo)
+    return clone
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def duplicar_pedido_admin(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para duplicar pedido.")
+    pedido = get_object_or_404(Pedido.objects.prefetch_related("itens"), id=pedido_id)
+    clone = _clone_order_as_draft(pedido)
+    detail_url = reverse("pedidos:pedido_detalhe_admin", args=[clone.id])
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True, "id": clone.id, "detail_url": detail_url})
+    return redirect("pedidos:pedido_detalhe_admin", pedido_id=clone.id)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+@transaction.atomic
+def excluir_pedido_admin(request, pedido_id):
+    if not _user_can_manage_order_payment(request.user):
+        return HttpResponseBadRequest("Usuario sem permissao para excluir pedido.")
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    pedido.delete()
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    return redirect("pedidos:cozinha_pedidos")
+
+
 @staff_member_required(login_url="/admin/login/")
 @require_POST
 def atualizar_pagamento_pedido(request, pedido_id):
@@ -3407,6 +3514,37 @@ def alternar_prato(request, prato_id):
     return redirect("pedidos:gestao_pratos")
 
 
+def _catalog_action_response(request, redirect_name):
+    redirect_url = reverse(redirect_name)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True, "redirect_url": redirect_url})
+    return redirect(redirect_name)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def duplicar_prato(request, prato_id):
+    prato = get_object_or_404(Prato, id=prato_id)
+    Prato.objects.create(
+        nome=f"Copia de {prato.nome}"[:120],
+        descricao=prato.descricao,
+        variacoes=prato.variacoes,
+        imagem=prato.imagem,
+        preco=prato.preco,
+        ativo=False,
+        dias_disponiveis=prato.dias_disponiveis,
+    )
+    return _catalog_action_response(request, "pedidos:gestao_pratos")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_prato(request, prato_id):
+    prato = get_object_or_404(Prato, id=prato_id)
+    prato.delete()
+    return _catalog_action_response(request, "pedidos:gestao_pratos")
+
+
 def _delete_catalog_image(model, object_id):
     item = get_object_or_404(model, id=object_id)
     if not item.imagem:
@@ -3494,6 +3632,29 @@ def alternar_bebida(request, bebida_id):
 
 @staff_member_required(login_url="/admin/login/")
 @require_POST
+def duplicar_bebida(request, bebida_id):
+    bebida = get_object_or_404(Bebida, id=bebida_id)
+    Bebida.objects.create(
+        nome=f"Copia de {bebida.nome}"[:120],
+        descricao=bebida.descricao,
+        imagem=bebida.imagem,
+        preco=bebida.preco,
+        ativo=False,
+        ordem=bebida.ordem,
+    )
+    return _catalog_action_response(request, "pedidos:gestao_bebidas")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_bebida(request, bebida_id):
+    bebida = get_object_or_404(Bebida, id=bebida_id)
+    bebida.delete()
+    return _catalog_action_response(request, "pedidos:gestao_bebidas")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
 def excluir_imagem_bebida(request, bebida_id):
     return _delete_catalog_image(Bebida, bebida_id)
 
@@ -3529,6 +3690,29 @@ def alternar_adicional(request, adicional_id):
     adicional.ativo = not adicional.ativo
     adicional.save(update_fields=["ativo"])
     return redirect("pedidos:adicionais_admin")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def duplicar_adicional(request, adicional_id):
+    adicional = get_object_or_404(Adicional, id=adicional_id)
+    Adicional.objects.create(
+        nome=f"Copia de {adicional.nome}"[:120],
+        descricao=adicional.descricao,
+        imagem=adicional.imagem,
+        preco=adicional.preco,
+        ativo=False,
+        ordem=adicional.ordem,
+    )
+    return _catalog_action_response(request, "pedidos:adicionais_admin")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def excluir_adicional(request, adicional_id):
+    adicional = get_object_or_404(Adicional, id=adicional_id)
+    adicional.delete()
+    return _catalog_action_response(request, "pedidos:adicionais_admin")
 
 
 @staff_member_required(login_url="/admin/login/")

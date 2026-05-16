@@ -7,7 +7,15 @@
     const checkoutPaymentKey = `${cartKey}_checkout_payment`;
     const checkoutCustomerNameKey = `${cartKey}_checkout_customer_name`;
     const checkoutCouponKey = `${cartKey}_checkout_coupon`;
+    const cartMetaKey = `${cartKey}_meta`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
+    const currentCartCycleKey = String(config.cartCycleKey || "").trim();
+    const cartExpiresAt = String(config.cartExpiresAt || "").trim();
+    const serverNow = String(config.serverNow || "").trim();
+    const serverClockOffsetMs = (() => {
+        const serverTime = Date.parse(serverNow);
+        return Number.isFinite(serverTime) ? serverTime - Date.now() : 0;
+    })();
     const checkoutLookup = (() => {
         const node = document.getElementById("checkout-pratos-lookup");
         if (!node) return {};
@@ -351,7 +359,70 @@
         return mergeSimpleDuplicates(cart.map(enrichCartItem));
     }
 
+    function operationalNowMs() {
+        return Date.now() + serverClockOffsetMs;
+    }
+
+    function readCartMeta() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(cartMetaKey) || "{}");
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function writeCartMeta() {
+        if (!currentCartCycleKey) {
+            localStorage.removeItem(cartMetaKey);
+            return;
+        }
+        localStorage.setItem(
+            cartMetaKey,
+            JSON.stringify({
+                cycle_key: currentCartCycleKey,
+                expires_at: cartExpiresAt,
+                saved_at: new Date(operationalNowMs()).toISOString(),
+            })
+        );
+    }
+
+    function clearCartStorage(options = {}) {
+        const shouldNotify = options.notify === true;
+        const hadCart = Boolean(localStorage.getItem(cartKey));
+        localStorage.removeItem(cartKey);
+        localStorage.removeItem(cartMetaKey);
+        localStorage.removeItem(checkoutDraftKey);
+        localStorage.removeItem(checkoutPaymentKey);
+        localStorage.removeItem(checkoutCouponKey);
+        if (shouldNotify && hadCart) {
+            showNotice(
+                "Carrinho reiniciado",
+                "O horario de pedidos virou. Monte seu carrinho novamente com os itens disponiveis agora."
+            );
+        }
+        syncCartCount();
+        document.dispatchEvent(new CustomEvent("prato:cart-cleared"));
+    }
+
+    function cartExpired(meta = readCartMeta()) {
+        if (!localStorage.getItem(cartKey)) return false;
+        if (currentCartCycleKey && meta.cycle_key !== currentCartCycleKey) return true;
+        const expiresAtMs = Date.parse(meta.expires_at || cartExpiresAt || "");
+        return Number.isFinite(expiresAtMs) && operationalNowMs() >= expiresAtMs;
+    }
+
+    function ensureCartIsCurrent(options = {}) {
+        if (!localStorage.getItem(cartKey)) return false;
+        if (cartExpired()) {
+            clearCartStorage(options);
+            return true;
+        }
+        return false;
+    }
+
     function getCart() {
+        if (ensureCartIsCurrent({ notify: true })) return [];
         try {
             return normalizeCart(JSON.parse(localStorage.getItem(cartKey) || "[]"));
         } catch (error) {
@@ -360,9 +431,34 @@
     }
 
     function saveCart(cart) {
-        localStorage.setItem(cartKey, JSON.stringify(normalizeCart(cart)));
+        const normalizedCart = normalizeCart(cart);
+        if (normalizedCart.length) {
+            writeCartMeta();
+            localStorage.setItem(cartKey, JSON.stringify(normalizedCart));
+        } else {
+            clearCartStorage();
+        }
         syncCartCount();
     }
+
+    function scheduleCartExpiration() {
+        ensureCartIsCurrent({ notify: true });
+        const expiresAtMs = Date.parse(cartExpiresAt || "");
+        if (!Number.isFinite(expiresAtMs)) return;
+        const delay = expiresAtMs - operationalNowMs();
+        if (delay <= 0) {
+            ensureCartIsCurrent({ notify: true });
+            return;
+        }
+        window.setTimeout(() => {
+            ensureCartIsCurrent({ notify: true });
+        }, Math.min(delay + 500, 2147483647));
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) ensureCartIsCurrent({ notify: true });
+    });
+    window.addEventListener("pageshow", () => ensureCartIsCurrent({ notify: true }));
 
     function cartStats(cartOverride) {
         const cart = Array.isArray(cartOverride) ? normalizeCart(cartOverride) : getCart();
@@ -375,6 +471,18 @@
     function trackMetricEvent(eventType, payload = {}) {
         const eventUrl = String(config.metricEventUrl || "").trim();
         if (!eventUrl || !eventType) return;
+        window.__pratoMetricLastSent = window.__pratoMetricLastSent || new Map();
+        const dedupeKey = JSON.stringify({
+            eventType,
+            path: window.location.pathname,
+            itemType: payload.item_type || "",
+            itemId: payload.item_id || "",
+            metadata: payload.metadata || {},
+        });
+        const now = Date.now();
+        const lastSent = window.__pratoMetricLastSent.get(dedupeKey) || 0;
+        if (now - lastSent < 900) return;
+        window.__pratoMetricLastSent.set(dedupeKey, now);
         const stats = cartStats();
         const body = {
             event_type: eventType,

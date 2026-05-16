@@ -16,7 +16,14 @@
                     <small>Cadastrar item do cardápio</small>
                 </button>
                 {% for prato in pratos %}
-                    <article class="dish-card management-card">
+                    <article
+                        class="dish-card management-card"
+                        data-context-menu
+                        data-context-edit-url="{% url 'pedidos:gestao_pratos' %}?edit={{ prato.id }}"
+                        data-context-duplicate-url="{% url 'pedidos:duplicar_prato' prato.id %}"
+                        data-context-delete-url="{% url 'pedidos:excluir_prato' prato.id %}"
+                        data-context-delete-message="Excluir {{ prato.nome }}?"
+                    >
                         <div class="dish-media">
                             {% if prato.imagem %}
                                 <img src="{{ prato.imagem.url }}" alt="{{ prato.nome }}">
@@ -130,4 +137,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+<script src="{% static 'js/context_actions.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

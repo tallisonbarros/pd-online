@@ -201,6 +201,22 @@ class AccessMetricsTests(TestCase):
             is_staff=True,
         )
 
+    def _create_metric_order(self, tipo_coleta):
+        return Pedido.objects.create(
+            nome_cliente="Cliente Metricas",
+            telefone="64999999999",
+            rua="Rua Metricas",
+            numero_endereco="10",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            endereco="Rua Metricas, 10 - Centro, Rio Verde - GO",
+            tipo_coleta=tipo_coleta,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.NOVO,
+            total=Decimal("39.90"),
+        )
+
     def test_metricas_page_requires_staff_authentication(self):
         response = self.client.get("/controle/metricas/")
 
@@ -242,6 +258,7 @@ class AccessMetricsTests(TestCase):
         events = [
             AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.CART_VIEW, path="/carrinho/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.PICKUP_SUBMIT, path="/carrinho/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.CHECKOUT_VIEW, path="/checkout/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.ORDER_CREATED, path="/pedido/criar/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="b"),
@@ -249,13 +266,32 @@ class AccessMetricsTests(TestCase):
         ]
         AccessEvent.objects.bulk_create(events)
         AccessEvent.objects.update(created_at=today)
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA)
+        self._create_metric_order(Pedido.TipoColeta.RETIRADA)
 
         response = self.client.get("/controle/metricas/?period=7d")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Metricas de acesso")
         self.assertContains(response, "Executivo")
-        self.assertContains(response, 'data-metric-value="cart_conversion">50%</span> dos visitantes chegaram aqui')
+        self.assertContains(response, "Retirada")
+        self.assertContains(response, "Caixa")
+        self.assertContains(response, "Visitantes que chegaram ao carrinho")
+        self.assertContains(response, 'data-metric-value="retirada_orders_total">1</strong>')
+        self.assertContains(response, 'data-metric-value="envio_orders_total">1</strong>')
+        self.assertContains(response, 'data-metric-value="total_pedidos_metricas">2</strong>')
+        self.assertContains(response, 'data-metric-value="envio_orders_share">50%</b>')
+        self.assertContains(response, 'data-metric-value="retirada_orders_share">50%</b>')
+        self.assertContains(response, "ops-kpi-card--fulfillment")
+        self.assertContains(response, "Acessos unicos no periodo")
+        self.assertContains(response, "Pedidos reais no periodo")
+        self.assertNotContains(response, "Adicoes")
+        content = response.content.decode()
+        self.assertLess(content.index('data-metric-value="total_cardapio"'), content.index('data-metric-value="total_carrinho"'))
+        self.assertLess(content.index('data-metric-value="total_carrinho"'), content.index('data-metric-value="total_checkout"'))
+        self.assertLess(content.index('data-metric-value="total_checkout"'), content.index('data-metric-value="total_pedidos_metricas"'))
+        self.assertLess(content.index('data-metric-value="total_pedidos_metricas"'), content.index('data-metric-value="envio_orders_total"'))
+        self.assertLess(content.index('data-metric-value="envio_orders_total"'), content.index('data-metric-value="retirada_orders_total"'))
         self.assertContains(response, 'data-metrics-root')
         self.assertContains(response, "/controle/api/metricas/")
 
@@ -265,10 +301,13 @@ class AccessMetricsTests(TestCase):
         events = [
             AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.CART_VIEW, path="/carrinho/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.PICKUP_SUBMIT, path="/carrinho/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.ADD_TO_CART, path="/", session_key="a", item_type="prato", item_id=prato.id),
         ]
         AccessEvent.objects.bulk_create(events)
         AccessEvent.objects.update(created_at=timezone.now())
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA)
+        self._create_metric_order(Pedido.TipoColeta.RETIRADA)
 
         response = self.client.get("/controle/api/metricas/?period=7d")
 
@@ -277,6 +316,15 @@ class AccessMetricsTests(TestCase):
         self.assertEqual(payload["periodo_key"], "7d")
         self.assertEqual(payload["kpis"]["total_cardapio"], 1)
         self.assertEqual(payload["kpis"]["total_carrinho"], 1)
+        self.assertEqual(payload["kpis"]["total_retirada"], 1)
+        self.assertEqual(payload["kpis"]["total_pedidos_metricas"], 2)
+        self.assertEqual(payload["kpis"]["envio_orders_total"], 1)
+        self.assertEqual(payload["kpis"]["retirada_orders_total"], 1)
+        self.assertEqual(payload["kpis"]["envio_orders_share"], "50%")
+        self.assertEqual(payload["kpis"]["retirada_orders_share"], "50%")
+        self.assertNotIn("add_to_cart_total", payload["kpis"])
+        self.assertEqual(payload["funnel_steps"][2]["label"], "Retirada")
+        self.assertEqual(payload["funnel_steps"][3]["label"], "Caixa")
         self.assertEqual(payload["top_items"][0]["nome"], "Executivo")
         self.assertIn("updated_at", payload)
 
@@ -552,17 +600,37 @@ class PublicFlowCacheTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("no-store", response.headers.get("Cache-Control", ""))
 
-    def test_repeated_menu_requests_are_deduplicated_for_same_session(self):
+    def test_menu_request_does_not_register_access_on_server_render(self):
         self.client.get("/")
         self.client.get("/")
         self.client.get("/")
+
+        self.assertEqual(AccessEvent.objects.filter(event_type=AccessEvent.EventType.MENU_VIEW).count(), 0)
+
+    def test_repeated_menu_metric_posts_with_same_page_open_id_are_deduplicated(self):
+        payload = {
+            "event_type": "menu_view",
+            "path": "/",
+            "metadata": {"origem": "page_open", "page_open_id": "tab-1"},
+        }
+        for _ in range(3):
+            self.client.post("/api/metrics/event/", data=json.dumps(payload), content_type="application/json")
 
         self.assertEqual(AccessEvent.objects.filter(event_type=AccessEvent.EventType.MENU_VIEW).count(), 1)
 
-    def test_menu_requests_from_different_sessions_are_counted_separately(self):
-        self.client.get("/")
-        other_client = self.client_class()
-        other_client.get("/")
+    def test_menu_metric_posts_with_different_page_open_ids_are_counted(self):
+        for page_open_id in ["tab-1", "tab-2"]:
+            self.client.post(
+                "/api/metrics/event/",
+                data=json.dumps(
+                    {
+                        "event_type": "menu_view",
+                        "path": "/",
+                        "metadata": {"origem": "page_open", "page_open_id": page_open_id},
+                    }
+                ),
+                content_type="application/json",
+            )
 
         self.assertEqual(AccessEvent.objects.filter(event_type=AccessEvent.EventType.MENU_VIEW).count(), 2)
 
@@ -594,6 +662,25 @@ class PedidoDetalheAdminTests(TestCase):
         response = self.client.get(f"/controle/pedidos/{pedido.id}/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
+
+    def test_superuser_can_delete_order_from_context_action(self):
+        superuser = get_user_model().objects.create_superuser(username="admin_delete", password="senha")
+        self.client.force_login(superuser)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Excluir",
+            telefone="64999999999",
+            endereco="Rua Excluir",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/excluir/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Pedido.objects.filter(id=pedido.id).exists())
 
     def test_shows_frete_and_distance_audit_information(self):
         self.client.force_login(self.staff_user)
@@ -2300,6 +2387,32 @@ class CardapioOperationalDayTests(TestCase):
         self.assertContains(response, "<span>QUARTA</span>", html=True)
         self.assertContains(response, "Prato Quarta")
         self.assertNotContains(response, "Prato Terca")
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_frontend_cart_cycle_moves_after_closing_time(self, mock_view_localtime, mock_context_localtime):
+        current = self._local_datetime(2026, 5, 11, 14, 30)
+        mock_view_localtime.return_value = current
+        mock_context_localtime.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'cartCycleKey: "2026\\u002D05\\u002D12"')
+        self.assertContains(response, 'cartExpiresAt: "2026\\u002D05\\u002D12T14:00:00')
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_frontend_cart_cycle_uses_current_day_before_closing_time(self, mock_view_localtime, mock_context_localtime):
+        current = self._local_datetime(2026, 5, 11, 13, 30)
+        mock_view_localtime.return_value = current
+        mock_context_localtime.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'cartCycleKey: "2026\\u002D05\\u002D11"')
+        self.assertContains(response, 'cartExpiresAt: "2026\\u002D05\\u002D11T14:00:00')
 
 
 class AdicionaisCatalogoTests(TestCase):

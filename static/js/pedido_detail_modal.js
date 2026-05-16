@@ -497,6 +497,12 @@
         openDetail(card);
     });
 
+    document.addEventListener("prato:open-order-detail", (event) => {
+        const url = event.detail?.url;
+        if (!url) return;
+        openDetail({ dataset: { orderDetailUrl: url } });
+    });
+
     document.addEventListener("change", (event) => {
         const form = event.target.closest("[data-items-editor]");
         if (form && event.target.matches("[data-editor-catalog]")) {

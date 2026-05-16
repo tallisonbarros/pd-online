@@ -29,9 +29,13 @@
             googleMapsApiKey: "{{ PRATO_FRONTEND_CONFIG.google_maps_api_key|escapejs }}",
             googleMapsLanguage: "{{ PRATO_FRONTEND_CONFIG.google_maps_language|escapejs }}",
             googleMapsRegion: "{{ PRATO_FRONTEND_CONFIG.google_maps_region|escapejs }}",
-            checkoutMapProvider: "{{ PRATO_FRONTEND_CONFIG.checkout_map_provider|escapejs }}"
+            checkoutMapProvider: "{{ PRATO_FRONTEND_CONFIG.checkout_map_provider|escapejs }}",
+            cartCycleKey: "{{ PRATO_FRONTEND_CONFIG.cart_cycle_key|escapejs }}",
+            cartExpiresAt: "{{ PRATO_FRONTEND_CONFIG.cart_expires_at|escapejs }}",
+            serverNow: "{{ PRATO_FRONTEND_CONFIG.server_now|escapejs }}"
         };
     </script>
+    <script src="{% static 'js/access_metrics.js' %}?v={% now 'U' %}"></script>
     <script src="{% static 'js/cart.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>

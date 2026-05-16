@@ -1776,6 +1776,58 @@ textarea {
     gap: 7px;
 }
 
+.context-actions-menu {
+    position: fixed;
+    z-index: 260;
+    min-width: 172px;
+    padding: 6px;
+    border: 1px solid rgba(78, 52, 46, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 253, 250, 0.98);
+    box-shadow: 0 18px 42px rgba(34, 19, 17, 0.2);
+}
+
+.context-actions-menu button {
+    width: 100%;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #321f1a;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: left;
+    cursor: pointer;
+}
+
+.context-actions-menu button:hover,
+.context-actions-menu button:focus-visible {
+    background: #f1ebe5;
+    outline: none;
+}
+
+.context-actions-menu button.is-danger {
+    color: #8d2d22;
+}
+
+.context-actions-menu button.is-warning {
+    color: #84511d;
+}
+
+.context-actions-menu button.is-warning:hover,
+.context-actions-menu button.is-warning:focus-visible {
+    background: #f7ecdb;
+}
+
+.context-actions-menu button.is-danger:hover,
+.context-actions-menu button.is-danger:focus-visible {
+    background: #f9e7e2;
+}
+
 .management-actions form {
     margin: 0;
 }
@@ -5805,6 +5857,77 @@ fieldset.field {
 .ops-kpi-card span {
     color: var(--text-muted);
     font-size: 0.93rem;
+}
+
+.ops-kpi-card--fulfillment {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(96, 68, 54, 0.18);
+}
+
+.ops-kpi-card--fulfillment::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: var(--fulfillment-accent, #7b3023);
+}
+
+.ops-kpi-card--delivery {
+    --fulfillment-accent: #2f6f4f;
+    background: linear-gradient(145deg, rgba(255, 253, 250, 0.98), rgba(240, 249, 244, 0.94));
+}
+
+.ops-kpi-card--pickup {
+    --fulfillment-accent: #8c5a2b;
+    background: linear-gradient(145deg, rgba(255, 253, 250, 0.98), rgba(250, 242, 232, 0.94));
+}
+
+.metrics-fulfillment-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.metrics-fulfillment-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+    color: var(--fulfillment-accent, var(--text));
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: inset 0 0 0 1px rgba(96, 68, 54, 0.12);
+}
+
+.metrics-fulfillment-icon svg {
+    width: 21px;
+    height: 21px;
+    fill: currentColor;
+}
+
+.ops-kpi-card .metrics-fulfillment-caption {
+    color: var(--text-soft);
+}
+
+.metrics-fulfillment-share {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(96, 68, 54, 0.12);
+}
+
+.metrics-fulfillment-share b {
+    color: var(--fulfillment-accent, var(--text));
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.metrics-fulfillment-share small {
+    color: var(--text-muted);
+    font-size: 0.78rem;
 }
 
 .ops-goal-bar {
