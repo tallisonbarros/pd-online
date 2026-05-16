@@ -364,6 +364,40 @@
         syncCartCount();
     }
 
+    function cartStats(cartOverride) {
+        const cart = Array.isArray(cartOverride) ? normalizeCart(cartOverride) : getCart();
+        return {
+            count: cart.reduce((total, item) => total + Number(item.quantidade || 0), 0),
+            total: cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0),
+        };
+    }
+
+    function trackMetricEvent(eventType, payload = {}) {
+        const eventUrl = String(config.metricEventUrl || "").trim();
+        if (!eventUrl || !eventType) return;
+        const stats = cartStats();
+        const body = {
+            event_type: eventType,
+            path: window.location.pathname,
+            cart_items_count: payload.cart_items_count ?? stats.count,
+            cart_total: payload.cart_total ?? stats.total.toFixed(2),
+            item_type: payload.item_type || "",
+            item_id: payload.item_id || "",
+            metadata: payload.metadata || {},
+        };
+        fetch(eventUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            keepalive: true,
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": config.csrfToken || getCsrfToken(),
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify(body),
+        }).catch(() => {});
+    }
+
     function getCheckoutDraft() {
         try {
             const parsed = JSON.parse(localStorage.getItem(checkoutDraftKey) || "{}");
@@ -471,12 +505,14 @@
             const cartDockSummary = cartDockRefs?.summary;
             const cartDockCount = cartDockRefs?.count;
             const cartDockWrap = cartDock.closest(".cart-dock-wrap");
+            const whatsappFloat = document.querySelector("[data-whatsapp-float]");
             const previousCount = Number(cartDock.dataset.cartCount || "0");
             const hydrated = cartDock.dataset.hydrated === "true";
             cartDock.dataset.cartCount = String(count);
             cartDock.dataset.hydrated = "true";
             cartDock.classList.toggle("is-visible", count > 0);
             cartDockWrap?.classList.toggle("is-visible", count > 0);
+            whatsappFloat?.classList.toggle("is-cart-visible", count > 0);
 
             if (cartDockSummary) {
                 cartDockSummary.textContent = count === 1 ? "1 item no carrinho" : `${count} itens no carrinho`;
@@ -726,6 +762,15 @@
             }
             saveCart(cart);
             syncMenuPromo();
+            trackMetricEvent("add_to_cart", {
+                item_type: cartItemType(normalizedIncomingItem),
+                item_id: normalizedIncomingItem.item_id || normalizedIncomingItem.prato_id || normalizedIncomingItem.adicional_id || normalizedIncomingItem.bebida_id || "",
+                cart_items_count: Number(normalizedIncomingItem.quantidade || 1),
+                metadata: {
+                    origem: "cardapio",
+                    variacao: normalizedIncomingItem.variacao || "",
+                },
+            });
         }
 
         function buildCardCartItem(dish, quantityToAdd = 1, variationOverride = "") {
@@ -862,6 +907,7 @@
             const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
             if (index < 0) return false;
 
+            const removedItem = cart[index];
             const nextQuantity = Number(cart[index].quantidade || 0) - 1;
             if (nextQuantity > 0) {
                 cart[index].quantidade = nextQuantity;
@@ -871,6 +917,12 @@
             saveCart(cart);
             syncCardQuantityBadges();
             syncMenuPromo();
+            trackMetricEvent("remove_from_cart", {
+                item_type: cartItemType(removedItem),
+                item_id: removedItem.item_id || removedItem.prato_id || removedItem.adicional_id || removedItem.bebida_id || "",
+                cart_items_count: 1,
+                metadata: { origem: "cardapio", variacao: removedItem.variacao || "" },
+            });
             return true;
         }
 
@@ -900,6 +952,7 @@
             const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
             if (index < 0) return false;
 
+            const removedItem = cart[index];
             const nextQuantity = Number(cart[index].quantidade || 0) - 1;
             if (nextQuantity > 0) {
                 cart[index].quantidade = nextQuantity;
@@ -909,6 +962,12 @@
             saveCart(cart);
             syncCardQuantityBadges();
             syncMenuPromo();
+            trackMetricEvent("remove_from_cart", {
+                item_type: cartItemType(removedItem),
+                item_id: removedItem.item_id || removedItem.prato_id || removedItem.adicional_id || removedItem.bebida_id || "",
+                cart_items_count: 1,
+                metadata: { origem: "cardapio", variacao: removedItem.variacao || "" },
+            });
             return true;
         }
 
@@ -3156,6 +3215,12 @@
                     cancelLabel: "Cancelar",
                     confirmLabel: "Continuar",
                     onConfirm() {
+                        trackMetricEvent("checkout_submit", {
+                            metadata: {
+                                tipo_coleta: "entrega",
+                                forma_pagamento: paymentMethodInput?.value || "",
+                            },
+                        });
                         whatsappSubmitInProgress = true;
                         form.querySelectorAll("button, input[type='submit']").forEach((button) => {
                             button.disabled = true;
@@ -3340,19 +3405,38 @@
                 const delta = Number(qtyButton.getAttribute("data-delta"));
                 const updatedCart = getCart();
                 if (!updatedCart[index]) return;
+                const changedItem = updatedCart[index];
                 updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
                 saveCart(updatedCart);
                 render();
                 if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
+                if (delta < 0) {
+                    trackMetricEvent("remove_from_cart", {
+                        item_type: cartItemType(changedItem),
+                        item_id: changedItem.item_id || changedItem.prato_id || changedItem.adicional_id || changedItem.bebida_id || "",
+                        cart_items_count: 1,
+                        metadata: { origem: "carrinho" },
+                    });
+                }
                 return;
             }
 
             const removeButton = event.target.closest("[data-remove-item]");
             if (removeButton) {
                 const index = Number(removeButton.getAttribute("data-remove-item"));
-                saveCart(getCart().filter((_, itemIndex) => itemIndex !== index));
+                const cart = getCart();
+                const removedItem = cart[index];
+                saveCart(cart.filter((_, itemIndex) => itemIndex !== index));
                 render();
                 if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
+                if (removedItem) {
+                    trackMetricEvent("remove_from_cart", {
+                        item_type: cartItemType(removedItem),
+                        item_id: removedItem.item_id || removedItem.prato_id || removedItem.adicional_id || removedItem.bebida_id || "",
+                        cart_items_count: Number(removedItem.quantidade || 1),
+                        metadata: { origem: "carrinho" },
+                    });
+                }
             }
         });
 
@@ -3384,6 +3468,7 @@
                 return;
             }
             persistDraftFromPage();
+            trackMetricEvent("go_to_checkout", { metadata: { origem: "carrinho" } });
         });
         let pickupSubmitInProgress = false;
         goPickupButton?.addEventListener("click", () => {
@@ -3400,6 +3485,7 @@
                 cancelLabel: "Voltar",
                 confirmLabel: "Abrir WhatsApp",
                 onConfirm() {
+                    trackMetricEvent("pickup_submit", { metadata: { origem: "carrinho" } });
                     pickupSubmitInProgress = true;
                     goPickupButton.disabled = true;
                     pickupForm.target = "_blank";

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import AccessEvent, Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -137,6 +137,18 @@ class ItemPedidoAdmin(admin.ModelAdmin):
     list_display = ("pedido", "nome_prato_snapshot", "variacao_nome_snapshot", "quantidade", "subtotal")
     list_select_related = ("pedido", "prato", "bebida", "adicional")
     search_fields = ("nome_prato_snapshot", "variacao_nome_snapshot", "pedido__nome_cliente", "pedido__numero")
+
+
+@admin.register(AccessEvent)
+class AccessEventAdmin(admin.ModelAdmin):
+    list_display = ("event_type", "path", "session_key", "item_type", "item_id", "cart_items_count", "cart_total", "created_at")
+    list_filter = ("event_type", "item_type", "created_at")
+    search_fields = ("session_key", "path", "item_type")
+    readonly_fields = ("event_type", "path", "session_key", "item_type", "item_id", "cart_items_count", "cart_total", "metadata", "created_at")
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(FaixaFrete)

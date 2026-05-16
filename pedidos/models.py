@@ -392,6 +392,37 @@ class PedidoListaImpressao(models.Model):
         return f"Pedido #{self.numero or self.pedido_id} - {self.nome_cliente}"
 
 
+class AccessEvent(models.Model):
+    class EventType(models.TextChoices):
+        MENU_VIEW = "menu_view", "Acesso ao cardapio"
+        CART_VIEW = "cart_view", "Acesso ao carrinho"
+        CHECKOUT_VIEW = "checkout_view", "Acesso ao checkout"
+        ADD_TO_CART = "add_to_cart", "Item adicionado ao carrinho"
+        REMOVE_FROM_CART = "remove_from_cart", "Item removido do carrinho"
+        GO_TO_CHECKOUT = "go_to_checkout", "Avanco para checkout"
+        CHECKOUT_SUBMIT = "checkout_submit", "Envio do checkout"
+        PICKUP_SUBMIT = "pickup_submit", "Envio de retirada"
+        ORDER_CREATED = "order_created", "Pedido criado"
+
+    event_type = models.CharField(max_length=32, choices=EventType.choices, db_index=True)
+    path = models.CharField(max_length=160, blank=True)
+    session_key = models.CharField(max_length=40, db_index=True)
+    item_type = models.CharField(max_length=20, blank=True)
+    item_id = models.PositiveIntegerField(blank=True, null=True)
+    cart_items_count = models.PositiveIntegerField(default=0)
+    cart_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Evento de acesso"
+        verbose_name_plural = "Eventos de acesso"
+
+    def __str__(self):
+        return f"{self.event_type} - {self.created_at:%d/%m/%Y %H:%M}"
+
+
 class Cupom(models.Model):
     class TipoDesconto(models.TextChoices):
         PERCENTUAL = "percentual", "Percentual"

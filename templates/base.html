@@ -23,6 +23,7 @@
             myOrdersUrl: "{% url 'pedidos:meus_pedidos' %}",
             deliveryEtaUrl: "{% url 'pedidos:api_address_delivery_time' %}",
             couponValidateUrl: "{% url 'pedidos:api_validar_cupom' %}",
+            metricEventUrl: "{% url 'pedidos:api_metric_event' %}",
             csrfToken: "{{ csrf_token }}",
             staticUrl: "{% get_static_prefix %}",
             googleMapsApiKey: "{{ PRATO_FRONTEND_CONFIG.google_maps_api_key|escapejs }}",

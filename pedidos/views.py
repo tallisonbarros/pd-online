@@ -27,7 +27,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
+from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -255,9 +255,58 @@ def _build_whatsapp_order_url(pedido, config=None):
     return f"https://wa.me/{numero}?text={quote(montar_mensagem_whatsapp(pedido))}"
 
 
+def _access_session_key(request):
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key or ""
+
+
+def _safe_metric_decimal(value):
+    try:
+        return Decimal(str(value or "0").replace(",", ".")).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0.00")
+
+
+def _safe_metric_int(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _record_access_event(request, event_type, **extra):
+    if event_type not in dict(AccessEvent.EventType.choices):
+        return None
+    metadata = extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {}
+    allowed_metadata = {"origem", "variacao", "tipo_coleta", "forma_pagamento", "pedido_id"}
+    clean_metadata = {
+        str(key)[:40]: str(value)[:160]
+        for key, value in metadata.items()
+        if key in allowed_metadata and value not in (None, "")
+    }
+    return AccessEvent.objects.create(
+        event_type=event_type,
+        path=_safe_text(extra.get("path") or request.path)[:160],
+        session_key=_access_session_key(request),
+        item_type=_safe_text(extra.get("item_type"))[:20],
+        item_id=extra.get("item_id") if isinstance(extra.get("item_id"), int) and extra.get("item_id") > 0 else None,
+        cart_items_count=_safe_metric_int(extra.get("cart_items_count")),
+        cart_total=_safe_metric_decimal(extra.get("cart_total")),
+        metadata=clean_metadata,
+    )
+
+
 @never_cache
 def cardapio(request):
+    _record_access_event(request, AccessEvent.EventType.MENU_VIEW)
     config = ConfiguracaoEntrega.get_solo()
+    whatsapp_numero = _configured_whatsapp_number(config)
+    whatsapp_cardapio_url = (
+        f"https://wa.me/{whatsapp_numero}?text={quote('Olá! Estou vendo o cardápio e queria tirar uma dúvida.')}"
+        if whatsapp_numero
+        else ""
+    )
     cardapio_context = _resolve_cardapio_pratos(config=config)
     pratos = cardapio_context["pratos"]
     adicionais = Adicional.objects.filter(ativo=True)
@@ -279,12 +328,14 @@ def cardapio(request):
             "cardapio_empty_label": cardapio_context["empty_label"],
             "horario_abertura": config.horario_abertura,
             "horario_fechamento": config.horario_fechamento,
+            "whatsapp_cardapio_url": whatsapp_cardapio_url,
         },
     )
 
 
 @never_cache
 def checkout(request):
+    _record_access_event(request, AccessEvent.EventType.CHECKOUT_VIEW)
     config = ConfiguracaoEntrega.get_solo()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
     adicionais_lookup = {
@@ -309,7 +360,40 @@ def checkout(request):
 
 @never_cache
 def carrinho(request):
+    _record_access_event(request, AccessEvent.EventType.CART_VIEW)
     return render(request, "pedidos/carrinho.html")
+
+
+@require_POST
+def api_metric_event(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        payload = request.POST
+
+    event_type = _safe_text(payload.get("event_type"))
+    if event_type not in dict(AccessEvent.EventType.choices):
+        return JsonResponse({"ok": False, "message": "Evento invalido."}, status=400)
+
+    item_id = None
+    try:
+        raw_item_id = payload.get("item_id")
+        item_id = int(raw_item_id) if raw_item_id not in (None, "") else None
+    except (TypeError, ValueError):
+        item_id = None
+
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    event = _record_access_event(
+        request,
+        event_type,
+        path=_safe_text(payload.get("path") or request.META.get("HTTP_REFERER") or request.path),
+        item_type=_safe_text(payload.get("item_type")),
+        item_id=item_id,
+        cart_items_count=payload.get("cart_items_count"),
+        cart_total=payload.get("cart_total"),
+        metadata=metadata,
+    )
+    return JsonResponse({"ok": True, "event_id": event.id})
 
 
 def _safe_text(value):
@@ -1274,6 +1358,17 @@ def _known_order_tokens_from_request(request):
     return tokens
 
 
+def _record_order_created_metric(request, pedido):
+    itens = list(pedido.itens.all())
+    _record_access_event(
+        request,
+        AccessEvent.EventType.ORDER_CREATED,
+        cart_items_count=sum(max(item.quantidade or 0, 0) for item in itens),
+        cart_total=pedido.total,
+        metadata={"pedido_id": pedido.id, "tipo_coleta": pedido.tipo_coleta},
+    )
+
+
 @require_POST
 @transaction.atomic
 def criar_pedido(request):
@@ -1411,6 +1506,7 @@ def criar_pedido(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
     inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
+    _record_order_created_metric(request, pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1467,6 +1563,7 @@ def criar_retirada(request):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
     inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
+    _record_order_created_metric(request, pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
@@ -1858,6 +1955,205 @@ def _build_hour_chart_context(labels, values):
         "labels": label_points,
         "grid_lines": grid_lines,
     }
+
+
+def _metrics_period(period):
+    hoje = timezone.localdate()
+    normalized = _safe_text(period).lower()
+    if normalized == "today":
+        return {"key": "today", "label": "Hoje", "inicio": hoje, "fim": hoje}
+    if normalized == "30d":
+        return {"key": "30d", "label": "Ultimos 30 dias", "inicio": hoje - timedelta(days=29), "fim": hoje}
+    if normalized == "month":
+        return {"key": "month", "label": "Este mes", "inicio": hoje.replace(day=1), "fim": hoje}
+    return {"key": "7d", "label": "Ultimos 7 dias", "inicio": hoje - timedelta(days=6), "fim": hoje}
+
+
+def _percent(part, total):
+    if not total:
+        return 0
+    return int(round((part / total) * 100))
+
+
+def _rate_label(part, total):
+    return f"{_percent(part, total)}%"
+
+
+def _build_access_metrics_context(period):
+    periodo = _metrics_period(period)
+    inicio = periodo["inicio"]
+    fim = periodo["fim"]
+    days = _dashboard_days(inicio, fim)
+    events = AccessEvent.objects.filter(created_at__date__gte=inicio, created_at__date__lte=fim)
+
+    event_counts_raw = events.values("event_type").annotate(total=Count("id"))
+    event_counts = {row["event_type"]: row["total"] for row in event_counts_raw}
+    event_sessions = {
+        row["event_type"]: row["total"]
+        for row in events.values("event_type").annotate(total=Count("session_key", distinct=True))
+    }
+
+    menu_sessions = event_sessions.get(AccessEvent.EventType.MENU_VIEW, 0)
+    cart_sessions = event_sessions.get(AccessEvent.EventType.CART_VIEW, 0)
+    checkout_sessions = event_sessions.get(AccessEvent.EventType.CHECKOUT_VIEW, 0)
+    order_sessions = event_sessions.get(AccessEvent.EventType.ORDER_CREATED, 0)
+
+    funnel_steps = [
+        {
+            "label": "Cardapio",
+            "count": menu_sessions,
+            "rate": "100%" if menu_sessions else "0%",
+            "width": 100 if menu_sessions else 0,
+        },
+        {
+            "label": "Carrinho",
+            "count": cart_sessions,
+            "rate": _rate_label(cart_sessions, menu_sessions),
+            "width": _percent(cart_sessions, menu_sessions),
+        },
+        {
+            "label": "Checkout",
+            "count": checkout_sessions,
+            "rate": _rate_label(checkout_sessions, cart_sessions),
+            "width": _percent(checkout_sessions, menu_sessions),
+        },
+        {
+            "label": "Pedido criado",
+            "count": order_sessions,
+            "rate": _rate_label(order_sessions, checkout_sessions or cart_sessions),
+            "width": _percent(order_sessions, menu_sessions),
+        },
+    ]
+
+    events_by_day_raw = (
+        events.filter(event_type=AccessEvent.EventType.MENU_VIEW)
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(total=Count("id"))
+        .order_by("day")
+    )
+    events_by_day_map = {row["day"]: row["total"] for row in events_by_day_raw}
+    access_series = [events_by_day_map.get(day, 0) for day in days]
+    access_labels = [day.strftime("%d/%m") for day in days]
+    max_access = max(access_series) if access_series else 0
+    access_bars = [
+        {
+            "label": label,
+            "value": value,
+            "height": max(4, _percent(value, max_access)) if max_access else 4,
+        }
+        for label, value in zip(access_labels, access_series)
+    ]
+
+    events_by_hour_raw = (
+        events.annotate(hour=ExtractHour("created_at"))
+        .values("hour")
+        .annotate(total=Count("id"))
+        .order_by("hour")
+    )
+    events_by_hour_map = {int(row["hour"] or 0): row["total"] for row in events_by_hour_raw}
+    hour_series = [events_by_hour_map.get(hour, 0) for hour in range(24)]
+    peak_hour_value = max(hour_series) if hour_series else 0
+    peak_hour = hour_series.index(peak_hour_value) if peak_hour_value else 0
+
+    top_items = list(
+        events.filter(event_type=AccessEvent.EventType.ADD_TO_CART)
+        .exclude(item_type="")
+        .exclude(item_id__isnull=True)
+        .values("item_type", "item_id")
+        .annotate(total=Count("id"), unidades=Sum("cart_items_count"))
+        .order_by("-total", "item_type", "item_id")[:8]
+    )
+
+    item_names = {
+        "prato": {item.id: item.nome for item in Prato.objects.filter(id__in=[row["item_id"] for row in top_items if row["item_type"] == "prato"])},
+        "adicional": {item.id: item.nome for item in Adicional.objects.filter(id__in=[row["item_id"] for row in top_items if row["item_type"] == "adicional"])},
+        "bebida": {item.id: item.nome for item in Bebida.objects.filter(id__in=[row["item_id"] for row in top_items if row["item_type"] == "bebida"])},
+    }
+    for row in top_items:
+        row["nome"] = item_names.get(row["item_type"], {}).get(row["item_id"], f"{row['item_type']} #{row['item_id']}")
+
+    metrics_payload = {
+        "access_labels": access_labels,
+        "access_series": access_series,
+        "hour_labels": [f"{hour:02d}h" for hour in range(24)],
+        "hour_series": hour_series,
+    }
+
+    pedidos_abertos = Pedido.objects.exclude(
+        status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
+    ).count()
+
+    return {
+        "periodo_key": periodo["key"],
+        "periodo_label": periodo["label"],
+        "total_cardapio": event_counts.get(AccessEvent.EventType.MENU_VIEW, 0),
+        "total_carrinho": event_counts.get(AccessEvent.EventType.CART_VIEW, 0),
+        "total_checkout": event_counts.get(AccessEvent.EventType.CHECKOUT_VIEW, 0),
+        "total_pedidos_metricas": event_counts.get(AccessEvent.EventType.ORDER_CREATED, 0),
+        "add_to_cart_total": event_counts.get(AccessEvent.EventType.ADD_TO_CART, 0),
+        "checkout_submit_total": event_counts.get(AccessEvent.EventType.CHECKOUT_SUBMIT, 0),
+        "pickup_submit_total": event_counts.get(AccessEvent.EventType.PICKUP_SUBMIT, 0),
+        "cart_conversion": _rate_label(cart_sessions, menu_sessions),
+        "checkout_conversion": _rate_label(checkout_sessions, cart_sessions),
+        "order_conversion": _rate_label(order_sessions, checkout_sessions or cart_sessions),
+        "funnel_steps": funnel_steps,
+        "top_items": top_items,
+        "peak_hour": peak_hour,
+        "peak_hour_value": peak_hour_value,
+        "metrics_payload": metrics_payload,
+        "access_bars": access_bars,
+        "pedidos_badge": pedidos_abertos,
+    }
+
+
+def _access_metrics_json(context):
+    return {
+        "periodo_key": context["periodo_key"],
+        "periodo_label": context["periodo_label"],
+        "kpis": {
+            "total_cardapio": context["total_cardapio"],
+            "total_carrinho": context["total_carrinho"],
+            "total_checkout": context["total_checkout"],
+            "total_pedidos_metricas": context["total_pedidos_metricas"],
+            "add_to_cart_total": context["add_to_cart_total"],
+            "envios_total": context["checkout_submit_total"] + context["pickup_submit_total"],
+            "cart_conversion": context["cart_conversion"],
+            "checkout_conversion": context["checkout_conversion"],
+            "order_conversion": context["order_conversion"],
+        },
+        "funnel_steps": context["funnel_steps"],
+        "access_bars": context["access_bars"],
+        "top_items": [
+            {
+                "nome": row["nome"],
+                "total": int(row["total"] or 0),
+                "item_type": row["item_type"],
+                "item_id": row["item_id"],
+            }
+            for row in context["top_items"]
+        ],
+        "peak": {
+            "hour": context["peak_hour"],
+            "value": context["peak_hour_value"],
+            "label": f"{context['peak_hour']:02d}h concentrou {context['peak_hour_value']} eventos.",
+        },
+        "updated_at": timezone.localtime().strftime("%H:%M:%S"),
+        "pedidos_badge": context["pedidos_badge"],
+    }
+
+
+@staff_member_required(login_url="/admin/login/")
+def metricas_acesso(request):
+    context = _build_access_metrics_context(request.GET.get("period", "7d"))
+    return render(request, "pedidos/metricas_acesso.html", context)
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_metricas_acesso(request):
+    context = _build_access_metrics_context(request.GET.get("period", "7d"))
+    return JsonResponse(_access_metrics_json(context))
 
 
 @staff_member_required(login_url="/admin/login/")

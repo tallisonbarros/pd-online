@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
+from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
@@ -190,6 +190,95 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/")
 
         self.assertEqual(response.status_code, 200)
+
+
+class AccessMetricsTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.staff_user = User.objects.create_user(
+            username="metricas_staff",
+            password="12345678",
+            is_staff=True,
+        )
+
+    def test_metricas_page_requires_staff_authentication(self):
+        response = self.client.get("/controle/metricas/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_metric_event_endpoint_records_sanitized_event(self):
+        response = self.client.post(
+            "/api/metrics/event/",
+            data=json.dumps(
+                {
+                    "event_type": "add_to_cart",
+                    "path": "/",
+                    "item_type": "prato",
+                    "item_id": 10,
+                    "cart_items_count": 2,
+                    "cart_total": "39.80",
+                    "metadata": {"nome_cliente": "Nao deve virar campo dedicado", "origem": "cardapio"},
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        event = AccessEvent.objects.get()
+        self.assertEqual(event.event_type, AccessEvent.EventType.ADD_TO_CART)
+        self.assertEqual(event.path, "/")
+        self.assertEqual(event.item_type, "prato")
+        self.assertEqual(event.item_id, 10)
+        self.assertEqual(event.cart_items_count, 2)
+        self.assertEqual(event.cart_total, Decimal("39.80"))
+        self.assertEqual(event.metadata["origem"], "cardapio")
+        self.assertNotIn("nome_cliente", event.metadata)
+
+    def test_metricas_page_shows_funnel_counts(self):
+        self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Executivo", preco=Decimal("19.90"), ativo=True)
+        today = timezone.now()
+        events = [
+            AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.CART_VIEW, path="/carrinho/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.CHECKOUT_VIEW, path="/checkout/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.ORDER_CREATED, path="/pedido/criar/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="b"),
+            AccessEvent(event_type=AccessEvent.EventType.ADD_TO_CART, path="/", session_key="b", item_type="prato", item_id=prato.id),
+        ]
+        AccessEvent.objects.bulk_create(events)
+        AccessEvent.objects.update(created_at=today)
+
+        response = self.client.get("/controle/metricas/?period=7d")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Metricas de acesso")
+        self.assertContains(response, "Executivo")
+        self.assertContains(response, 'data-metric-value="cart_conversion">50%</span> dos visitantes chegaram aqui')
+        self.assertContains(response, 'data-metrics-root')
+        self.assertContains(response, "/controle/api/metricas/")
+
+    def test_metricas_api_returns_live_payload(self):
+        self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Executivo", preco=Decimal("19.90"), ativo=True)
+        events = [
+            AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.CART_VIEW, path="/carrinho/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.ADD_TO_CART, path="/", session_key="a", item_type="prato", item_id=prato.id),
+        ]
+        AccessEvent.objects.bulk_create(events)
+        AccessEvent.objects.update(created_at=timezone.now())
+
+        response = self.client.get("/controle/api/metricas/?period=7d")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["periodo_key"], "7d")
+        self.assertEqual(payload["kpis"]["total_cardapio"], 1)
+        self.assertEqual(payload["kpis"]["total_carrinho"], 1)
+        self.assertEqual(payload["top_items"][0]["nome"], "Executivo")
+        self.assertIn("updated_at", payload)
 
 
 class PedidosReadOnlyApiTests(TestCase):
@@ -2096,6 +2185,27 @@ class FrontendConfigTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CARDÁPIO")
         self.assertContains(response, "Aberto 10:30 às 14:45")
+
+    def test_cardapio_displays_whatsapp_float_when_number_is_configured(self):
+        config = ConfiguracaoEntrega.get_solo()
+        config.whatsapp_numero = "5564999999999"
+        config.save()
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "whatsapp-float")
+        self.assertContains(response, "https://wa.me/5564999999999")
+        self.assertContains(response, "Falar com atendente")
+
+    @override_settings(RESTAURANT_WHATSAPP="")
+    def test_cardapio_hides_whatsapp_float_without_configured_number(self):
+        ConfiguracaoEntrega.objects.update(whatsapp_numero="")
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "whatsapp-float")
 
     def test_carrinho_displays_cart_stage(self):
         response = self.client.get("/carrinho/")

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Metricas de Acesso | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha metrics-live-root" data-metrics-root data-api-url="{% url 'pedidos:api_metricas_acesso' %}" data-current-period="{{ periodo_key }}">
+    {% include "pedidos/_ops_sidebar.html" with active="metricas" pedidos_badge=pedidos_badge %}
+
+    <main class="ops-main">
+        <header class="ops-session">
+            <div>
+                <p class="ops-session-kicker">Analise</p>
+                <h1>Metricas de acesso</h1>
+            </div>
+            <div class="ops-session-actions">
+                <span class="ops-user-chip metrics-live-chip" data-metrics-status>Atualizando agora</span>
+                <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
+                <form method="post" action="/admin/logout/">
+                    {% csrf_token %}
+                    <button type="submit" class="ops-logout">Sair</button>
+                </form>
+            </div>
+        </header>
+
+        <div class="ops-period-switch" data-metrics-periods>
+            <a class="ops-period-btn {% if periodo_key == 'today' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}?period=today" data-period="today">Hoje</a>
+            <a class="ops-period-btn {% if periodo_key == '7d' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}?period=7d" data-period="7d">7 dias</a>
+            <a class="ops-period-btn {% if periodo_key == '30d' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}?period=30d" data-period="30d">30 dias</a>
+            <a class="ops-period-btn {% if periodo_key == 'month' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}?period=month" data-period="month">Este mes</a>
+        </div>
+
+        <section class="ops-kpis">
+            <article class="ops-kpi-card">
+                <p>Cardapio</p>
+                <strong data-metric-value="total_cardapio">{{ total_cardapio }}</strong>
+                <span>Acessos no periodo</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Carrinho</p>
+                <strong data-metric-value="total_carrinho">{{ total_carrinho }}</strong>
+                <span><span data-metric-value="cart_conversion">{{ cart_conversion }}</span> dos visitantes chegaram aqui</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Checkout</p>
+                <strong data-metric-value="total_checkout">{{ total_checkout }}</strong>
+                <span><span data-metric-value="checkout_conversion">{{ checkout_conversion }}</span> a partir do carrinho</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Pedidos criados</p>
+                <strong data-metric-value="total_pedidos_metricas">{{ total_pedidos_metricas }}</strong>
+                <span><span data-metric-value="order_conversion">{{ order_conversion }}</span> a partir do checkout</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Adicoes</p>
+                <strong data-metric-value="add_to_cart_total">{{ add_to_cart_total }}</strong>
+                <span>Cliques de adicionar ao carrinho</span>
+            </article>
+            <article class="ops-kpi-card">
+                <p>Envios</p>
+                <strong data-metric-value="envios_total">{{ checkout_submit_total|add:pickup_submit_total }}</strong>
+                <span>Finalizacoes de entrega e retirada</span>
+            </article>
+        </section>
+
+        <section class="ops-card metrics-funnel-card">
+            <div class="ops-chart-head">
+                <div>
+                    <p class="ops-kicker">Conversao</p>
+                    <h3>Funil do pedido</h3>
+                    <p>Sessoes unicas por etapa em <span data-metric-period-label>{{ periodo_label|lower }}</span>.</p>
+                </div>
+            </div>
+            <div class="metrics-funnel" data-metrics-funnel>
+                {% for step in funnel_steps %}
+                    <article class="metrics-funnel-step">
+                        <div>
+                            <span>{{ step.label }}</span>
+                            <strong>{{ step.count }}</strong>
+                        </div>
+                        <div class="metrics-funnel-track" aria-hidden="true">
+                            <span style="width: {{ step.width }}%;"></span>
+                        </div>
+                        <b>{{ step.rate }}</b>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="ops-bottom-grid">
+            <article class="ops-card metrics-bars-card">
+                <div class="ops-chart-head">
+                    <div>
+                        <p class="ops-kicker">Acessos por dia</p>
+                        <h3>Visitas ao cardapio</h3>
+                        <p>Volume diario no periodo selecionado.</p>
+                    </div>
+                </div>
+                <div class="metrics-bars" data-metrics-bars aria-label="Acessos ao cardapio por dia">
+                    {% for bar in access_bars %}
+                        <div class="metrics-bar">
+                            <span style="height: {{ bar.height }}%;"></span>
+                            <small>{{ bar.label }}</small>
+                            <b>{{ bar.value }}</b>
+                        </div>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="ops-card">
+                <p class="ops-kicker">Itens</p>
+                <h3>Mais adicionados</h3>
+                <ol class="ops-ranking-list" data-metrics-ranking>
+                    {% for item in top_items %}
+                        <li>
+                            <span>#{{ forloop.counter }}</span>
+                            <strong>{{ item.nome }}</strong>
+                            <b>{{ item.total }}</b>
+                        </li>
+                    {% empty %}
+                        <li class="is-empty">Ainda nao ha eventos de carrinho no periodo.</li>
+                    {% endfor %}
+                </ol>
+            </article>
+        </section>
+
+        <section class="ops-insight">
+            <div>
+                <p class="ops-kicker">Horario com mais movimento</p>
+                <h3 data-metrics-peak>{{ peak_hour|stringformat:"02d" }}h concentrou {{ peak_hour_value }} eventos.</h3>
+            </div>
+            <aside class="ops-period-pill">
+                <p>Periodo analisado</p>
+                <strong data-metrics-period-strong>{{ periodo_label }}</strong>
+                <span>baseado nos eventos coletados</span>
+            </aside>
+        </section>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/metricas.js' %}?v={% now 'U' %}"></script>
+{% endblock %}
