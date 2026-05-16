@@ -552,6 +552,20 @@ class PublicFlowCacheTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("no-store", response.headers.get("Cache-Control", ""))
 
+    def test_repeated_menu_requests_are_deduplicated_for_same_session(self):
+        self.client.get("/")
+        self.client.get("/")
+        self.client.get("/")
+
+        self.assertEqual(AccessEvent.objects.filter(event_type=AccessEvent.EventType.MENU_VIEW).count(), 1)
+
+    def test_menu_requests_from_different_sessions_are_counted_separately(self):
+        self.client.get("/")
+        other_client = self.client_class()
+        other_client.get("/")
+
+        self.assertEqual(AccessEvent.objects.filter(event_type=AccessEvent.EventType.MENU_VIEW).count(), 2)
+
 
 class PedidoDetalheAdminTests(TestCase):
     def setUp(self):

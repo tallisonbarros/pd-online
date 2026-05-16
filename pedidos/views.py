@@ -278,6 +278,18 @@ def _safe_metric_int(value):
 def _record_access_event(request, event_type, **extra):
     if event_type not in dict(AccessEvent.EventType.choices):
         return None
+    event_path = _safe_text(extra.get("path") or request.path)[:160]
+    session_key = _access_session_key(request)
+    dedupe_seconds = _safe_metric_int(extra.get("dedupe_seconds"))
+    if dedupe_seconds:
+        recent_since = timezone.now() - timedelta(seconds=dedupe_seconds)
+        if AccessEvent.objects.filter(
+            event_type=event_type,
+            path=event_path,
+            session_key=session_key,
+            created_at__gte=recent_since,
+        ).exists():
+            return None
     metadata = extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {}
     allowed_metadata = {"origem", "variacao", "tipo_coleta", "forma_pagamento", "pedido_id"}
     clean_metadata = {
@@ -287,8 +299,8 @@ def _record_access_event(request, event_type, **extra):
     }
     return AccessEvent.objects.create(
         event_type=event_type,
-        path=_safe_text(extra.get("path") or request.path)[:160],
-        session_key=_access_session_key(request),
+        path=event_path,
+        session_key=session_key,
         item_type=_safe_text(extra.get("item_type"))[:20],
         item_id=extra.get("item_id") if isinstance(extra.get("item_id"), int) and extra.get("item_id") > 0 else None,
         cart_items_count=_safe_metric_int(extra.get("cart_items_count")),
@@ -299,7 +311,7 @@ def _record_access_event(request, event_type, **extra):
 
 @never_cache
 def cardapio(request):
-    _record_access_event(request, AccessEvent.EventType.MENU_VIEW)
+    _record_access_event(request, AccessEvent.EventType.MENU_VIEW, dedupe_seconds=60)
     config = ConfiguracaoEntrega.get_solo()
     whatsapp_numero = _configured_whatsapp_number(config)
     whatsapp_cardapio_url = (
@@ -335,7 +347,7 @@ def cardapio(request):
 
 @never_cache
 def checkout(request):
-    _record_access_event(request, AccessEvent.EventType.CHECKOUT_VIEW)
+    _record_access_event(request, AccessEvent.EventType.CHECKOUT_VIEW, dedupe_seconds=60)
     config = ConfiguracaoEntrega.get_solo()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
     adicionais_lookup = {
@@ -360,7 +372,7 @@ def checkout(request):
 
 @never_cache
 def carrinho(request):
-    _record_access_event(request, AccessEvent.EventType.CART_VIEW)
+    _record_access_event(request, AccessEvent.EventType.CART_VIEW, dedupe_seconds=60)
     return render(request, "pedidos/carrinho.html")
 
 
