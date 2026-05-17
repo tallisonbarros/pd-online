@@ -132,6 +132,25 @@ def _resolve_cardapio_pratos(config=None, now=None):
     }
 
 
+def _cart_closed_notice(config=None, now=None):
+    config = config or ConfiguracaoEntrega.get_solo()
+    abertura = getattr(config, "horario_abertura", None)
+    fechamento = getattr(config, "horario_fechamento", None)
+    if not abertura or not fechamento:
+        return None
+    current = now or timezone.localtime()
+    current_time = current.time()
+    is_open = abertura <= current_time < fechamento
+    if is_open:
+        return None
+    opening_day = "hoje" if current_time < abertura else "amanhã"
+    return {
+        "opening_time": abertura.strftime("%H:%M"),
+        "opening_day": opening_day,
+        "message": f"Pedido antecipado: finalize com calma, e nossa equipe revisa {opening_day} às {abertura.strftime('%H:%M')} da manhã.",
+    }
+
+
 def serializar_prato(prato):
     return {
         "id": prato.id,
@@ -380,7 +399,8 @@ def checkout(request):
 
 @never_cache
 def carrinho(request):
-    return render(request, "pedidos/carrinho.html")
+    config = ConfiguracaoEntrega.get_solo()
+    return render(request, "pedidos/carrinho.html", {"cart_closed_notice": _cart_closed_notice(config)})
 
 
 @require_POST
@@ -1396,7 +1416,6 @@ def _record_order_created_metric(request, pedido):
 
 
 @require_POST
-@transaction.atomic
 def criar_pedido(request):
     payload = request.POST.get("carrinho_payload")
     if not payload:
@@ -1496,48 +1515,41 @@ def criar_pedido(request):
     if valor_frete < 0:
         valor_frete = Decimal("0.00")
 
-    pedido = Pedido.objects.create(
-        nome_cliente=nome_cliente,
-        telefone=telefone,
-        rua=rua,
-        numero_endereco=numero,
-        bairro=bairro,
-        cidade=cidade,
-        estado=estado,
-        endereco_formatado=endereco_formatado,
-        latitude=latitude,
-        longitude=longitude,
-        endereco=endereco,
-        lote_quadra=lote_quadra,
-        complemento=complemento,
-        ponto_referencia=ponto_referencia,
-        tipo_coleta=Pedido.TipoColeta.ENTREGA,
-        forma_pagamento=forma_pagamento,
-        enviar_talheres=enviar_talheres,
-        observacao_geral=observacao_geral,
-        status=Pedido.Status.AGUARDANDO_APROVACAO,
-        valor_frete=valor_frete,
-        distancia_km=distancia_km,
-    )
-
     try:
-        create_order_items_from_payload(pedido, itens_payload)
+        with transaction.atomic():
+            pedido = Pedido.objects.create(
+                nome_cliente=nome_cliente,
+                telefone=telefone,
+                rua=rua,
+                numero_endereco=numero,
+                bairro=bairro,
+                cidade=cidade,
+                estado=estado,
+                endereco_formatado=endereco_formatado,
+                latitude=latitude,
+                longitude=longitude,
+                endereco=endereco,
+                lote_quadra=lote_quadra,
+                complemento=complemento,
+                ponto_referencia=ponto_referencia,
+                tipo_coleta=Pedido.TipoColeta.ENTREGA,
+                forma_pagamento=forma_pagamento,
+                enviar_talheres=enviar_talheres,
+                observacao_geral=observacao_geral,
+                status=Pedido.Status.AGUARDANDO_APROVACAO,
+                valor_frete=valor_frete,
+                distancia_km=distancia_km,
+            )
+            create_order_items_from_payload(pedido, itens_payload)
+            recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+            inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     except ValueError as exc:
-        transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
-
-    try:
-        recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
-    except ValueError as exc:
-        transaction.set_rollback(True)
-        return HttpResponseBadRequest(str(exc))
-    inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     _record_order_created_metric(request, pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 
 
 @require_POST
-@transaction.atomic
 def criar_retirada(request):
     payload = request.POST.get("carrinho_payload")
     if not payload:
@@ -1559,36 +1571,32 @@ def criar_retirada(request):
     observacao_geral = request.POST.get("observacao_geral", "").strip()
     enviar_talheres_raw = request.POST.get("enviar_talheres", "sim").strip().lower()
     cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
-    pedido = Pedido.objects.create(
-        nome_cliente=nome_cliente,
-        telefone="",
-        rua="",
-        numero_endereco="",
-        bairro="",
-        cidade="Rio Verde",
-        estado="GO",
-        endereco_formatado="Retirada no local",
-        endereco="Retirada no local",
-        tipo_coleta=Pedido.TipoColeta.RETIRADA,
-        forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
-        enviar_talheres=enviar_talheres_raw != "nao",
-        observacao_geral=observacao_geral,
-        status=Pedido.Status.AGUARDANDO_APROVACAO,
-        valor_frete=Decimal("0.00"),
-        distancia_km=Decimal("0.00"),
-    )
-    try:
-        create_order_items_from_payload(pedido, itens_payload)
-    except ValueError as exc:
-        transaction.set_rollback(True)
-        return HttpResponseBadRequest(str(exc))
 
     try:
-        recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+        with transaction.atomic():
+            pedido = Pedido.objects.create(
+                nome_cliente=nome_cliente,
+                telefone="",
+                rua="",
+                numero_endereco="",
+                bairro="",
+                cidade="Rio Verde",
+                estado="GO",
+                endereco_formatado="Retirada no local",
+                endereco="Retirada no local",
+                tipo_coleta=Pedido.TipoColeta.RETIRADA,
+                forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+                enviar_talheres=enviar_talheres_raw != "nao",
+                observacao_geral=observacao_geral,
+                status=Pedido.Status.AGUARDANDO_APROVACAO,
+                valor_frete=Decimal("0.00"),
+                distancia_km=Decimal("0.00"),
+            )
+            create_order_items_from_payload(pedido, itens_payload)
+            recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+            inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     except ValueError as exc:
-        transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
-    inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     _record_order_created_metric(request, pedido)
     return redirect("pedidos:sucesso", public_token=pedido.public_token)
 

@@ -2457,6 +2457,42 @@ body.modal-open {
     color: var(--brand-strong);
 }
 
+.cart-closed-note {
+    width: fit-content;
+    max-width: min(100%, 620px);
+    justify-self: center;
+    margin: -2px 0 0;
+    padding: 7px 12px 7px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid rgba(96, 68, 54, 0.12);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 253, 250, 0.86), rgba(246, 240, 235, 0.72));
+    color: var(--text-soft);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    box-shadow: 0 10px 24px rgba(34, 19, 17, 0.055);
+}
+
+.cart-closed-note > span:first-child {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(96, 68, 54, 0.1);
+    color: var(--brand-strong);
+    font-size: 0.72rem;
+}
+
+.cart-closed-note > span:last-child {
+    min-width: 0;
+}
+
 [data-page="carrinho"] .checkout-summary-panel {
     padding: 10px;
     border-radius: 20px;
@@ -5088,6 +5124,198 @@ fieldset.field {
 
 .order-closed-actions {
     margin-top: 2px;
+}
+
+.order-closed-page {
+    width: min(560px, calc(100% - 32px));
+    min-height: 100dvh;
+    padding: 32px 0;
+    display: grid;
+    align-items: center;
+}
+
+.order-closed-stage {
+    width: 100%;
+}
+
+.order-closed-panel--quiet {
+    display: grid;
+    justify-items: center;
+    gap: 22px;
+    padding: clamp(28px, 7vw, 46px) clamp(18px, 5vw, 34px);
+    border: 1px solid rgba(78, 52, 46, 0.09);
+    border-radius: 22px;
+    background: rgba(255, 253, 250, 0.94);
+    box-shadow: 0 22px 60px rgba(50, 31, 26, 0.08);
+    text-align: center;
+    animation: orderClosedPanelIn 520ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-logo {
+    width: 76px;
+    height: 76px;
+    display: inline-grid;
+    place-items: center;
+    animation: orderClosedElementIn 520ms 80ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-logo img {
+    width: 48px;
+    height: auto;
+    display: block;
+}
+
+.order-closed-status {
+    display: grid;
+    gap: 8px;
+    animation: orderClosedElementIn 520ms 150ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-status span {
+    color: rgba(78, 52, 46, 0.54);
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.order-closed-status h1 {
+    margin: 0;
+    color: var(--brand-strong);
+    font-size: clamp(1.55rem, 7vw, 2.35rem);
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.order-closed-status p {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 0.96rem;
+    line-height: 1.35;
+}
+
+.order-closed-panel--quiet .whatsapp-countdown-card {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    animation: orderClosedCounterIn 560ms 240ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-panel--quiet .whatsapp-progress-ring {
+    width: 86px;
+    height: 86px;
+    background:
+        radial-gradient(circle, #fffdfa 0 61%, transparent 62%),
+        conic-gradient(var(--success) var(--progress), rgba(47, 111, 79, 0.13) 0);
+    color: var(--brand-strong);
+    font-size: 1.5rem;
+    box-shadow: inset 0 0 0 1px rgba(47, 111, 79, 0.08);
+}
+
+.order-closed-running-notice {
+    width: 100%;
+    margin: 0;
+    padding: 11px 14px;
+    border: 1px solid rgba(78, 52, 46, 0.08);
+    border-radius: 999px;
+    background: rgba(248, 242, 239, 0.56);
+    color: rgba(78, 52, 46, 0.66);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.35;
+    animation: orderClosedElementIn 520ms 330ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-ops-summary {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    animation: orderClosedElementIn 520ms 410ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-ops-summary span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+    padding: 7px 10px;
+    border: 1px solid rgba(78, 52, 46, 0.08);
+    border-radius: 999px;
+    background: rgba(255, 253, 250, 0.82);
+    color: rgba(78, 52, 46, 0.62);
+    font-size: 0.75rem;
+    line-height: 1.1;
+}
+
+.order-closed-ops-summary strong {
+    color: var(--brand-strong);
+    font-weight: 900;
+}
+
+.order-closed-panel--quiet .order-closed-actions {
+    width: 100%;
+    max-width: 310px;
+    margin-top: 0;
+    animation: orderClosedElementIn 520ms 490ms cubic-bezier(.2, .78, .28, 1) both;
+}
+
+.order-closed-panel--quiet .primary-button,
+.order-closed-panel--quiet .secondary-pill {
+    min-height: 44px;
+    border-radius: 999px;
+}
+
+.layout.public-layout.order-closed-page {
+    width: min(560px, calc(100% - 32px));
+}
+
+@keyframes orderClosedPanelIn {
+    from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.985);
+        filter: blur(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes orderClosedElementIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes orderClosedCounterIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .order-closed-panel--quiet,
+    .order-closed-logo,
+    .order-closed-status,
+    .order-closed-panel--quiet .whatsapp-countdown-card,
+    .order-closed-running-notice,
+    .order-closed-ops-summary,
+    .order-closed-panel--quiet .order-closed-actions {
+        animation: none;
+    }
 }
 
 .follow-order-actions {
@@ -10544,4 +10772,9 @@ fieldset.field {
     .metrics-funnel-step b {
         text-align: left;
     }
+}
+
+.layout.public-layout.order-closed-page {
+    width: min(560px, calc(100% - 32px));
+    padding: 32px 0;
 }

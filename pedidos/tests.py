@@ -2319,6 +2319,51 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, "/pedido/retirada/")
         self.assertContains(response, "/checkout/")
 
+    @patch("pedidos.views.timezone.localtime")
+    def test_carrinho_displays_discreet_closed_notice_before_opening(self, mock_localtime):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 45)
+        config.save()
+        mock_localtime.return_value = timezone.make_aware(datetime(2026, 5, 17, 9, 15))
+
+        response = self.client.get("/carrinho/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cart-closed-note")
+        self.assertContains(response, "Pedido antecipado")
+        self.assertContains(response, "hoje")
+        self.assertContains(response, "10:30")
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_carrinho_closed_notice_after_closing_mentions_tomorrow(self, mock_localtime):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 45)
+        config.save()
+        mock_localtime.return_value = timezone.make_aware(datetime(2026, 5, 17, 18, 0))
+
+        response = self.client.get("/carrinho/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cart-closed-note")
+        self.assertContains(response, "Pedido antecipado")
+        self.assertContains(response, "amanh")
+        self.assertContains(response, "10:30")
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_carrinho_hides_closed_notice_while_open(self, mock_localtime):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 45)
+        config.save()
+        mock_localtime.return_value = timezone.make_aware(datetime(2026, 5, 17, 11, 0))
+
+        response = self.client.get("/carrinho/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "cart-closed-note")
+
 
 class CardapioOperationalDayTests(TestCase):
     def setUp(self):
@@ -2586,9 +2631,9 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(response.url, f"/pedido/{pedido.public_token}/sucesso/")
 
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "Pedido recebido")
-        self.assertContains(success_response, "Abrir WhatsApp")
-        self.assertContains(success_response, "Abrindo WhatsApp")
+        self.assertContains(success_response, "Pedido finalizado")
+        self.assertContains(success_response, "Abrir WhatsApp agora")
+        self.assertContains(success_response, "Redirecionando voce ao WhatsApp")
         self.assertContains(success_response, "data-whatsapp-countdown")
         self.assertContains(success_response, "https://wa.me/5564999999999?text=")
         self.assertNotContains(success_response, "window.open")
@@ -2797,8 +2842,8 @@ class CriarPedidoFreteTests(TestCase):
         pedido = Pedido.objects.get()
         self.assertEqual(response.url, f"/pedido/{pedido.public_token}/sucesso/")
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "Abrir WhatsApp")
-        self.assertContains(success_response, "Abrindo WhatsApp")
+        self.assertContains(success_response, "Abrir WhatsApp agora")
+        self.assertContains(success_response, "Redirecionando voce ao WhatsApp")
         self.assertContains(success_response, "data-whatsapp-countdown")
         self.assertContains(success_response, f"https://wa.me/556488887777?text=")
         self.assertNotContains(success_response, "window.open")

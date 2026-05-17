@@ -1,108 +1,51 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Pedido recebido | PRATO-DELIVERY{% endblock %}
+{% block title %}Pedido finalizado | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <main class="layout public-layout order-closed-page" data-page="checkout">
-    <header class="context-header" aria-label="Cabeçalho da página">
-        <div class="context-header-group">
-            <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
+    <section class="order-closed-stage" aria-label="Pedido finalizado">
+        <article class="order-closed-panel order-closed-panel--quiet">
+            <a class="order-closed-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardapio">
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
-            <span class="context-header-label">CAIXA</span>
-        </div>
-    </header>
 
-    <section class="checkout-stage-shell">
-        <article class="panel checkout-form order-closed-panel">
-            <header class="panel-head checkout-delivery-head order-closed-hero">
-                <div>
-                    <p class="address-resolution-kicker">Pedido recebido</p>
-                    <h2>#{{ pedido.numero }}</h2>
-                    <p>Confirme pelo WhatsApp para o pedido entrar na operação.</p>
-                </div>
-                <span class="status-badge">{{ pedido.status_label_contextual }}</span>
-            </header>
+            <div class="order-closed-status">
+                <span>Pedido #{{ pedido.numero }}</span>
+                <h1>Pedido finalizado</h1>
+                <p>Redirecionando voce ao WhatsApp</p>
+            </div>
 
             {% if whatsapp_url %}
                 <div class="whatsapp-countdown-card" data-whatsapp-redirect="{{ whatsapp_url|escape }}" aria-live="polite">
-                    <div class="whatsapp-progress-ring" style="--progress: 0%;" aria-hidden="true">
+                    <div class="whatsapp-progress-ring" style="--progress: 0%;">
                         <span data-whatsapp-countdown>5</span>
-                    </div>
-                    <div>
-                        <strong>Abrindo WhatsApp</strong>
-                        <small>Se não abrir automaticamente, toque no botão abaixo.</small>
                     </div>
                 </div>
             {% endif %}
 
-            <section class="order-flow-track" aria-label="Etapas do pedido">
-                <div class="order-flow-step is-done">
-                    <span>1</span>
-                    <strong>Recebido</strong>
-                </div>
-                <div class="order-flow-step is-active">
-                    <span>2</span>
-                    <strong>Confirmar</strong>
-                </div>
-                <div class="order-flow-step">
-                    <span>3</span>
-                    <strong>Produção</strong>
-                </div>
-                <div class="order-flow-step">
-                    <span>4</span>
-                    <strong>Entrega</strong>
-                </div>
-            </section>
+            <p class="order-closed-running-notice">
+                Mantenha esta tela aberta enquanto preparamos a conversa com o resumo do pedido.
+            </p>
 
-            <section class="checkout-delivery-summary" aria-label="Resumo rapido do pedido">
-                <span><strong>{{ pedido.itens.count }}</strong> itens</span>
-                <span>Frete <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong></span>
+            <section class="order-closed-ops-summary" aria-label="Resumo operacional do pedido">
+                <span>Itens <strong>{{ pedido.itens.count }}</strong></span>
+                <span>Total <strong>R$ {{ pedido.total|floatformat:2 }}</strong></span>
+                <span>Pagamento <strong>{{ pedido.get_forma_pagamento_display }}</strong></span>
                 {% if pedido.promocao_desconto %}
-                    <span>{{ pedido.promocao_descricao|default:"Promoção" }} <strong>- R$ {{ pedido.promocao_desconto|floatformat:2 }}</strong></span>
+                    <span>{{ pedido.promocao_descricao|default:"Promocao" }} <strong>- R$ {{ pedido.promocao_desconto|floatformat:2 }}</strong></span>
                 {% endif %}
                 {% if pedido.cupom_desconto %}
                     <span>Cupom <strong>- R$ {{ pedido.cupom_desconto|floatformat:2 }}</strong></span>
                 {% endif %}
-                <span>Pagamento <strong>{{ pedido.get_forma_pagamento_display }}</strong></span>
-                <span>Total <strong>R$ {{ pedido.total|floatformat:2 }}</strong></span>
-            </section>
-
-            <section class="address-resolution-card is-exact order-closed-address">
-                <div class="address-resolution-head">
-                    <p class="address-resolution-kicker">Endereço selecionado</p>
-                </div>
-                <strong>{{ pedido.endereco }}</strong>
-                <small>
-                    {% if pedido.lote_quadra %}{{ pedido.lote_quadra }}{% endif %}
-                    {% if pedido.complemento %}{% if pedido.lote_quadra %}  {% endif %}{{ pedido.complemento }}{% endif %}
-                    {% if pedido.ponto_referencia %}{% if pedido.lote_quadra or pedido.complemento %}  {% endif %}{{ pedido.ponto_referencia }}{% endif %}
-                </small>
-            </section>
-
-            <section class="order-closed-items" aria-label="Itens do pedido">
-                {% for item in pedido.itens.all %}
-                    <div class="order-closed-item">
-                        <div>
-                            <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
-                            {% if item.variacao_nome_snapshot %}
-                                <small>Variação: {{ item.variacao_nome_snapshot }}</small>
-                            {% endif %}
-                            {% if item.observacao %}
-                                <small>Obs: {{ item.observacao }}</small>
-                            {% endif %}
-                        </div>
-                        <span>R$ {{ item.subtotal|floatformat:2 }}</span>
-                    </div>
-                {% endfor %}
             </section>
 
             <div class="success-actions order-closed-actions">
                 {% if whatsapp_url %}
-                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Abrir WhatsApp</a>
+                    <a class="primary-button wide" href="{{ whatsapp_url }}" target="_blank" rel="noopener">Abrir WhatsApp agora</a>
                 {% endif %}
-                <a class="secondary-pill wide" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+                <a class="secondary-pill wide" href="{% url 'pedidos:meus_pedidos' %}">Acompanhar pedido</a>
             </div>
         </article>
     </section>

@@ -78,6 +78,9 @@ DATABASES = {
         ssl_require=not DEBUG and "postgres" in os.getenv("DATABASE_URL", ""),
     )
 }
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"].setdefault("timeout", 20)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

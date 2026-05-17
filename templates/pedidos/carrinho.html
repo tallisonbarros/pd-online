@@ -17,6 +17,12 @@
     <section class="checkout-stage-shell">
         <section id="checkout-stage-items" class="checkout-stage-panel">
             <a class="cart-back-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+            {% if cart_closed_notice %}
+                <p class="cart-closed-note">
+                    <span aria-hidden="true">⏱</span>
+                    <span>{{ cart_closed_notice.message }}</span>
+                </p>
+            {% endif %}
             <div class="panel checkout-summary-panel">
                 <div class="panel-head">
                     <h2>Itens escolhidos</h2>
