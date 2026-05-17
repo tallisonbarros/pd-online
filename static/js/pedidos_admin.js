@@ -302,17 +302,25 @@
         `;
     }
 
-    function updateSidebarBadge(count) {
-        const activePedidos = document.querySelector('.ops-nav-item.is-active[href*="/controle/pedidos/"] .ops-nav-badge');
-        if (activePedidos) activePedidos.textContent = String(count || 0);
+    function formatCount(count, prefix = "") {
+        const value = Number(count || 0);
+        const label = value > 99 ? "99+" : String(value);
+        return `${prefix}${label}`;
     }
 
-    function updateApprovalBadge(count) {
-        const badge = document.querySelector("[data-approval-badge]");
-        if (!badge) return;
+    function updateSidebarBadge(count) {
+        document.querySelectorAll("[data-current-orders-badge]").forEach((badge) => {
+            badge.textContent = formatCount(count);
+        });
+    }
+
+    function updateApprovalBadges(count) {
         const value = Number(count || 0);
-        badge.textContent = value > 99 ? "99+" : String(value);
-        badge.classList.toggle("is-hidden", value <= 0);
+        document.querySelectorAll("[data-approval-badge], [data-sidebar-approval-badge]").forEach((badge) => {
+            const isSidebarBadge = badge.hasAttribute("data-sidebar-approval-badge");
+            badge.textContent = formatCount(value, isSidebarBadge ? "+" : "");
+            badge.classList.toggle("is-hidden", value <= 0);
+        });
     }
 
     function renderCurrentOrders(payload) {
@@ -391,7 +399,7 @@
 
     function renderOrders(payload) {
         updateSidebarBadge(payload.pedidos_badge);
-        updateApprovalBadge(payload.aprovacao_count);
+        updateApprovalBadges(payload.aprovacao_count);
         if (page === "pedidos-approval-admin") {
             renderApprovalOrders(payload);
             return;

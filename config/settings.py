@@ -63,6 +63,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "pedidos.context_processors.frontend_config",
+                "pedidos.context_processors.ops_sidebar_counts",
             ],
         },
     },

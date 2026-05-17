@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
 
-from .models import ConfiguracaoEntrega
+from .models import ConfiguracaoEntrega, Pedido
 
 
 def _cart_operational_window(config, now=None):
@@ -46,4 +46,23 @@ def frontend_config(request):
             "cart_expires_at": cart_window["expires_at"],
             "server_now": cart_window["server_now"],
         }
+    }
+
+
+def ops_sidebar_counts(request):
+    if not request.path.startswith("/controle/"):
+        return {}
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_staff", False):
+        return {}
+
+    active_statuses = [
+        Pedido.Status.NOVO,
+        Pedido.Status.EM_PREPARO,
+        Pedido.Status.AGUARDANDO_ENTREGADOR,
+        Pedido.Status.SAIU_ENTREGA,
+    ]
+    return {
+        "ops_pedidos_badge": Pedido.objects.filter(status__in=active_statuses).count(),
+        "ops_aprovacao_count": Pedido.objects.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
     }

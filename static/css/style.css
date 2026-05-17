@@ -5587,10 +5587,17 @@ fieldset.field {
     box-shadow: 0 10px 18px rgba(19, 9, 8, 0.15);
 }
 
-.ops-nav-badge {
+.ops-nav-badges {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ops-nav-badge {
     min-width: 22px;
     height: 22px;
+    padding: 0 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -5600,6 +5607,17 @@ fieldset.field {
     background: rgba(255, 255, 255, 0.86);
     color: #3d2621;
     border: 1px solid rgba(95, 75, 66, 0.16);
+}
+
+.ops-nav-badge--approval {
+    background: #d43d3d;
+    color: #fffdfa;
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 18px rgba(212, 61, 61, 0.24);
+}
+
+.ops-nav-badge.is-hidden {
+    display: none;
 }
 
 .ops-nav-footer {
