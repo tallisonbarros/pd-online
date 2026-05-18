@@ -94,7 +94,7 @@
                         </button>
                         <button type="button" class="payment-choice-card" data-payment-type="pix">
                             <span>PAGAR</span>
-                            <strong>Online Pix</strong>
+                            <strong>Pix</strong>
                         </button>
                     </div>
                     <small id="checkout-payment-feedback" class="field-help payment-feedback hidden">Escolha uma forma de pagamento para finalizar.</small>
@@ -117,7 +117,7 @@
                                 </button>
                             </div>
                             <small id="pix-copy-feedback" class="pix-copy-feedback hidden">Chave Pix copiada.</small>
-                            <small>Copie a chave, e apos gerar o pedido, realize o pix e nos envie.</small>
+                            <small>Copie a chave Pix, mas nao esqueca: seu pedido so chega para nos depois de tocar em Gerar pedido e abrir WhatsApp.</small>
                         {% else %}
                             <strong>Pix não configurado</strong>
                             <small>Cadastre a chave Pix em Ajustes > Pagamento.</small>
@@ -129,6 +129,7 @@
         </section>
     </section>
     <div class="checkout-page-footer" aria-label="Finalizar pedido">
+        <div id="pix-copy-footer-notice" class="checkout-footer-notice hidden" aria-live="polite"></div>
         <button type="submit" form="checkout-form" class="primary-button wide checkout-submit-button" id="checkout-submit-button">
             <span>Gerar pedido e abrir WhatsApp</span>
             <small>Toque aqui para enviar seu pedido para nossa equipe</small>

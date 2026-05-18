@@ -47,7 +47,7 @@ ORDER_HISTORY_COOKIE = "prato_delivery_orders"
 ORDER_HISTORY_COOKIE_MAX_AGE = 60 * 60 * 24 * 180
 WEEKDAY_LABELS = {
     "seg": "SEGUNDA",
-    "ter": "TERCA",
+    "ter": "TERÇA",
     "qua": "QUARTA",
     "qui": "QUINTA",
     "sex": "SEXTA",
@@ -124,6 +124,7 @@ def _resolve_cardapio_pratos(config=None, now=None):
                 "pratos": pratos,
                 "weekday_key": weekday_key,
                 "is_today": is_today,
+                "day_offset": offset,
                 "title_lines": ["PRATO", "DO DIA"] if is_today else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
                 "empty_label": "hoje" if is_today else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
             }
@@ -133,9 +134,33 @@ def _resolve_cardapio_pratos(config=None, now=None):
         "pratos": [],
         "weekday_key": weekday_key,
         "is_today": start_offset == 0,
+        "day_offset": start_offset,
         "title_lines": ["PRATO", "DO DIA"] if start_offset == 0 else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
         "empty_label": "hoje" if start_offset == 0 else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
     }
+
+
+def _cardapio_status_tag(config, cardapio_context, now=None):
+    abertura = getattr(config, "horario_abertura", None)
+    fechamento = getattr(config, "horario_fechamento", None)
+    if not abertura or not fechamento:
+        return None
+
+    current = now or timezone.localtime()
+    current_time = current.time()
+    opening_range = f"{abertura.strftime('%H:%M')} às {fechamento.strftime('%H:%M')}"
+    is_today = bool(cardapio_context.get("is_today"))
+    day_offset = int(cardapio_context.get("day_offset") or 0)
+    weekday_key = cardapio_context.get("weekday_key")
+    weekday_label = WEEKDAY_LABELS.get(weekday_key, "HOJE")
+
+    if is_today and abertura <= current_time < fechamento:
+        return {"label": "Aberto agora", "time": f"até {fechamento.strftime('%H:%M')}"}
+    if is_today and current_time < abertura:
+        return {"label": "Abre hoje", "time": opening_range}
+    if day_offset == 1:
+        return {"label": "Amanhã", "time": opening_range}
+    return {"label": weekday_label, "time": opening_range}
 
 
 def _cart_closed_notice(config=None, now=None):
@@ -370,11 +395,12 @@ def cardapio(request):
             "pratos_json": json.dumps(pratos_serializados, ensure_ascii=False),
             "adicionais_json": json.dumps(adicionais_serializados, ensure_ascii=False),
             "bebidas_json": json.dumps(bebidas_serializadas, ensure_ascii=False),
-            "cardapio_title_lines": cardapio_context["title_lines"],
-            "cardapio_empty_label": cardapio_context["empty_label"],
-            "horario_abertura": config.horario_abertura,
-            "horario_fechamento": config.horario_fechamento,
-            "whatsapp_cardapio_url": whatsapp_cardapio_url,
+              "cardapio_title_lines": cardapio_context["title_lines"],
+              "cardapio_empty_label": cardapio_context["empty_label"],
+              "cardapio_status_tag": _cardapio_status_tag(config, cardapio_context),
+              "horario_abertura": config.horario_abertura,
+              "horario_fechamento": config.horario_fechamento,
+              "whatsapp_cardapio_url": whatsapp_cardapio_url,
         },
     )
 

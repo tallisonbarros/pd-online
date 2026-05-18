@@ -665,6 +665,7 @@
             const cartDockCount = cartDockRefs?.count;
             const cartDockWrap = cartDock.closest(".cart-dock-wrap");
             const whatsappFloat = document.querySelector("[data-whatsapp-float]");
+            const myOrdersFloat = document.querySelector("[data-my-orders-float]");
             const previousCount = Number(cartDock.dataset.cartCount || "0");
             const hydrated = cartDock.dataset.hydrated === "true";
             cartDock.dataset.cartCount = String(count);
@@ -672,6 +673,7 @@
             cartDock.classList.toggle("is-visible", count > 0);
             cartDockWrap?.classList.toggle("is-visible", count > 0);
             whatsappFloat?.classList.toggle("is-cart-visible", count > 0);
+            myOrdersFloat?.classList.toggle("is-cart-visible", count > 0);
 
             if (cartDockSummary) {
                 cartDockSummary.textContent = count === 1 ? "1 item no carrinho" : `${count} itens no carrinho`;
@@ -3010,6 +3012,7 @@
         const paymentPixPanel = document.getElementById("payment-pix-panel");
         const paymentFeedback = document.getElementById("checkout-payment-feedback");
         const submitButton = document.getElementById("checkout-submit-button");
+        const pixFooterNotice = document.getElementById("pix-copy-footer-notice");
         const checkoutNameInput = document.getElementById("checkout-nome");
         const checkoutAddressSummary = document.getElementById("checkout-address-summary");
         const savedProfileOpenButton = document.getElementById("saved-profile-open");
@@ -3426,10 +3429,16 @@
                 }
                 feedback?.classList.remove("hidden");
                 window.setTimeout(() => feedback?.classList.add("hidden"), 1600);
-                showUiNotice("Agora toque em Gerar pedido e abrir WhatsApp para concluir seu pedido.", {
-                    title: "Chave Pix copiada.",
-                    dismissLabel: "Entendi",
-                });
+                if (pixFooterNotice) {
+                    pixFooterNotice.textContent = "Chave Pix copiada. Agora toque em Gerar pedido e abrir WhatsApp para concluir seu pedido.";
+                    pixFooterNotice.classList.remove("hidden");
+                    pixFooterNotice.style.display = "block";
+                    if (pixFooterNotice._hideTimer) clearTimeout(pixFooterNotice._hideTimer);
+                    pixFooterNotice._hideTimer = window.setTimeout(() => {
+                        pixFooterNotice.classList.add("hidden");
+                        pixFooterNotice.style.display = "";
+                    }, 7000);
+                }
             } catch (error) {
                 showUiNotice("Não foi possível copiar a chave Pix automaticamente.");
             }

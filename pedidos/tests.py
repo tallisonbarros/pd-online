@@ -2659,7 +2659,7 @@ class CardapioOperationalDayTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "<span>PRATO</span>", html=True)
         self.assertContains(response, "<span>DE</span>", html=True)
-        self.assertContains(response, "<span>TERCA</span>", html=True)
+        self.assertContains(response, "<span>TERÇA</span>", html=True)
         self.assertContains(response, "Prato Terca")
         self.assertNotContains(response, "Prato Segunda")
 

@@ -14,11 +14,14 @@
                 <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
             </a>
             <span class="context-header-label">CARDÁPIO</span>
-            {% if horario_abertura and horario_fechamento %}
-                <span class="context-header-hours">Aberto {{ horario_abertura|time:"H:i" }} às {{ horario_fechamento|time:"H:i" }}</span>
-            {% endif %}
-            <a class="context-header-link" href="{% url 'pedidos:meus_pedidos' %}">Meus pedidos</a>
+            <span class="context-header-slogan">Seu almoço, sem erro.</span>
         </div>
+        {% if cardapio_status_tag %}
+            <div class="menu-status-tag" aria-label="{{ cardapio_status_tag.label }} {{ cardapio_status_tag.time }}">
+                <span class="menu-status-label">{{ cardapio_status_tag.label }}</span>
+                <span class="menu-status-time">{{ cardapio_status_tag.time }}</span>
+            </div>
+        {% endif %}
     </header>
 
     <section class="menu-feature-band" aria-labelledby="menu-feature-title">
@@ -75,19 +78,20 @@
         </div>
     </section>
 
-    <section class="menu-promo-card reveal-on-scroll" aria-labelledby="menu-promo-title">
-        <div class="menu-promo-copy">
-            <p class="menu-promo-kicker">Promoção especial</p>
-            <h2 id="menu-promo-title">Compre 4 marmitas, a 5ª é por nossa conta.</h2>
-            <div class="meal-promo-progress" data-meal-promo-progress aria-label="Progresso da promoção">
-                <div class="meal-promo-progress-head">
-                    <span data-meal-promo-count>0/4 marmitas</span>
-                    <strong data-meal-promo-message>Faltam 4 para liberar 1 grátis</strong>
-                </div>
-                <div class="meal-promo-track" aria-hidden="true">
-                    <span data-meal-promo-fill></span>
-                </div>
-                <small class="meal-promo-auto-note">Desconto aplicado automaticamente</small>
+    <section class="quality-signature reveal-on-scroll" aria-label="Marmitas seladas e feitas no dia">
+        <div class="quality-signature-text">
+            MARMITAS SELADAS <span>&bull;</span> FEITAS NO DIA
+        </div>
+        <div class="quality-marquee" aria-hidden="true">
+            <div class="quality-marquee-track">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
             </div>
         </div>
     </section>
@@ -193,7 +197,29 @@
             {% endfor %}
         </section>
     </section>
+
+    <section class="menu-promo-card reveal-on-scroll" aria-labelledby="menu-promo-title">
+        <div class="menu-promo-copy">
+            <p class="menu-promo-kicker">Promoção especial</p>
+            <h2 id="menu-promo-title">Compre 4 marmitas, a 5ª é por nossa conta.</h2>
+            <div class="meal-promo-progress" data-meal-promo-progress aria-label="Progresso da promoção">
+                <div class="meal-promo-progress-head">
+                    <span data-meal-promo-count>0/4 marmitas</span>
+                    <strong data-meal-promo-message>Faltam 4 para liberar 1 grátis</strong>
+                </div>
+                <div class="meal-promo-track" aria-hidden="true">
+                    <span data-meal-promo-fill></span>
+                </div>
+                <small class="meal-promo-auto-note">Desconto aplicado automaticamente</small>
+            </div>
+        </div>
+    </section>
 </main>
+
+<a class="orders-float" data-my-orders-float href="{% url 'pedidos:meus_pedidos' %}" aria-label="Abrir meus pedidos">
+    <span>Meus</span>
+    <span>Pedidos</span>
+</a>
 
 {% if whatsapp_cardapio_url %}
 <a class="whatsapp-float" data-whatsapp-float href="{{ whatsapp_cardapio_url }}" target="_blank" rel="noopener noreferrer" aria-label="Falar com atendente pelo WhatsApp">
