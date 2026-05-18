@@ -7,6 +7,7 @@
     const checkoutPaymentKey = `${cartKey}_checkout_payment`;
     const checkoutCustomerNameKey = `${cartKey}_checkout_customer_name`;
     const checkoutCouponKey = `${cartKey}_checkout_coupon`;
+    const checkoutPendingKey = `${cartKey}_checkout_pending_key`;
     const cartMetaKey = `${cartKey}_meta`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const currentCartCycleKey = String(config.cartCycleKey || "").trim();
@@ -598,6 +599,55 @@
                 .slice(0, 30);
         } catch (error) {
             return [];
+        }
+    }
+
+    function getOrCreateCheckoutKey(scope) {
+        const storageKey = `${checkoutPendingKey}_${scope || "pedido"}`;
+        try {
+            const current = String(localStorage.getItem(storageKey) || "").trim();
+            if (current) return current;
+            const randomPart = window.crypto?.randomUUID
+                ? window.crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const checkoutKey = String(randomPart).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+            localStorage.setItem(storageKey, checkoutKey);
+            return checkoutKey;
+        } catch (error) {
+            return `${Date.now()}-${Math.random().toString(36).slice(2)}`.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+        }
+    }
+
+    function clearCheckoutKey(scope) {
+        try {
+            localStorage.removeItem(`${checkoutPendingKey}_${scope || "pedido"}`);
+        } catch (error) {
+            // Ignora falha de storage.
+        }
+    }
+
+    function rememberOrder(order) {
+        if (!order || !order.token) return;
+        const key = (window.PRATO_CONFIG && window.PRATO_CONFIG.orderHistoryKey) || "prato_delivery_orders";
+        try {
+            let currentOrders = JSON.parse(localStorage.getItem(key) || "[]");
+            if (!Array.isArray(currentOrders)) currentOrders = [];
+            currentOrders = currentOrders.filter((item) => item && item.token && item.token !== order.token);
+            currentOrders.unshift(order);
+            localStorage.setItem(key, JSON.stringify(currentOrders.slice(0, 30)));
+        } catch (error) {
+            // Ignora falha de storage.
+        }
+    }
+
+    function clearCheckoutAfterOrder() {
+        clearCartStorage();
+        try {
+            localStorage.removeItem(checkoutDraftKey);
+            localStorage.removeItem(checkoutPaymentKey);
+            localStorage.removeItem(checkoutCouponKey);
+        } catch (error) {
+            // Ignora falha de storage.
         }
     }
 
@@ -2881,6 +2931,7 @@
         const payloadInput = document.getElementById("carrinho-payload");
         const couponPayloadInput = document.getElementById("checkout-coupon-code-payload");
         const knownOrderTokensInput = document.getElementById("checkout-known-order-tokens");
+        const checkoutKeyInput = document.getElementById("checkout-key");
         const mealPromoReview = document.getElementById("checkout-meal-promo-review");
         const mealPromoReviewValue = document.getElementById("checkout-meal-promo-review-value");
         const couponReview = document.getElementById("checkout-coupon-review");
@@ -2911,12 +2962,28 @@
         let whatsappSubmitInProgress = false;
         const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
 
-        function submitOrderInNewTab(orderForm) {
-            orderForm.target = "_blank";
-            orderForm.submit();
-            window.setTimeout(() => {
-                window.location.href = myOrdersUrl;
-            }, 160);
+        async function submitOrder(orderForm) {
+            if (checkoutKeyInput) checkoutKeyInput.value = getOrCreateCheckoutKey("entrega");
+            const response = await fetch(orderForm.action, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: new FormData(orderForm),
+            });
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || "Nao foi possivel finalizar o pedido.");
+            }
+            const payload = await response.json();
+            if (!payload?.ok || !payload?.pedido?.token) {
+                throw new Error("Nao foi possivel confirmar o pedido criado.");
+            }
+            rememberOrder(payload.pedido);
+            clearCheckoutAfterOrder();
+            clearCheckoutKey("entrega");
+            window.location.href = payload.success_url || myOrdersUrl;
         }
 
         function redirectToCardapio() {
@@ -3334,7 +3401,14 @@
                             button.disabled = true;
                         });
                         if (submitButton) submitButton.disabled = true;
-                        submitOrderInNewTab(form);
+                        submitOrder(form).catch((error) => {
+                            whatsappSubmitInProgress = false;
+                            form.querySelectorAll("button, input[type='submit']").forEach((button) => {
+                                button.disabled = false;
+                            });
+                            if (submitButton) submitButton.disabled = false;
+                            showUiNotice(error.message || "Nao foi possivel confirmar o pedido. Confira sua conexao e toque em finalizar novamente.");
+                        });
                     },
                 });
                 return;
@@ -3366,6 +3440,7 @@
         const pickupTalheresInput = document.getElementById("pickup-talheres-payload");
         const pickupCouponInput = document.getElementById("pickup-coupon-code-payload");
         const pickupKnownOrderTokensInput = document.getElementById("pickup-known-order-tokens");
+        const pickupCheckoutKeyInput = document.getElementById("pickup-checkout-key");
         const cartCouponInput = document.getElementById("cart-coupon-code");
         const cartCouponApplyButton = document.getElementById("cart-coupon-apply");
         const cartCouponRemoveButton = document.getElementById("cart-coupon-remove");
@@ -3408,6 +3483,31 @@
             if (pickupTalheresInput) pickupTalheresInput.value = draftPayload.enviar_talheres === "nao" ? "nao" : "sim";
             if (pickupCouponInput) pickupCouponInput.value = getCheckoutCouponCode();
             if (pickupKnownOrderTokensInput) pickupKnownOrderTokensInput.value = JSON.stringify(getKnownOrderTokens());
+            if (pickupCheckoutKeyInput) pickupCheckoutKeyInput.value = getOrCreateCheckoutKey("retirada");
+        }
+
+        async function submitPickupOrder() {
+            syncPickupFormPayload();
+            const response = await fetch(pickupForm.action, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: new FormData(pickupForm),
+            });
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || "Nao foi possivel finalizar a retirada.");
+            }
+            const payload = await response.json();
+            if (!payload?.ok || !payload?.pedido?.token) {
+                throw new Error("Nao foi possivel confirmar o pedido criado.");
+            }
+            rememberOrder(payload.pedido);
+            clearCheckoutAfterOrder();
+            clearCheckoutKey("retirada");
+            window.location.href = payload.success_url || myOrdersUrl;
         }
 
         function cartItemsTotal() {
@@ -3583,7 +3683,6 @@
             const cart = getCart();
             if (!cart.length || !pickupForm || pickupSubmitInProgress) return;
             persistDraftFromPage();
-            syncPickupFormPayload();
             showUiNotice("", {
                 title: "Fazer retirada",
                 messageLines: [
@@ -3596,11 +3695,11 @@
                     trackMetricEvent("pickup_submit", { metadata: { origem: "carrinho" } });
                     pickupSubmitInProgress = true;
                     goPickupButton.disabled = true;
-                    pickupForm.target = "_blank";
-                    pickupForm.submit();
-                    window.setTimeout(() => {
-                        window.location.href = myOrdersUrl;
-                    }, 160);
+                    submitPickupOrder().catch((error) => {
+                        pickupSubmitInProgress = false;
+                        goPickupButton.disabled = false;
+                        showUiNotice(error.message || "Nao foi possivel confirmar a retirada. Confira sua conexao e tente novamente.");
+                    });
                 },
             });
         });

@@ -9121,6 +9121,12 @@ fieldset.field {
     display: inline-flex;
     margin: 0;
 }
+.ped-print-queue-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
 .ped-modal-cancel-link {
     border: 0;
     background: transparent;
@@ -9498,16 +9504,6 @@ fieldset.field {
 .ped-modal-audit {
     margin-top: 12px;
 }
-.ped-modal-footer-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 12px;
-}
-.ped-modal-footer-actions form {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
 .ped-print-queue-link {
     border: 0;
     background: transparent;
@@ -9516,8 +9512,9 @@ fieldset.field {
     font: inherit;
     font-size: 12px;
     font-weight: 800;
-    text-decoration: line-through;
+    text-decoration: none;
     text-underline-offset: 3px;
+    text-transform: uppercase;
     cursor: pointer;
 }
 .ped-print-queue-link:hover,

@@ -2590,6 +2590,96 @@ class CriarPedidoFreteTests(TestCase):
             ]
         )
 
+    def _delivery_payload(self, checkout_key="checkout-key-1234567890"):
+        return {
+            "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+            "nome_cliente": "Cliente Teste",
+            "telefone": "64999999999",
+            "rua": "Rua Teste",
+            "numero": "10",
+            "bairro": "Centro",
+            "cidade": "Rio Verde",
+            "estado": "GO",
+            "latitude": "-17.7707268",
+            "longitude": "-50.9003217",
+            "endereco_formatado": "Rua Teste, 10, Centro, Rio Verde - GO",
+            "geocode_tipo": "house",
+            "geocode_precision": "exact",
+            "valor_frete": "5.00",
+            "distancia_km": "1.00",
+            "forma_pagamento": Pedido.FormaPagamento.PIX,
+            "checkout_key": checkout_key,
+        }
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    def test_ajax_order_creation_returns_public_payload_and_cookie(self, _mock_route):
+        response = self.client.post(
+            "/pedido/criar/",
+            self._delivery_payload(),
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        pedido = Pedido.objects.get()
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["reused"])
+        self.assertEqual(payload["pedido"]["token"], pedido.public_token)
+        self.assertEqual(payload["success_url"], f"/pedido/{pedido.public_token}/sucesso/")
+        self.assertEqual(pedido.checkout_key, "entrega:checkout-key-1234567890")
+        self.assertIn(ORDER_HISTORY_COOKIE, response.cookies)
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    def test_checkout_key_retry_returns_existing_order_without_duplicate(self, mock_route):
+        first_response = self.client.post(
+            "/pedido/criar/",
+            self._delivery_payload(),
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        second_response = self.client.post(
+            "/pedido/criar/",
+            self._delivery_payload(),
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(Pedido.objects.count(), 1)
+        self.assertTrue(second_response.json()["reused"])
+        self.assertEqual(second_response.json()["pedido"]["token"], first_response.json()["pedido"]["token"])
+        self.assertEqual(mock_route.call_count, 1)
+
+    def test_pickup_checkout_key_retry_returns_existing_order_without_duplicate(self):
+        payload = {
+            "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+            "nome_cliente": "Cliente Retirada",
+            "observacao_geral": "Retiro no balcao",
+            "enviar_talheres": "nao",
+            "checkout_key": "pickup-key-1234567890",
+        }
+
+        first_response = self.client.post(
+            "/pedido/retirada/",
+            payload,
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        second_response = self.client.post(
+            "/pedido/retirada/",
+            payload,
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(Pedido.objects.count(), 1)
+        self.assertTrue(second_response.json()["reused"])
+        self.assertEqual(Pedido.objects.get().checkout_key, "retirada:pickup-key-1234567890")
+
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 5870.0))
     def test_server_recalculates_distance_and_shipping_from_resolved_destination(self, _mock_route):
         response = self.client.post(

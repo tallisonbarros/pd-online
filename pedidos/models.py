@@ -137,6 +137,7 @@ class Pedido(models.Model):
     cupom_desconto = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     public_token = models.CharField(max_length=64, unique=True, blank=True, editable=False)
+    checkout_key = models.CharField(max_length=80, unique=True, blank=True, null=True, db_index=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     producao_iniciada_em = models.DateTimeField(blank=True, null=True)
     entregador_solicitado = models.BooleanField(default=False)

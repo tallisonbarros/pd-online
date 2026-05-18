@@ -59,7 +59,12 @@
         var progressRing = document.querySelector(".whatsapp-progress-ring");
         try {
             localStorage.removeItem(cartKey);
+            localStorage.removeItem(cartKey + "_meta");
             localStorage.removeItem(cartKey + "_checkout_draft");
+            localStorage.removeItem(cartKey + "_checkout_payment");
+            localStorage.removeItem(cartKey + "_checkout_coupon");
+            localStorage.removeItem(cartKey + "_checkout_pending_key_entrega");
+            localStorage.removeItem(cartKey + "_checkout_pending_key_retirada");
             var orderEntry = {
                 token: "{{ pedido.public_token|escapejs }}",
                 numero: {{ pedido.numero }},

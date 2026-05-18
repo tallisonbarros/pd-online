@@ -4,7 +4,7 @@
 
     const apiUrl = root.dataset.apiUrl;
     const refreshMs = 3000;
-    let currentPeriod = root.dataset.currentPeriod || "7d";
+    let currentPeriod = root.dataset.currentPeriod || "today";
     let refreshTimer = null;
     let inFlight = null;
 
@@ -162,7 +162,7 @@
         const link = event.target.closest("[data-period]");
         if (!link) return;
         event.preventDefault();
-        currentPeriod = link.dataset.period || "7d";
+        currentPeriod = link.dataset.period || "today";
         updatePeriods(currentPeriod);
         setStatus("Atualizando agora");
         fetchMetrics(currentPeriod);

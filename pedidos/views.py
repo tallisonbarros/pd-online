@@ -1404,6 +1404,61 @@ def _known_order_tokens_from_request(request):
     return tokens
 
 
+def _checkout_key_from_request(request, prefix):
+    raw_key = _safe_text(request.POST.get("checkout_key"))
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    normalized = "".join(char for char in raw_key if char in allowed).strip()
+    if len(normalized) < 16:
+        return None
+    return f"{prefix}:{normalized[:64]}"
+
+
+def _request_expects_json(request):
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+
+def _order_history_for_response(request, pedido):
+    history = [
+        {
+            "token": pedido.public_token,
+            "numero": pedido.numero,
+        }
+    ]
+    for token in _known_order_tokens_from_request(request):
+        if token != pedido.public_token:
+            history.append({"token": token})
+        if len(history) >= 30:
+            break
+    return history
+
+
+def _attach_order_history_cookie(response, request, pedido):
+    response.set_cookie(
+        ORDER_HISTORY_COOKIE,
+        json.dumps(_order_history_for_response(request, pedido)),
+        max_age=ORDER_HISTORY_COOKIE_MAX_AGE,
+        samesite="Lax",
+    )
+    return response
+
+
+def _order_created_response(request, pedido, reused=False):
+    if _request_expects_json(request):
+        response = JsonResponse(
+            {
+                "ok": True,
+                "reused": reused,
+                "pedido": _pedido_public_payload(pedido),
+                "success_url": reverse("pedidos:sucesso", args=[pedido.public_token]),
+            }
+        )
+        return _attach_order_history_cookie(response, request, pedido)
+    return redirect("pedidos:sucesso", public_token=pedido.public_token)
+
+
 def _record_order_created_metric(request, pedido):
     itens = list(pedido.itens.all())
     _record_access_event(
@@ -1449,6 +1504,11 @@ def criar_pedido(request):
     distancia_km_raw = request.POST.get("distancia_km", "").strip()
     forma_pagamento = _safe_text(request.POST.get("forma_pagamento"))
     cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
+    checkout_key = _checkout_key_from_request(request, "entrega")
+    if checkout_key:
+        existing_pedido = Pedido.objects.filter(checkout_key=checkout_key).first()
+        if existing_pedido:
+            return _order_created_response(request, existing_pedido, reused=True)
     config_entrega = ConfiguracaoEntrega.get_solo()
     if not _configured_whatsapp_number(config_entrega):
         return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
@@ -1539,6 +1599,7 @@ def criar_pedido(request):
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=valor_frete,
                 distancia_km=distancia_km,
+                checkout_key=checkout_key,
             )
             create_order_items_from_payload(pedido, itens_payload)
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
@@ -1546,7 +1607,7 @@ def criar_pedido(request):
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
     _record_order_created_metric(request, pedido)
-    return redirect("pedidos:sucesso", public_token=pedido.public_token)
+    return _order_created_response(request, pedido)
 
 
 @require_POST
@@ -1571,6 +1632,11 @@ def criar_retirada(request):
     observacao_geral = request.POST.get("observacao_geral", "").strip()
     enviar_talheres_raw = request.POST.get("enviar_talheres", "sim").strip().lower()
     cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
+    checkout_key = _checkout_key_from_request(request, "retirada")
+    if checkout_key:
+        existing_pedido = Pedido.objects.filter(checkout_key=checkout_key).first()
+        if existing_pedido:
+            return _order_created_response(request, existing_pedido, reused=True)
 
     try:
         with transaction.atomic():
@@ -1591,6 +1657,7 @@ def criar_retirada(request):
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=Decimal("0.00"),
                 distancia_km=Decimal("0.00"),
+                checkout_key=checkout_key,
             )
             create_order_items_from_payload(pedido, itens_payload)
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
@@ -1598,7 +1665,7 @@ def criar_retirada(request):
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
     _record_order_created_metric(request, pedido)
-    return redirect("pedidos:sucesso", public_token=pedido.public_token)
+    return _order_created_response(request, pedido)
 
 
 @never_cache
@@ -1614,24 +1681,7 @@ def sucesso(request, public_token):
             "whatsapp_url": whatsapp_url,
         },
     )
-    history = [
-        {
-            "token": pedido.public_token,
-            "numero": pedido.numero,
-        }
-    ]
-    for token in _known_order_tokens_from_request(request):
-        if token != pedido.public_token:
-            history.append({"token": token})
-        if len(history) >= 30:
-            break
-    response.set_cookie(
-        ORDER_HISTORY_COOKIE,
-        json.dumps(history),
-        max_age=ORDER_HISTORY_COOKIE_MAX_AGE,
-        samesite="Lax",
-    )
-    return response
+    return _attach_order_history_cookie(response, request, pedido)
 
 
 def _pedido_public_payload(pedido, include_items=False):
@@ -2205,14 +2255,14 @@ def _access_metrics_json(context):
 
 @staff_member_required(login_url="/admin/login/")
 def metricas_acesso(request):
-    context = _build_access_metrics_context(request.GET.get("period", "7d"))
+    context = _build_access_metrics_context(request.GET.get("period", "today"))
     return render(request, "pedidos/metricas_acesso.html", context)
 
 
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_metricas_acesso(request):
-    context = _build_access_metrics_context(request.GET.get("period", "7d"))
+    context = _build_access_metrics_context(request.GET.get("period", "today"))
     return JsonResponse(_access_metrics_json(context))
 
 
