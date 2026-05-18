@@ -12,6 +12,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 def _split_env(name, default=""):
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
+
+def _append_unique(values, additions):
+    for item in additions:
+        if item and item not in values:
+            values.append(item)
+
+
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me")
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
@@ -21,28 +28,23 @@ CSRF_TRUSTED_ORIGINS = _split_env(
     "http://127.0.0.1:8000,http://localhost:8000",
 )
 
-PRODUCTION_HOSTS = [
+# The Render dashboard can retain old environment values after manual edits.
+# Keep the known production domains here as a guarded fallback while still
+# treating ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS as the primary deploy config.
+DEFAULT_PRODUCTION_HOSTS = [
     "prato-delivery.onrender.com",
     "www.pratodelivery.com.br",
     "pratodelivery.com.br",
 ]
-PRODUCTION_CSRF_ORIGINS = [f"https://{host}" for host in PRODUCTION_HOSTS]
+DEFAULT_PRODUCTION_CSRF_ORIGINS = [f"https://{host}" for host in DEFAULT_PRODUCTION_HOSTS]
 
-for host in PRODUCTION_HOSTS:
-    if host not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(host)
-
-for origin in PRODUCTION_CSRF_ORIGINS:
-    if origin not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(origin)
+_append_unique(ALLOWED_HOSTS, DEFAULT_PRODUCTION_HOSTS)
+_append_unique(CSRF_TRUSTED_ORIGINS, DEFAULT_PRODUCTION_CSRF_ORIGINS)
 
 render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
 if render_hostname:
-    if render_hostname not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(render_hostname)
-    render_origin = f"https://{render_hostname}"
-    if render_origin not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(render_origin)
+    _append_unique(ALLOWED_HOSTS, [render_hostname])
+    _append_unique(CSRF_TRUSTED_ORIGINS, [f"https://{render_hostname}"])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
