@@ -18,9 +18,9 @@ services:
           name: prato-delivery-db
           property: connectionString
       - key: ALLOWED_HOSTS
-        value: prato-delivery.onrender.com
+        value: prato-delivery.onrender.com,www.pratodelivery.com.br,pratodelivery.com.br
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://prato-delivery.onrender.com
+        value: https://prato-delivery.onrender.com,https://www.pratodelivery.com.br,https://pratodelivery.com.br
       - key: RESTAURANT_WHATSAPP
         sync: false
 databases:
