@@ -261,6 +261,7 @@ class AccessMetricsTests(TestCase):
             AccessEvent(event_type=AccessEvent.EventType.PICKUP_SUBMIT, path="/carrinho/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.CHECKOUT_VIEW, path="/checkout/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.ORDER_CREATED, path="/pedido/criar/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.PAGE_ACTIVE, path="/checkout/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.MENU_VIEW, path="/", session_key="b"),
             AccessEvent(event_type=AccessEvent.EventType.ADD_TO_CART, path="/", session_key="b", item_type="prato", item_id=prato.id),
         ]
@@ -285,6 +286,9 @@ class AccessMetricsTests(TestCase):
         self.assertContains(response, "ops-kpi-card--fulfillment")
         self.assertContains(response, "Acessos unicos no periodo")
         self.assertContains(response, "Pedidos reais no periodo")
+        self.assertContains(response, "Acessos recentes")
+        self.assertContains(response, 'data-active-users-count>1</strong>')
+        self.assertContains(response, "Acesso ao cardapio")
         self.assertNotContains(response, "Adicoes")
         content = response.content.decode()
         self.assertLess(content.index('data-metric-value="total_cardapio"'), content.index('data-metric-value="total_carrinho"'))
@@ -303,6 +307,8 @@ class AccessMetricsTests(TestCase):
             AccessEvent(event_type=AccessEvent.EventType.CART_VIEW, path="/carrinho/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.PICKUP_SUBMIT, path="/carrinho/", session_key="a"),
             AccessEvent(event_type=AccessEvent.EventType.ADD_TO_CART, path="/", session_key="a", item_type="prato", item_id=prato.id),
+            AccessEvent(event_type=AccessEvent.EventType.PAGE_ACTIVE, path="/", session_key="a"),
+            AccessEvent(event_type=AccessEvent.EventType.PAGE_ACTIVE, path="/carrinho/", session_key="b"),
         ]
         AccessEvent.objects.bulk_create(events)
         AccessEvent.objects.update(created_at=timezone.now())
@@ -326,6 +332,9 @@ class AccessMetricsTests(TestCase):
         self.assertEqual(payload["funnel_steps"][2]["label"], "Retirada")
         self.assertEqual(payload["funnel_steps"][3]["label"], "Caixa")
         self.assertEqual(payload["top_items"][0]["nome"], "Executivo")
+        self.assertEqual(payload["active_users_count"], 2)
+        self.assertEqual(payload["access_history"][0]["label"], "Item adicionado ao carrinho")
+        self.assertNotIn("Usuario ativo", [row["label"] for row in payload["access_history"]])
         self.assertIn("updated_at", payload)
 
 

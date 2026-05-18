@@ -402,6 +402,7 @@ class AccessEvent(models.Model):
         MENU_VIEW = "menu_view", "Acesso ao cardapio"
         CART_VIEW = "cart_view", "Acesso ao carrinho"
         CHECKOUT_VIEW = "checkout_view", "Acesso ao caixa"
+        PAGE_ACTIVE = "page_active", "Usuario ativo"
         ADD_TO_CART = "add_to_cart", "Item adicionado ao carrinho"
         REMOVE_FROM_CART = "remove_from_cart", "Item removido do carrinho"
         GO_TO_CHECKOUT = "go_to_checkout", "Avanco para caixa"

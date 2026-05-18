@@ -110,6 +110,25 @@
             .join("");
     }
 
+    function renderHistory(rows) {
+        const node = document.querySelector("[data-metrics-history]");
+        if (!node) return;
+        if (!rows || !rows.length) {
+            node.innerHTML = '<tr><td colspan="4" class="metrics-history-empty">Ainda nao ha acessos no periodo.</td></tr>';
+            return;
+        }
+        node.innerHTML = rows
+            .map((row) => `
+                <tr>
+                    <td><time>${escapeHtml(row.time)}</time><small>${escapeHtml(row.date)}</small></td>
+                    <td><strong>${escapeHtml(row.label)}</strong>${row.detail ? `<small>${escapeHtml(row.detail)}</small>` : ""}</td>
+                    <td>${escapeHtml(row.page)}</td>
+                    <td><code>${escapeHtml(row.session)}</code></td>
+                </tr>
+            `)
+            .join("");
+    }
+
     function applyMetrics(data) {
         const kpis = data.kpis || {};
         Object.entries(kpis).forEach(([key, value]) => {
@@ -118,6 +137,8 @@
         renderFunnel(data.funnel_steps || []);
         renderBars(data.access_bars || []);
         renderRanking(data.top_items || []);
+        renderHistory(data.access_history || []);
+        setText("[data-active-users-count]", data.active_users_count ?? 0);
         setText("[data-metrics-peak]", data.peak?.label || "00h concentrou 0 eventos.");
         setText("[data-metric-period-label]", String(data.periodo_label || "").toLowerCase());
         setText("[data-metrics-period-strong]", data.periodo_label || "");

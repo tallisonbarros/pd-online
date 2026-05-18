@@ -8,6 +8,7 @@
     const checkoutCustomerNameKey = `${cartKey}_checkout_customer_name`;
     const checkoutCouponKey = `${cartKey}_checkout_coupon`;
     const checkoutPendingKey = `${cartKey}_checkout_pending_key`;
+    const checkoutAutoAddressKey = `${cartKey}_checkout_auto_address`;
     const cartMetaKey = `${cartKey}_meta`;
     const placeholderImage = `${config.staticUrl || "/static/"}img/placeholder-prato.svg`;
     const currentCartCycleKey = String(config.cartCycleKey || "").trim();
@@ -1907,6 +1908,14 @@
         });
 
         renderProfiles();
+        try {
+            if (sessionStorage.getItem(checkoutAutoAddressKey) === "1" && !getSavedCheckoutProfiles().length) {
+                sessionStorage.removeItem(checkoutAutoAddressKey);
+                window.setTimeout(() => openEditor("create", null), 80);
+            }
+        } catch (error) {
+            // Sem sessionStorage, o fluxo manual continua disponivel.
+        }
     }
 
     function initAddressEditor(form, options = {}) {
@@ -3676,6 +3685,15 @@
                 return;
             }
             persistDraftFromPage();
+            try {
+                if (getSavedCheckoutProfiles().length) {
+                    sessionStorage.removeItem(checkoutAutoAddressKey);
+                } else {
+                    sessionStorage.setItem(checkoutAutoAddressKey, "1");
+                }
+            } catch (error) {
+                // Sem sessionStorage, o checkout segue com o botao manual de endereco.
+            }
             trackMetricEvent("go_to_checkout", { metadata: { origem: "carrinho" } });
         });
         let pickupSubmitInProgress = false;

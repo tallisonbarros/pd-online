@@ -11,6 +11,8 @@
     if (!eventUrl || !eventType || window.__pratoPageViewTracked) return;
 
     window.__pratoPageViewTracked = true;
+    const activePingMs = 30000;
+    let activePingTimer = null;
 
     function csrfToken() {
         const match = document.cookie.match(/csrftoken=([^;]+)/);
@@ -21,24 +23,46 @@
         return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     }
 
-    const body = JSON.stringify({
+    function postMetric(payload, keepalive = false) {
+        return fetch(eventUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            keepalive,
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": config.csrfToken || csrfToken(),
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify(payload),
+        }).catch(() => {});
+    }
+
+    function postActivePing() {
+        if (document.hidden) return;
+        postMetric({
+            event_type: "page_active",
+            path: window.location.pathname,
+            metadata: {
+                origem: page,
+            },
+        });
+    }
+
+    postMetric({
         event_type: eventType,
         path: window.location.pathname,
         metadata: {
             origem: "page_open",
             page_open_id: pageOpenId(),
         },
-    });
+    }, true);
+    postActivePing();
+    activePingTimer = window.setInterval(postActivePing, activePingMs);
 
-    fetch(eventUrl, {
-        method: "POST",
-        credentials: "same-origin",
-        keepalive: true,
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": config.csrfToken || csrfToken(),
-            "X-Requested-With": "XMLHttpRequest",
-        },
-        body,
-    }).catch(() => {});
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) postActivePing();
+    });
+    window.addEventListener("pagehide", () => {
+        if (activePingTimer) window.clearInterval(activePingTimer);
+    });
 })();

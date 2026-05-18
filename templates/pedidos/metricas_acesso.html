@@ -14,6 +14,12 @@
                 <h1>Metricas de acesso</h1>
             </div>
             <div class="ops-session-actions">
+                <span class="ops-user-chip metrics-active-users" title="Usuarios ativos no cardapio, carrinho ou caixa">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <path d="M16 11a4 4 0 1 0-3.5-5.9A5 5 0 0 1 16 11Zm-8 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-6 1.7-6 3.8V20h12v-2.2C14 15.7 11.3 14 8 14Zm8-.5c-.9 0-1.8.1-2.6.4 1.6.9 2.6 2.2 2.6 3.9V20h6v-2.2c0-2.4-2.7-4.3-6-4.3Z"/>
+                    </svg>
+                    <strong data-active-users-count>{{ active_users_count }}</strong>
+                </span>
                 <span class="ops-user-chip metrics-live-chip" data-metrics-status>Atualizando agora</span>
                 <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
                 <form method="post" action="/admin/logout/">
@@ -156,6 +162,42 @@
                 <strong data-metrics-period-strong>{{ periodo_label }}</strong>
                 <span>baseado nos eventos coletados</span>
             </aside>
+        </section>
+
+        <section class="ops-card metrics-history-card">
+            <div class="ops-chart-head">
+                <div>
+                    <p class="ops-kicker">Historico</p>
+                    <h3>Acessos recentes</h3>
+                    <p>Registros coletados no periodo selecionado.</p>
+                </div>
+            </div>
+            <div class="metrics-history-table-wrap">
+                <table class="metrics-history-table">
+                    <thead>
+                        <tr>
+                            <th>Horario</th>
+                            <th>Registro</th>
+                            <th>Pagina</th>
+                            <th>Sessao</th>
+                        </tr>
+                    </thead>
+                    <tbody data-metrics-history>
+                        {% for row in access_history %}
+                            <tr>
+                                <td><time>{{ row.time }}</time><small>{{ row.date }}</small></td>
+                                <td><strong>{{ row.label }}</strong>{% if row.detail %}<small>{{ row.detail }}</small>{% endif %}</td>
+                                <td>{{ row.page }}</td>
+                                <td><code>{{ row.session }}</code></td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4" class="metrics-history-empty">Ainda nao ha acessos no periodo.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </section>
     </main>
 </div>

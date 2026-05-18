@@ -2064,18 +2064,46 @@ def _rate_label(part, total):
     return f"{_percent(part, total)}%"
 
 
+def _access_page_label(path):
+    normalized = _safe_text(path)
+    if normalized in {"/", ""}:
+        return "Cardapio"
+    if normalized.startswith("/carrinho"):
+        return "Carrinho"
+    if normalized.startswith("/checkout"):
+        return "Caixa"
+    if normalized.startswith("/meus-pedidos"):
+        return "Meus pedidos"
+    return normalized[:80] or "-"
+
+
+def _access_history_rows(events):
+    return [
+        {
+            "time": timezone.localtime(event.created_at).strftime("%H:%M:%S"),
+            "date": timezone.localtime(event.created_at).strftime("%d/%m/%Y"),
+            "label": event.get_event_type_display(),
+            "page": _access_page_label(event.path),
+            "session": event.session_key[-6:] if event.session_key else "-",
+            "detail": event.metadata.get("origem", "") if isinstance(event.metadata, dict) else "",
+        }
+        for event in events
+    ]
+
+
 def _build_access_metrics_context(period):
     periodo = _metrics_period(period)
     inicio = periodo["inicio"]
     fim = periodo["fim"]
     days = _dashboard_days(inicio, fim)
     events = AccessEvent.objects.filter(created_at__date__gte=inicio, created_at__date__lte=fim)
+    visible_events = events.exclude(event_type=AccessEvent.EventType.PAGE_ACTIVE)
 
-    event_counts_raw = events.values("event_type").annotate(total=Count("id"))
+    event_counts_raw = visible_events.values("event_type").annotate(total=Count("id"))
     event_counts = {row["event_type"]: row["total"] for row in event_counts_raw}
     event_sessions = {
         row["event_type"]: row["total"]
-        for row in events.values("event_type").annotate(total=Count("session_key", distinct=True))
+        for row in visible_events.values("event_type").annotate(total=Count("session_key", distinct=True))
     }
 
     menu_sessions = event_sessions.get(AccessEvent.EventType.MENU_VIEW, 0)
@@ -2119,7 +2147,7 @@ def _build_access_metrics_context(period):
     ]
 
     events_by_day_raw = (
-        events.filter(event_type=AccessEvent.EventType.MENU_VIEW)
+        visible_events.filter(event_type=AccessEvent.EventType.MENU_VIEW)
         .annotate(day=TruncDate("created_at"))
         .values("day")
         .annotate(total=Count("id"))
@@ -2139,7 +2167,7 @@ def _build_access_metrics_context(period):
     ]
 
     events_by_hour_raw = (
-        events.annotate(hour=ExtractHour("created_at"))
+        visible_events.annotate(hour=ExtractHour("created_at"))
         .values("hour")
         .annotate(total=Count("id"))
         .order_by("hour")
@@ -2150,7 +2178,7 @@ def _build_access_metrics_context(period):
     peak_hour = hour_series.index(peak_hour_value) if peak_hour_value else 0
 
     top_items = list(
-        events.filter(event_type=AccessEvent.EventType.ADD_TO_CART)
+        visible_events.filter(event_type=AccessEvent.EventType.ADD_TO_CART)
         .exclude(item_type="")
         .exclude(item_id__isnull=True)
         .values("item_type", "item_id")
@@ -2183,6 +2211,12 @@ def _build_access_metrics_context(period):
     total_pedidos_metricas = pedidos_metricas.count()
     envio_orders_share = _rate_label(envio_orders_total, total_pedidos_metricas)
     retirada_orders_share = _rate_label(retirada_orders_total, total_pedidos_metricas)
+    active_since = timezone.now() - timedelta(seconds=90)
+    active_users_count = AccessEvent.objects.filter(
+        event_type=AccessEvent.EventType.PAGE_ACTIVE,
+        created_at__gte=active_since,
+    ).values("session_key").distinct().count()
+    access_history = _access_history_rows(visible_events.order_by("-created_at", "-id")[:40])
 
     return {
         "periodo_key": periodo["key"],
@@ -2208,6 +2242,8 @@ def _build_access_metrics_context(period):
         "peak_hour_value": peak_hour_value,
         "metrics_payload": metrics_payload,
         "access_bars": access_bars,
+        "active_users_count": active_users_count,
+        "access_history": access_history,
         "pedidos_badge": pedidos_abertos,
         "aprovacao_count": aprovacao_count,
     }
@@ -2248,6 +2284,8 @@ def _access_metrics_json(context):
             "value": context["peak_hour_value"],
             "label": f"{context['peak_hour']:02d}h concentrou {context['peak_hour_value']} eventos.",
         },
+        "active_users_count": context["active_users_count"],
+        "access_history": context["access_history"],
         "updated_at": timezone.localtime().strftime("%H:%M:%S"),
         "pedidos_badge": context["pedidos_badge"],
         "aprovacao_count": context["aprovacao_count"],
