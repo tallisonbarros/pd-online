@@ -8641,10 +8641,23 @@ fieldset.field {
     box-shadow: 0 12px 20px rgba(34, 19, 17, 0.12);
 }
 .ped-icon {
-    width: 46px; height: 46px; border-radius: 12px; border: 1px solid #e2d6cf; display: grid; place-items: center;
+    width: 46px;
+    height: 46px;
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid #e2d6cf;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
 }
-.ped-icon svg { width: 24px; height: 24px; fill: #221311; }
-.ped-icon img { width: 28px; height: 28px; object-fit: contain; display: block; }
+.ped-icon svg,
+.ped-icon img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+}
+.ped-icon svg { fill: #221311; }
 .ped-client h2 { margin: 2px 0 0; color: #302621; font-size: 33px; line-height: 1.1; }
 .ped-client h2 span { color: #302621; }
 .ped-time { margin: 4px 0 0; color: #7c675c; font-size: 13px; }
