@@ -508,6 +508,9 @@
             node.textContent = fieldLabelFromPayload(field, pedido);
         });
 
+        const facts = content?.querySelector(".ped-modal-facts");
+        facts?.classList.toggle("is-pickup", pedido.tipo_coleta === "retirada");
+
         const address = content?.querySelector("[data-modal-address] > span");
         if (address) address.textContent = pedido.endereco || "";
         const route = content?.querySelector("[data-modal-route]");
@@ -654,6 +657,9 @@
             const payload = await response.json();
             applyModalPayload(payload, options);
             if (statusNode) statusNode.textContent = "Salvo";
+            if (form.matches("[data-delivery-editor]")) {
+                closeDeliveryEditor();
+            }
             if (currentDetailUrl && form.matches("[data-modal-status-form]")) {
                 closeDetail();
                 notifyOrdersChanged();
