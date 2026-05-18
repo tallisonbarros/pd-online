@@ -3174,12 +3174,32 @@
         }
 
         function syncCheckoutSubmitReadiness() {
+            const label = submitButton?.querySelector("span");
+            const helper = submitButton?.querySelector("small");
+            const hasItems = getCart().length > 0;
+            const hasDelivery = hasCheckoutDeliveryData(form);
+            const hasPayment = String(paymentMethodInput?.value || "").trim();
             const ready = Boolean(
-                getCart().length &&
-                hasCheckoutDeliveryData(form) &&
-                String(paymentMethodInput?.value || "").trim()
+                hasItems &&
+                hasDelivery &&
+                hasPayment
             );
             submitButton?.classList.toggle("is-ready", ready);
+            submitButton?.classList.toggle("is-missing-step", hasItems && !ready);
+
+            if (!label || !helper) return;
+            if (!hasDelivery) {
+                label.textContent = "Cadastre o endereco para continuar";
+                helper.textContent = "Toque aqui para escolher ou cadastrar o ponto de entrega";
+                return;
+            }
+            if (!hasPayment) {
+                label.textContent = "Escolha a forma de pagamento";
+                helper.textContent = "Selecione Pix, dinheiro ou cartao para continuar";
+                return;
+            }
+            label.textContent = "Gerar pedido e abrir WhatsApp";
+            helper.textContent = "Toque aqui para enviar seu pedido para nossa equipe";
         }
 
         function setActiveStage(stage) {
@@ -3406,6 +3426,10 @@
                 }
                 feedback?.classList.remove("hidden");
                 window.setTimeout(() => feedback?.classList.add("hidden"), 1600);
+                showUiNotice("Agora toque em Gerar pedido e abrir WhatsApp para concluir seu pedido.", {
+                    title: "Chave Pix copiada.",
+                    dismissLabel: "Entendi",
+                });
             } catch (error) {
                 showUiNotice("Não foi possível copiar a chave Pix automaticamente.");
             }
@@ -3447,7 +3471,7 @@
             if (!whatsappSubmitInProgress) {
                 event.preventDefault();
                 showUiNotice("", {
-                    title: "Finalizar no WhatsApp",
+                    title: "Gerar pedido e abrir WhatsApp",
                     messageLines: [
                         "Seu pedido será gerado e o WhatsApp abrirá com o resumo pronto.",
                         "Depois é só enviar a mensagem para nossa equipe confirmar.",
