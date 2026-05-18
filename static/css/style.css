@@ -2428,8 +2428,33 @@ body.modal-open {
 
 [data-page="checkout"] .checkout-page-footer .checkout-submit-button {
     position: relative;
+    display: grid;
+    gap: 2px;
+    justify-items: center;
+    line-height: 1.12;
+    overflow: hidden;
     z-index: 1;
     pointer-events: auto;
+}
+
+[data-page="checkout"] .checkout-page-footer .checkout-submit-button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.28) 42%, transparent 68%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+[data-page="checkout"] .checkout-page-footer .checkout-submit-button > * {
+    position: relative;
+    z-index: 1;
+}
+
+[data-page="checkout"] .checkout-page-footer .checkout-submit-button small {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.68rem;
+    font-weight: 700;
 }
 
 [data-page="carrinho"] .checkout-stage-shell {
@@ -2815,18 +2840,35 @@ body.modal-open {
 }
 
 .checkout-submit-button.is-ready {
-    animation: checkoutSubmitReady 2200ms ease-in-out infinite;
+    animation: checkoutSubmitReadyHalo 1700ms ease-in-out infinite;
 }
 
-@keyframes checkoutSubmitReady {
+.checkout-submit-button.is-ready::after {
+    animation: checkoutSubmitReadyShine 1700ms ease-in-out infinite;
+}
+
+@keyframes checkoutSubmitReadyHalo {
     0%,
     100% {
-        transform: translateY(0);
-        box-shadow: 0 16px 32px rgba(34, 19, 17, 0.14);
+        box-shadow: 0 18px 38px rgba(34, 19, 17, 0.2), 0 0 0 0 rgba(90, 58, 50, 0.16);
     }
     50% {
-        transform: translateY(-1px);
-        box-shadow: 0 18px 38px rgba(34, 19, 17, 0.2), 0 0 0 5px rgba(90, 58, 50, 0.08);
+        box-shadow: 0 22px 46px rgba(34, 19, 17, 0.26), 0 0 0 8px rgba(90, 58, 50, 0.12);
+    }
+}
+
+@keyframes checkoutSubmitReadyShine {
+    0% {
+        opacity: 0;
+        transform: translateX(-120%);
+    }
+    28%,
+    58% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(120%);
     }
 }
 

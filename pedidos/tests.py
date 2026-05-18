@@ -931,6 +931,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(detail_response, "data-field=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-param=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-field=\"enviar_talheres\"")
+        self.assertContains(detail_response, "data-field=\"ifood\"")
         self.assertContains(detail_response, "data-field=\"tipo_coleta\"")
         self.assertContains(detail_response, "data-field=\"observacao_geral\"")
         self.assertContains(detail_response, "data-open-delivery-editor")
@@ -1114,6 +1115,86 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(pedido.total_sem_desconto, Decimal("69.00"))
         self.assertEqual(pedido.total, Decimal("69.00"))
 
+    def test_manager_can_mark_order_as_ifood_and_reprice_items(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), preco_ifood=Decimal("32.00"), ativo=True)
+        bebida = Bebida.objects.create(nome="Refrigerante", preco=Decimal("6.00"), preco_ifood=Decimal("8.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente iFood",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("0.00"),
+            total=Decimal("31.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            bebida=bebida,
+            nome_prato_snapshot=bebida.nome,
+            preco_snapshot=Decimal("6.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "ifood", "value": "sim"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertTrue(pedido.ifood)
+        self.assertEqual(pedido.itens.get(prato=prato).preco_snapshot, Decimal("32.00"))
+        self.assertEqual(pedido.itens.get(bebida=bebida).preco_snapshot, Decimal("8.00"))
+        self.assertEqual(pedido.total, Decimal("40.00"))
+        self.assertEqual(response.json()["pedido"]["ifood"], "sim")
+        self.assertEqual(response.json()["pedido"]["ifood_label"], "iFood")
+
+    def test_ifood_order_uses_ifood_price_when_replacing_items(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), preco_ifood=Decimal("32.00"), ativo=True)
+        adicional = Adicional.objects.create(nome="Bacon", preco=Decimal("9.00"), preco_ifood=Decimal("12.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente iFood",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            ifood=True,
+            valor_frete=Decimal("0.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/itens/",
+            {
+                "itens_payload": json.dumps(
+                    [
+                        {"tipo": "prato", "item_id": prato.id, "quantidade": 1},
+                        {"tipo": "adicional", "item_id": adicional.id, "quantidade": 2},
+                    ]
+                )
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.itens.get(prato=prato).preco_snapshot, Decimal("32.00"))
+        self.assertEqual(pedido.itens.get(adicional=adicional).preco_snapshot, Decimal("12.00"))
+        self.assertEqual(pedido.total, Decimal("56.00"))
+
     def test_manager_can_apply_and_remove_coupon_from_order_modal(self):
         self.client.force_login(self.staff_user)
         gerente_group, _created = Group.objects.get_or_create(name="Gerente")
@@ -1192,12 +1273,13 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_staff_can_load_editor_catalog(self):
         self.client.force_login(self.staff_user)
-        Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), preco_ifood=Decimal("32.00"), ativo=True)
 
         response = self.client.get("/controle/api/catalogo-editor/")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"][0]["nome"], "Carreteiro")
+        self.assertEqual(response.json()["items"][0]["preco_ifood"], "32.00")
 
     def test_new_order_modal_uses_detail_modal_context(self):
         self.client.force_login(self.staff_user)
@@ -2501,6 +2583,7 @@ class AdicionaisCatalogoTests(TestCase):
                 "nome": "Farofa extra",
                 "descricao": "Porcao individual",
                 "preco": "4.50",
+                "preco_ifood": "6.50",
                 "ordem": "15",
                 "ativo": "on",
             },
@@ -2510,6 +2593,7 @@ class AdicionaisCatalogoTests(TestCase):
         adicional = Adicional.objects.get(nome="Farofa extra")
         self.assertTrue(adicional.ativo)
         self.assertEqual(adicional.preco, Decimal("4.50"))
+        self.assertEqual(adicional.preco_ifood, Decimal("6.50"))
 
         response = self.client.post(f"/controle/adicionais/{adicional.id}/alternar/")
 

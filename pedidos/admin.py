@@ -10,21 +10,21 @@ admin.site.index_title = "Gestão do delivery"
 
 @admin.register(Prato)
 class PratoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "preco", "ativo", "dias_disponiveis", "criado_em")
-    list_editable = ("preco", "ativo", "dias_disponiveis")
+    list_display = ("nome", "preco", "preco_ifood", "ativo", "dias_disponiveis", "criado_em")
+    list_editable = ("preco", "preco_ifood", "ativo", "dias_disponiveis")
     list_filter = ("ativo", "criado_em")
     search_fields = ("nome", "descricao", "variacoes", "dias_disponiveis")
     list_per_page = 25
     fieldsets = (
         ("Dados do prato", {"fields": ("nome", "descricao", "variacoes", "imagem")}),
-        ("Publicacao", {"fields": ("preco", "ativo", "dias_disponiveis")}),
+        ("Publicacao", {"fields": ("preco", "preco_ifood", "ativo", "dias_disponiveis")}),
     )
 
 
 @admin.register(Bebida)
 class BebidaAdmin(admin.ModelAdmin):
-    list_display = ("nome", "preco", "ativo", "ordem", "criado_em")
-    list_editable = ("preco", "ativo", "ordem")
+    list_display = ("nome", "preco", "preco_ifood", "ativo", "ordem", "criado_em")
+    list_editable = ("preco", "preco_ifood", "ativo", "ordem")
     list_filter = ("ativo", "criado_em")
     search_fields = ("nome", "descricao")
     ordering = ("ordem", "nome")
@@ -33,8 +33,8 @@ class BebidaAdmin(admin.ModelAdmin):
 
 @admin.register(Adicional)
 class AdicionalAdmin(admin.ModelAdmin):
-    list_display = ("nome", "preco", "ativo", "ordem", "criado_em")
-    list_editable = ("preco", "ativo", "ordem")
+    list_display = ("nome", "preco", "preco_ifood", "ativo", "ordem", "criado_em")
+    list_editable = ("preco", "preco_ifood", "ativo", "ordem")
     list_filter = ("ativo", "criado_em")
     search_fields = ("nome", "descricao")
     ordering = ("ordem", "nome")

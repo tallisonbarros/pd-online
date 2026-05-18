@@ -21,6 +21,12 @@ def normalize_coupon_code(value):
     return safe_text(value).upper()
 
 
+def catalog_price(item, use_ifood=False):
+    if use_ifood and getattr(item, "preco_ifood", None) is not None:
+        return item.preco_ifood
+    return getattr(item, "preco", None) or Decimal("0.00")
+
+
 def normalize_phone(value):
     digits = "".join(char for char in str(value or "") if char.isdigit())
     if len(digits) > 11 and digits.startswith("55"):
@@ -230,7 +236,7 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False)
         else:
             variacao_nome = ""
 
-        preco = catalog_item.preco or Decimal("0.00")
+        preco = catalog_price(catalog_item, pedido.ifood)
         item_pedido = ItemPedido.objects.create(
             pedido=pedido,
             prato=prato,
@@ -244,6 +250,15 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False)
         )
         total += item_pedido.subtotal
     return total
+
+
+def reprice_order_items_from_catalog(pedido):
+    for item in pedido.itens.select_related("prato", "bebida", "adicional"):
+        catalog_item = item.prato or item.bebida or item.adicional
+        if not catalog_item:
+            continue
+        item.preco_snapshot = catalog_price(catalog_item, pedido.ifood)
+        item.save(update_fields=["preco_snapshot", "subtotal"])
 
 
 def calcular_promocao_marmitas(pedido):
@@ -332,6 +347,7 @@ def serialize_editor_catalog():
             "id": item.id,
             "nome": item.nome,
             "preco": f"{(item.preco or Decimal('0.00')):.2f}",
+            "preco_ifood": f"{(item.preco_ifood or item.preco or Decimal('0.00')):.2f}",
             "variacoes": [
                 safe_text(line)
                 for line in (getattr(item, "variacoes", "") or "").splitlines()

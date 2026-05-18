@@ -34,6 +34,7 @@ from .order_services import (
     money_decimal,
     normalize_coupon_code,
     recalculate_order_totals,
+    reprice_order_items_from_catalog,
     replace_order_items,
     serialize_editor_catalog,
     sync_customer_from_order,
@@ -2904,6 +2905,8 @@ def _pedido_modal_payload(pedido):
             "forma_pagamento_label": pedido.get_forma_pagamento_display(),
             "enviar_talheres": "sim" if pedido.enviar_talheres else "nao",
             "enviar_talheres_label": "Enviar" if pedido.enviar_talheres else "Nao enviar",
+            "ifood": "sim" if pedido.ifood else "nao",
+            "ifood_label": "iFood" if pedido.ifood else "Balcao/PD",
             "observacao_geral": pedido.observacao_geral,
             "status": pedido.status,
             "status_label": pedido.status_label_contextual,
@@ -2951,6 +2954,7 @@ def pedido_novo_admin(request):
         tipo_coleta=Pedido.TipoColeta.RETIRADA,
         forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
         enviar_talheres=True,
+        ifood=False,
         status=Pedido.Status.RASCUNHO,
         valor_frete=Decimal("0.00"),
         distancia_km=Decimal("0.00"),
@@ -3007,6 +3011,7 @@ def _clone_order_as_draft(pedido):
         tipo_coleta=pedido.tipo_coleta,
         forma_pagamento=pedido.forma_pagamento,
         enviar_talheres=pedido.enviar_talheres,
+        ifood=pedido.ifood,
         observacao_geral=pedido.observacao_geral,
         status=Pedido.Status.RASCUNHO,
         distancia_km=pedido.distancia_km,
@@ -3117,6 +3122,7 @@ def atualizar_itens_pedido(request, pedido_id):
 
 @staff_member_required(login_url="/admin/login/")
 @require_POST
+@transaction.atomic
 def atualizar_dados_pedido(request, pedido_id):
     if not _user_can_manage_order_payment(request.user):
         return HttpResponseBadRequest("Usuario sem permissao para editar pedido.")
@@ -3133,6 +3139,15 @@ def atualizar_dados_pedido(request, pedido_id):
     elif field == "enviar_talheres":
         pedido.enviar_talheres = request.POST.get("value") == "sim"
         pedido.save(update_fields=["enviar_talheres"])
+    elif field == "ifood":
+        pedido.ifood = request.POST.get("value") == "sim"
+        pedido.save(update_fields=["ifood"])
+        try:
+            reprice_order_items_from_catalog(pedido)
+            recalculate_order_totals(pedido)
+        except ValueError as exc:
+            transaction.set_rollback(True)
+            return HttpResponseBadRequest(str(exc))
     elif field == "tipo_coleta":
         tipo_coleta = _safe_text(request.POST.get("value"))
         if tipo_coleta not in dict(Pedido.TipoColeta.choices):
@@ -3635,6 +3650,7 @@ def duplicar_prato(request, prato_id):
         variacoes=prato.variacoes,
         imagem=prato.imagem,
         preco=prato.preco,
+        preco_ifood=prato.preco_ifood,
         ativo=False,
         dias_disponiveis=prato.dias_disponiveis,
     )
@@ -3743,6 +3759,7 @@ def duplicar_bebida(request, bebida_id):
         descricao=bebida.descricao,
         imagem=bebida.imagem,
         preco=bebida.preco,
+        preco_ifood=bebida.preco_ifood,
         ativo=False,
         ordem=bebida.ordem,
     )
@@ -3805,6 +3822,7 @@ def duplicar_adicional(request, adicional_id):
         descricao=adicional.descricao,
         imagem=adicional.imagem,
         preco=adicional.preco,
+        preco_ifood=adicional.preco_ifood,
         ativo=False,
         ordem=adicional.ordem,
     )

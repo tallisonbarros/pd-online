@@ -45,6 +45,7 @@
                             </div>
                             <div class="management-meta">
                                 <p><strong>Preço:</strong> {% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
+                                <p><strong>Preço iFood:</strong> {% if prato.preco_ifood %}R$ {{ prato.preco_ifood|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Dias:</strong> {{ prato.dias_disponiveis|default:"Todos os dias" }}</p>
                                 {% if prato.variacoes %}
                                     <p><strong>Variações:</strong> {{ prato.variacoes|linebreaksbr }}</p>
@@ -110,6 +111,10 @@
                         <label class="field">
                             <span>Preço</span>
                             {{ form.preco }}
+                        </label>
+                        <label class="field">
+                            <span>Preço iFood</span>
+                            {{ form.preco_ifood }}
                         </label>
 
                         <label class="field">

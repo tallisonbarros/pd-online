@@ -45,6 +45,7 @@
                             </div>
                             <div class="management-meta">
                                 <p><strong>Preço:</strong> {% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
+                                <p><strong>Preço iFood:</strong> {% if bebida.preco_ifood %}R$ {{ bebida.preco_ifood|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Ordem:</strong> {{ bebida.ordem }}</p>
                             </div>
                             <div class="management-actions">
@@ -101,6 +102,10 @@
                         <label class="field">
                             <span>Preço</span>
                             {{ form.preco }}
+                        </label>
+                        <label class="field">
+                            <span>Preço iFood</span>
+                            {{ form.preco_ifood }}
                         </label>
 
                         <label class="field">

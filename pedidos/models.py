@@ -19,6 +19,7 @@ class Prato(models.Model):
     )
     imagem = models.ImageField(upload_to="pratos/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     dias_disponiveis = models.CharField(
         max_length=120,
@@ -39,6 +40,7 @@ class Bebida(models.Model):
     descricao = models.CharField(max_length=255, blank=True)
     imagem = models.ImageField(upload_to="bebidas/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveSmallIntegerField(default=0)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -55,6 +57,7 @@ class Adicional(models.Model):
     descricao = models.CharField(max_length=255, blank=True)
     imagem = models.ImageField(upload_to="adicionais/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveSmallIntegerField(default=0)
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -125,6 +128,7 @@ class Pedido(models.Model):
     icone_pedido = models.CharField(max_length=80, blank=True)
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
     enviar_talheres = models.BooleanField(default=True)
+    ifood = models.BooleanField(default=False)
     observacao_geral = models.TextField(blank=True)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOVO)
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))

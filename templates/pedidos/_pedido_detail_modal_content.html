@@ -211,6 +211,24 @@
                 </dd>
             </div>
             <div>
+                <dt>Canal</dt>
+                <dd data-modal-fact="ifood">
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="ifood"
+                            data-type="select"
+                            data-value="{% if pedido.ifood %}sim{% else %}nao{% endif %}"
+                            data-options="nao:Balcao/PD|sim:iFood"
+                            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                        >{% if pedido.ifood %}iFood{% else %}Balcao/PD{% endif %}</span>
+                    {% else %}
+                        {% if pedido.ifood %}iFood{% else %}Balcao/PD{% endif %}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
                 <dt>Endereço</dt>
                 <dd class="ped-address-row" data-modal-address>
                     {% if can_edit_payment %}

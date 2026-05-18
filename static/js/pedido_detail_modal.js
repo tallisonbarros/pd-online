@@ -11,6 +11,7 @@
     const csrfToken = (window.PRATO_CONFIG && window.PRATO_CONFIG.csrfToken) || "";
     let lastFocus = null;
     let currentDetailUrl = "";
+    let latestDetailPayload = null;
 
     function setOpen(isOpen) {
         modal.classList.toggle("hidden", !isOpen);
@@ -65,6 +66,7 @@
             });
             if (!response.ok) throw new Error(`Falha ao carregar pedido (${response.status})`);
             if (content) content.innerHTML = await response.text();
+            latestDetailPayload = null;
         } catch (error) {
             if (content) {
                 content.innerHTML = '<div class="ped-modal-error">Não foi possível carregar os detalhes do pedido.</div>';
@@ -95,6 +97,7 @@
             if (content) {
                 content.innerHTML = await response.text();
                 currentDetailUrl = content.querySelector("[data-current-detail-url]")?.dataset.currentDetailUrl || "";
+                latestDetailPayload = null;
             }
         } catch (error) {
             if (content) {
@@ -284,6 +287,10 @@
         if (!template || !itemsEditorHost) return;
         itemsEditorHost.innerHTML = "";
         itemsEditorHost.appendChild(template.content.cloneNode(true));
+        if (latestDetailPayload?.itens?.length) {
+            const editorItems = itemsEditorHost.querySelector("[data-editor-items]");
+            if (editorItems) editorItems.innerHTML = buildEditorRows(latestDetailPayload);
+        }
         setItemsEditorOpen(true);
         loadCatalog(itemsEditorHost);
     }
@@ -379,9 +386,11 @@
         });
         if (!response.ok) return;
         const payload = await response.json();
+        const useIfood = content?.querySelector("[data-inline-edit][data-field='ifood']")?.dataset.value === "sim";
         select.innerHTML = (payload.items || []).map((item) => {
             const variations = encodeURIComponent(JSON.stringify(item.variacoes || []));
-            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(item.preco)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(item.preco).replace(".", ",")}</option>`;
+            const price = useIfood ? item.preco_ifood : item.preco;
+            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(price)}" data-price-ifood="${escapeHtml(item.preco_ifood)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(price).replace(".", ",")}</option>`;
         }).join("");
         select.dataset.loaded = "true";
         updateVariationSelect(form);
@@ -405,6 +414,7 @@
         if (field === "telefone") return pedido.telefone || "";
         if (field === "forma_pagamento") return pedido.forma_pagamento || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres || "nao";
+        if (field === "ifood") return pedido.ifood || "nao";
         if (field === "tipo_coleta") return pedido.tipo_coleta || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "";
         return "";
@@ -415,6 +425,7 @@
         if (field === "telefone") return pedido.telefone || "Adicionar telefone";
         if (field === "forma_pagamento") return pedido.forma_pagamento_label || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres_label || "";
+        if (field === "ifood") return pedido.ifood_label || "";
         if (field === "tipo_coleta") return pedido.tipo_coleta_label || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "Adicionar observacao";
         return "";
@@ -494,6 +505,7 @@
 
     function applyModalPayload(payload, options = {}) {
         if (!payload?.ok) return;
+        latestDetailPayload = payload;
         const pedido = modalPedido(payload);
         const totalNode = content?.querySelector("[data-modal-total]");
         if (totalNode) totalNode.textContent = pedido.total || "";
