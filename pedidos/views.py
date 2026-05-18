@@ -2737,6 +2737,7 @@ def pedidos_admin(request):
         "pedidos/pedidos_admin.html",
         {
             "pedidos_ativos": pedidos_ativos,
+            "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
@@ -2753,6 +2754,7 @@ def pedidos_aprovacao_admin(request):
         "pedidos/pedidos_aprovacao_admin.html",
         {
             "pedidos_aprovacao": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20],
+            "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
@@ -2770,6 +2772,7 @@ def pedidos_concluidos_admin(request):
         {
             "pedidos_concluidos": base.filter(status=Pedido.Status.FINALIZADO).order_by("-criado_em", "-id")[:20],
             "pedidos_cancelados": base.filter(status=Pedido.Status.CANCELADO).order_by("-criado_em", "-id")[:20],
+            "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
             "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),

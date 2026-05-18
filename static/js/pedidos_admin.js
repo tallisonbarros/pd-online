@@ -6,7 +6,13 @@
     const listNode = root.querySelector("[data-orders-list]") || document.getElementById("pedidos-lista");
     const apiUrl = root.dataset.apiUrl;
     const statusUrlTemplate = root.dataset.statusUrlTemplate || "";
-    const csrfToken = (window.PRATO_CONFIG && window.PRATO_CONFIG.csrfToken) || "";
+    const config = window.PRATO_CONFIG || {};
+    const csrfToken = config.csrfToken || "";
+    const deliveryEtaUrl = config.deliveryEtaUrl || "/api/address/delivery-time/";
+    const googleMapsLanguage = config.googleMapsLanguage || "pt-BR";
+    const googleMapsRegion = config.googleMapsRegion || "BR";
+    let googleMapsPromise = null;
+    let googleGeocoder = null;
     let pollHandle = null;
     let isSyncing = false;
 
@@ -25,6 +31,65 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    function loadGoogleMaps() {
+        if (!config.googleMapsApiKey) return Promise.reject(new Error("Google Maps nao configurado."));
+        if (window.google?.maps?.importLibrary) return Promise.resolve(window.google.maps);
+        if (googleMapsPromise) return googleMapsPromise;
+
+        googleMapsPromise = new Promise((resolve, reject) => {
+            const existingScript = document.querySelector("script[data-google-maps-js]");
+            if (existingScript) {
+                existingScript.addEventListener("load", () => resolve(window.google.maps), { once: true });
+                existingScript.addEventListener("error", () => reject(new Error("Falha ao carregar Google Maps.")), { once: true });
+                return;
+            }
+
+            const params = new URLSearchParams({
+                key: config.googleMapsApiKey,
+                v: "weekly",
+                libraries: "places",
+                language: googleMapsLanguage,
+                region: googleMapsRegion,
+            });
+            const script = document.createElement("script");
+            script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+            script.async = true;
+            script.defer = true;
+            script.setAttribute("data-google-maps-js", "true");
+            script.onload = () => resolve(window.google.maps);
+            script.onerror = () => reject(new Error("Falha ao carregar Google Maps."));
+            document.head.appendChild(script);
+        });
+
+        return googleMapsPromise;
+    }
+
+    async function geocodeDeliverySector(setor) {
+        await loadGoogleMaps();
+        if (!googleGeocoder) {
+            const { Geocoder } = await google.maps.importLibrary("geocoding");
+            googleGeocoder = new Geocoder();
+        }
+        const address = [setor, "Rio Verde", "GO", "Brasil"].filter(Boolean).join(", ");
+        const response = await googleGeocoder.geocode({
+            address,
+            componentRestrictions: {
+                country: "BR",
+                administrativeArea: "GO",
+                locality: "Rio Verde",
+            },
+            language: googleMapsLanguage,
+        });
+        const result = response?.results?.[0];
+        const location = result?.geometry?.location;
+        if (!result || !location) throw new Error("Setor nao encontrado no Google Maps.");
+        return {
+            lat: location.lat(),
+            lng: location.lng(),
+            label: result.formatted_address || address,
+        };
     }
 
     function buildStatusUrl(pedidoId) {
@@ -509,6 +574,80 @@
         }
     }
 
+    const deliveryLookupModal = document.querySelector("[data-delivery-lookup-modal]");
+    const deliveryLookupForm = deliveryLookupModal?.querySelector("[data-delivery-lookup-form]");
+    const deliveryLookupResult = deliveryLookupModal?.querySelector("[data-delivery-lookup-result]");
+    const deliveryLookupInput = deliveryLookupForm?.querySelector("input[name='setor']");
+
+    function setDeliveryLookupResult(markup, isError = false) {
+        if (!deliveryLookupResult) return;
+        deliveryLookupResult.classList.remove("hidden", "is-error");
+        deliveryLookupResult.classList.toggle("is-error", Boolean(isError));
+        deliveryLookupResult.innerHTML = markup;
+    }
+
+    function openDeliveryLookup(button) {
+        if (!deliveryLookupModal) return;
+        deliveryLookupModal.classList.remove("hidden");
+        deliveryLookupModal.setAttribute("aria-hidden", "false");
+        deliveryLookupResult?.classList.add("hidden");
+        window.setTimeout(() => deliveryLookupInput?.focus(), 20);
+    }
+
+    function closeDeliveryLookup() {
+        if (!deliveryLookupModal) return;
+        deliveryLookupModal.classList.add("hidden");
+        deliveryLookupModal.setAttribute("aria-hidden", "true");
+    }
+
+    async function submitDeliveryLookup(event) {
+        event.preventDefault();
+        if (!deliveryLookupForm) return;
+        const setor = String(deliveryLookupInput?.value || "").trim();
+        if (!setor) {
+            setDeliveryLookupResult("<p>Informe o nome do setor.</p>", true);
+            return;
+        }
+        const submitButton = deliveryLookupForm.querySelector("button[type='submit']");
+        submitButton.disabled = true;
+        setDeliveryLookupResult("<p>Localizando setor...</p>");
+        try {
+            const destination = await geocodeDeliverySector(setor);
+            const params = new URLSearchParams({
+                lat: String(destination.lat),
+                lng: String(destination.lng),
+                resolved_label: destination.label,
+                resolved_type: "district",
+                resolved_precision: "approximate",
+                bairro: setor,
+                cidade: "Rio Verde",
+                estado: "GO",
+            });
+            setDeliveryLookupResult("<p>Calculando frete...</p>");
+            const response = await fetch(`${deliveryEtaUrl}?${params.toString()}`, {
+                method: "GET",
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                const error = payload.error === "origin_not_configured"
+                    ? "Configure a origem de entrega em Ajustes > Frete."
+                    : "Nao foi possivel consultar o frete.";
+                throw new Error(error);
+            }
+            setDeliveryLookupResult(`
+                <span>${escapeHtml(setor)}</span>
+                <strong>${escapeHtml(payload.shipping_fee_formatted)}</strong>
+                <small>${escapeHtml(payload.distance_km)} km - ${escapeHtml(payload.shipping_rule?.tipo || "faixa")} ${escapeHtml(payload.shipping_rule?.km_limite || "")} km</small>
+            `);
+        } catch (error) {
+            setDeliveryLookupResult(`<p>${escapeHtml(error.message || "Erro ao consultar entrega.")}</p>`, true);
+        } finally {
+            submitButton.disabled = false;
+        }
+    }
+
     root.addEventListener("submit", (event) => {
         const form = event.target.closest("[data-status-form], [data-entregador-form]");
         if (!form) return;
@@ -521,6 +660,25 @@
         if (!button) return;
         event.preventDefault();
         copyOrderText(button);
+    });
+
+    root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-open-delivery-lookup]");
+        if (!button) return;
+        event.preventDefault();
+        openDeliveryLookup(button);
+    });
+
+    deliveryLookupForm?.addEventListener("submit", submitDeliveryLookup);
+    deliveryLookupModal?.addEventListener("click", (event) => {
+        if (event.target === deliveryLookupModal || event.target.closest("[data-close-delivery-lookup]")) {
+            closeDeliveryLookup();
+        }
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && deliveryLookupModal && !deliveryLookupModal.classList.contains("hidden")) {
+            closeDeliveryLookup();
+        }
     });
 
     document.addEventListener("prato:orders-changed", syncOrders);

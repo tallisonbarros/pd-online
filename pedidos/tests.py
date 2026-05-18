@@ -902,6 +902,15 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertNotContains(response, "Pedidos para aprovação")
         self.assertNotIn(pedido, list(response.context["pedidos_ativos"]))
 
+    def test_orders_admin_includes_delivery_lookup_link(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/controle/pedidos/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "consultar entrega")
+        self.assertContains(response, 'data-open-delivery-lookup')
+
     def test_approval_orders_admin_shows_approval_queue(self):
         self.client.force_login(self.staff_user)
         pedido = Pedido.objects.create(

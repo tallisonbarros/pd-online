@@ -8502,9 +8502,32 @@ fieldset.field {
 .ped-route-nav .ped-btn {
     min-width: 170px;
 }
-.ped-route-nav .ped-add-btn {
+.ped-route-nav .ped-nav-actions {
     min-width: 260px;
     margin-left: auto;
+}
+.ped-route-nav .ped-add-btn {
+    width: 100%;
+}
+.ped-nav-actions {
+    display: grid;
+    gap: 4px;
+    justify-items: stretch;
+}
+.ped-delivery-lookup-link {
+    border: 0;
+    background: transparent;
+    color: #6f5a50;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.ped-delivery-lookup-link:hover,
+.ped-delivery-lookup-link:focus-visible {
+    color: #221311;
 }
 .ped-route-nav .ped-btn.is-active {
     border-color: #4e342e;
@@ -9083,6 +9106,10 @@ fieldset.field {
     overflow: hidden;
     border-radius: 22px;
 }
+.ped-delivery-lookup-card {
+    width: min(420px, 96vw);
+    border-radius: 20px;
+}
 .ped-items-editor-modal-content {
     max-height: 86vh;
     overflow-y: auto;
@@ -9092,6 +9119,64 @@ fieldset.field {
     max-height: 86vh;
     overflow-y: auto;
     padding: 22px;
+}
+.ped-delivery-lookup-content {
+    padding: 22px;
+}
+.ped-delivery-lookup-content h2 {
+    margin: 4px 0 16px;
+    color: #221311;
+    font-family: "Poppins", sans-serif;
+    font-size: 24px;
+    line-height: 1.15;
+}
+.delivery-lookup-form {
+    display: grid;
+    gap: 12px;
+}
+.delivery-lookup-form .field {
+    display: grid;
+    gap: 6px;
+}
+.delivery-lookup-form .field span {
+    color: #7a6257;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.delivery-lookup-form input {
+    width: 100%;
+    border: 1px solid #eadbd4;
+    border-radius: 12px;
+    padding: 12px 13px;
+    color: #2a1a17;
+    font: inherit;
+    font-size: 15px;
+    background: #fffdfa;
+}
+.delivery-lookup-result {
+    margin-top: 14px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #eadbd4;
+    border-radius: 14px;
+    padding: 12px;
+    background: #fbfaf8;
+}
+.delivery-lookup-result span,
+.delivery-lookup-result small,
+.delivery-lookup-result p {
+    margin: 0;
+    color: #6f5a50;
+}
+.delivery-lookup-result strong {
+    color: #221311;
+    font-size: 30px;
+    line-height: 1;
+}
+.delivery-lookup-result.is-error {
+    border-color: #f1c3a3;
+    background: #fff6ef;
 }
 .ped-items-editor-head {
     margin-bottom: 16px;
@@ -9658,11 +9743,11 @@ fieldset.field {
         top: 0;
     }
     .ped-route-nav .ped-btn,
-    .ped-route-nav .ped-add-btn {
+    .ped-route-nav .ped-nav-actions {
         min-width: 0;
         flex: 1 1 180px;
     }
-    .ped-route-nav .ped-add-btn {
+    .ped-route-nav .ped-nav-actions {
         margin-left: 0;
     }
     .ped-card-top { grid-template-columns: 1fr; align-items: start; }

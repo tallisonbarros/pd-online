@@ -1,0 +1,22 @@
+<div id="delivery-lookup-modal" class="modal-backdrop hidden ped-delivery-lookup-modal" aria-hidden="true" data-delivery-lookup-modal>
+    <div class="modal-card ped-delivery-lookup-card" role="dialog" aria-modal="true" aria-labelledby="delivery-lookup-title">
+        <button type="button" class="modal-close" data-close-delivery-lookup aria-label="Fechar">&times;</button>
+        <div class="modal-content ped-delivery-lookup-content">
+            <span class="ped-modal-kicker">Entrega</span>
+            <h2 id="delivery-lookup-title">Consultar frete</h2>
+            <form class="delivery-lookup-form" data-delivery-lookup-form>
+                <label class="field">
+                    <span>Setor</span>
+                    <input type="search" name="setor" list="delivery-lookup-sector-options" autocomplete="off" placeholder="Digite o nome do setor" required>
+                </label>
+                <datalist id="delivery-lookup-sector-options">
+                    {% for bairro in bairros_sugestoes %}
+                        <option value="{{ bairro }}"></option>
+                    {% endfor %}
+                </datalist>
+                <button class="ped-btn ped-btn-primary" type="submit">Consultar</button>
+            </form>
+            <div class="delivery-lookup-result hidden" data-delivery-lookup-result aria-live="polite"></div>
+        </div>
+    </div>
+</div>
