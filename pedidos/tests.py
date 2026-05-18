@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
@@ -16,6 +17,14 @@ from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflit
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
+
+
+class ProductionHostSettingsTests(SimpleTestCase):
+    def test_production_domains_are_allowed_even_with_env_override(self):
+        self.assertIn("prato-delivery.onrender.com", settings.ALLOWED_HOSTS)
+        self.assertIn("www.pratodelivery.com.br", settings.ALLOWED_HOSTS)
+        self.assertIn("pratodelivery.com.br", settings.ALLOWED_HOSTS)
+        self.assertIn("https://www.pratodelivery.com.br", settings.CSRF_TRUSTED_ORIGINS)
 
 
 class GoogleMapsRouteUrlTests(TestCase):

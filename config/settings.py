@@ -21,6 +21,21 @@ CSRF_TRUSTED_ORIGINS = _split_env(
     "http://127.0.0.1:8000,http://localhost:8000",
 )
 
+PRODUCTION_HOSTS = [
+    "prato-delivery.onrender.com",
+    "www.pratodelivery.com.br",
+    "pratodelivery.com.br",
+]
+PRODUCTION_CSRF_ORIGINS = [f"https://{host}" for host in PRODUCTION_HOSTS]
+
+for host in PRODUCTION_HOSTS:
+    if host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
+
+for origin in PRODUCTION_CSRF_ORIGINS:
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
+
 render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
 if render_hostname:
     if render_hostname not in ALLOWED_HOSTS:
