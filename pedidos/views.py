@@ -2884,6 +2884,57 @@ def _pedido_detail_context(request, pedido, *, is_new_order=False):
     return context
 
 
+def _pedido_modal_payload(pedido):
+    pedido = Pedido.objects.prefetch_related("itens").get(pk=pedido.pk)
+    itens_subtotal = pedido.itens.aggregate(total=Sum("subtotal")).get("total") or Decimal("0.00")
+    frete_esperado, _faixa_frete_atual = _calcular_frete_por_distancia(pedido.distancia_km)
+    diferenca_frete = pedido.valor_frete - frete_esperado
+    total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
+    return {
+        "ok": True,
+        "pedido": {
+            "id": pedido.id,
+            "numero": pedido.numero,
+            "nome_cliente": pedido.nome_cliente,
+            "telefone": pedido.telefone,
+            "cliente_nome": pedido.cliente.nome if pedido.cliente_id and pedido.cliente else "",
+            "tipo_coleta": pedido.tipo_coleta,
+            "tipo_coleta_label": pedido.get_tipo_coleta_display(),
+            "forma_pagamento": pedido.forma_pagamento,
+            "forma_pagamento_label": pedido.get_forma_pagamento_display(),
+            "enviar_talheres": "sim" if pedido.enviar_talheres else "nao",
+            "enviar_talheres_label": "Enviar" if pedido.enviar_talheres else "Nao enviar",
+            "observacao_geral": pedido.observacao_geral,
+            "status": pedido.status,
+            "status_label": pedido.status_label_contextual,
+            "endereco": pedido.endereco,
+            "google_maps_route_url": pedido.google_maps_route_url,
+            "valor_frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
+            "distancia_km": f"{pedido.distancia_km:.2f}".replace(".", ","),
+            "itens_subtotal": f"R$ {itens_subtotal:.2f}".replace(".", ","),
+            "total": f"R$ {pedido.total:.2f}".replace(".", ","),
+            "cupom_codigo": pedido.cupom_codigo,
+            "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ","),
+            "promocao_descricao": pedido.promocao_descricao,
+            "promocao_desconto": f"R$ {pedido.promocao_desconto:.2f}".replace(".", ","),
+            "frete_confere": diferenca_frete == Decimal("0.00"),
+            "total_confere": total_recalculado == pedido.total,
+        },
+        "itens": [
+            {
+                "tipo": "prato" if item.prato_id else "bebida" if item.bebida_id else "adicional" if item.adicional_id else "",
+                "item_id": item.prato_id or item.bebida_id or item.adicional_id or "",
+                "nome": item.nome_prato_snapshot,
+                "variacao": item.variacao_nome_snapshot,
+                "quantidade": item.quantidade,
+                "observacao": item.observacao,
+                "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),
+            }
+            for item in pedido.itens.all()
+        ],
+    }
+
+
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def pedido_novo_admin(request):
@@ -3017,7 +3068,7 @@ def atualizar_pagamento_pedido(request, pedido_id):
         return HttpResponseBadRequest("Forma de pagamento invalida.")
     pedido.forma_pagamento = forma_pagamento
     pedido.save(update_fields=["forma_pagamento"])
-    return JsonResponse({"ok": True, "pagamento": pedido.get_forma_pagamento_display()})
+    return JsonResponse(_pedido_modal_payload(pedido))
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -3034,14 +3085,7 @@ def atualizar_cupom_pedido(request, pedido_id):
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
     pedido.refresh_from_db()
-    return JsonResponse(
-        {
-            "ok": True,
-            "cupom_codigo": pedido.cupom_codigo,
-            "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ","),
-            "total": f"R$ {pedido.total:.2f}".replace(".", ","),
-        }
-    )
+    return JsonResponse(_pedido_modal_payload(pedido))
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -3068,7 +3112,7 @@ def atualizar_itens_pedido(request, pedido_id):
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
-    return JsonResponse({"ok": True, "total": f"R$ {pedido.total:.2f}".replace(".", ",")})
+    return JsonResponse(_pedido_modal_payload(pedido))
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -3137,7 +3181,7 @@ def atualizar_dados_pedido(request, pedido_id):
         pedido.save(update_fields=["observacao_geral"])
     else:
         return HttpResponseBadRequest("Campo invalido.")
-    return JsonResponse({"ok": True})
+    return JsonResponse(_pedido_modal_payload(pedido))
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -3174,12 +3218,9 @@ def atualizar_entrega_pedido(request, pedido_id):
             setattr(pedido, field, value)
         pedido.save(update_fields=list(common_fields.keys()))
         sync_customer_from_order(pedido)
-        return JsonResponse({
-            "ok": True,
-            "frete_recalculado": False,
-            "frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
-            "total": f"R$ {pedido.total:.2f}".replace(".", ","),
-        })
+        payload = _pedido_modal_payload(pedido)
+        payload["frete_recalculado"] = False
+        return JsonResponse(payload)
     origin_result = _resolve_saved_origin_result()
     if not origin_result:
         return HttpResponseBadRequest("Configure a origem de entrega antes de recalcular.")
@@ -3220,7 +3261,9 @@ def atualizar_entrega_pedido(request, pedido_id):
     ])
     recalculate_order_totals(pedido)
     sync_customer_from_order(pedido)
-    return JsonResponse({"ok": True, "frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","), "total": f"R$ {pedido.total:.2f}".replace(".", ",")})
+    payload = _pedido_modal_payload(pedido)
+    payload["frete_recalculado"] = True
+    return JsonResponse(payload)
 
 
 @staff_member_required(login_url="/admin/login/")

@@ -173,9 +173,7 @@
                 credentials: "same-origin",
             });
             if (!response.ok) throw new Error(`Falha ao atualizar pagamento (${response.status})`);
-            if (currentDetailUrl) {
-                await openDetail({ dataset: { orderDetailUrl: currentDetailUrl } });
-            }
+            applyModalPayload(await response.json(), { syncEditor: false });
         } catch (error) {
             if (content) {
                 content.insertAdjacentHTML("afterbegin", '<div class="ped-modal-error">Não foi possível salvar o pagamento.</div>');
@@ -227,6 +225,9 @@
         form.dataset.action = action;
         form.dataset.field = field;
         form.dataset.param = node.dataset.param || "value";
+        form.dataset.type = type;
+        form.dataset.inlineClass = node.className || "ped-inline-edit";
+        if (node.dataset.options) form.dataset.options = node.dataset.options;
 
         let control;
         if (type === "select") {
@@ -251,16 +252,31 @@
         control.name = "value";
         control.setAttribute("aria-label", "Editar campo");
 
-        const save = document.createElement("button");
-        save.type = "submit";
-        save.className = "ped-btn ped-btn-primary";
-        save.textContent = "Salvar";
+        const status = document.createElement("span");
+        status.className = "ped-autosave-status";
+        status.dataset.inlineAutosaveStatus = "true";
+        status.setAttribute("aria-live", "polite");
 
         form.appendChild(control);
-        form.appendChild(save);
+        form.appendChild(status);
         node.replaceWith(form);
         control.focus();
         if (control.select) control.select();
+        if (type === "select") {
+            control.addEventListener("change", () => submitInlineForm(form));
+        } else {
+            control.addEventListener("blur", () => submitInlineForm(form));
+            control.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && type !== "textarea") {
+                    event.preventDefault();
+                    submitInlineForm(form);
+                }
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    submitInlineForm(form);
+                }
+            });
+        }
     }
 
     function openItemsEditor() {
@@ -380,6 +396,146 @@
             .replace(/'/g, "&#39;");
     }
 
+    function modalPedido(payload) {
+        return payload?.pedido || {};
+    }
+
+    function fieldValueFromPayload(field, pedido) {
+        if (field === "nome_cliente") return pedido.nome_cliente || "";
+        if (field === "telefone") return pedido.telefone || "";
+        if (field === "forma_pagamento") return pedido.forma_pagamento || "";
+        if (field === "enviar_talheres") return pedido.enviar_talheres || "nao";
+        if (field === "tipo_coleta") return pedido.tipo_coleta || "";
+        if (field === "observacao_geral") return pedido.observacao_geral || "";
+        return "";
+    }
+
+    function fieldLabelFromPayload(field, pedido) {
+        if (field === "nome_cliente") return pedido.nome_cliente || "Cliente";
+        if (field === "telefone") return pedido.telefone || "Adicionar telefone";
+        if (field === "forma_pagamento") return pedido.forma_pagamento_label || "";
+        if (field === "enviar_talheres") return pedido.enviar_talheres_label || "";
+        if (field === "tipo_coleta") return pedido.tipo_coleta_label || "";
+        if (field === "observacao_geral") return pedido.observacao_geral || "Adicionar observacao";
+        return "";
+    }
+
+    function createInlineDisplay(form, payload) {
+        const pedido = modalPedido(payload);
+        const span = document.createElement("span");
+        span.className = form.dataset.inlineClass || "ped-inline-edit";
+        span.dataset.inlineEdit = "true";
+        span.dataset.field = form.dataset.field || "";
+        span.dataset.type = form.dataset.type || "text";
+        span.dataset.value = fieldValueFromPayload(span.dataset.field, pedido);
+        span.dataset.action = form.dataset.action || form.action || "";
+        span.dataset.param = form.dataset.param || "value";
+        if (form.dataset.options) span.dataset.options = form.dataset.options;
+        span.textContent = fieldLabelFromPayload(span.dataset.field, pedido);
+        return span;
+    }
+
+    function buildModalItems(payload) {
+        const itens = Array.isArray(payload?.itens) ? payload.itens : [];
+        const pedido = modalPedido(payload);
+        const rows = itens.length
+            ? itens.map((item) => `
+                <li>
+                    <div>
+                        <strong>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}</strong>
+                        ${item.variacao ? `<small>${escapeHtml(item.variacao)}</small>` : ""}
+                        ${item.observacao ? `<small>Obs.: ${escapeHtml(item.observacao)}</small>` : ""}
+                    </div>
+                    <span>${escapeHtml(item.subtotal)}</span>
+                </li>
+            `).join("")
+            : '<li class="is-empty">Nenhum item encontrado.</li>';
+        const promo = pedido.promocao_descricao && pedido.promocao_desconto && pedido.promocao_desconto !== "R$ 0,00"
+            ? `
+                <li class="is-discount">
+                    <div>
+                        <strong>${escapeHtml(pedido.promocao_descricao || "Promocao especial")}</strong>
+                        <small>Promocao aplicada</small>
+                    </div>
+                    <span>- ${escapeHtml(pedido.promocao_desconto)}</span>
+                </li>
+            `
+            : "";
+        const coupon = pedido.cupom_codigo && pedido.cupom_desconto && pedido.cupom_desconto !== "R$ 0,00"
+            ? `
+                <li class="is-discount">
+                    <div>
+                        <strong>Cupom ${escapeHtml(pedido.cupom_codigo)}</strong>
+                        <small>Desconto aplicado</small>
+                    </div>
+                    <span>- ${escapeHtml(pedido.cupom_desconto)}</span>
+                </li>
+            `
+            : "";
+        return rows + promo + coupon;
+    }
+
+    function buildEditorRows(payload) {
+        return (Array.isArray(payload?.itens) ? payload.itens : []).filter((item) => item.tipo && item.item_id).map((item) => `
+            <div
+                class="ped-item-editor-row"
+                data-editor-row
+                data-tipo="${escapeHtml(item.tipo)}"
+                data-item-id="${escapeHtml(item.item_id)}"
+                data-variacao="${escapeHtml(item.variacao)}"
+                data-quantidade="${escapeHtml(item.quantidade)}"
+                data-observacao="${escapeHtml(item.observacao)}"
+            >
+                <span>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}${item.variacao ? ` - ${escapeHtml(item.variacao)}` : ""}</span>
+                <button type="button" data-editor-remove-item aria-label="Remover item">Remover</button>
+            </div>
+        `).join("");
+    }
+
+    function applyModalPayload(payload, options = {}) {
+        if (!payload?.ok) return;
+        const pedido = modalPedido(payload);
+        const totalNode = content?.querySelector("[data-modal-total]");
+        if (totalNode) totalNode.textContent = pedido.total || "";
+        const itemsList = content?.querySelector("[data-modal-items-list]");
+        if (itemsList) itemsList.innerHTML = buildModalItems(payload);
+        const editorItems = itemsEditorHost?.querySelector("[data-editor-items]");
+        if (editorItems && options.syncEditor !== false) editorItems.innerHTML = buildEditorRows(payload);
+
+        content?.querySelectorAll("[data-inline-edit]").forEach((node) => {
+            const field = node.dataset.field;
+            node.dataset.value = fieldValueFromPayload(field, pedido);
+            node.textContent = fieldLabelFromPayload(field, pedido);
+        });
+
+        const address = content?.querySelector("[data-modal-address] > span");
+        if (address) address.textContent = pedido.endereco || "";
+        const route = content?.querySelector("[data-modal-route]");
+        if (route) {
+            route.href = pedido.google_maps_route_url || "#";
+            route.classList.toggle("hidden", pedido.tipo_coleta === "retirada");
+        }
+
+        const subtotal = content?.querySelector("[data-modal-audit='subtotal']");
+        if (subtotal) subtotal.textContent = pedido.itens_subtotal || "";
+        const frete = content?.querySelector("[data-modal-frete]");
+        if (frete) frete.textContent = pedido.valor_frete || "";
+        const distancia = content?.querySelector("[data-modal-distancia]");
+        if (distancia) distancia.textContent = `${pedido.distancia_km || "0,00"} km`;
+        const auditTotal = content?.querySelector("[data-modal-audit='total']");
+        if (auditTotal) auditTotal.textContent = pedido.total || "";
+
+        const couponInput = content?.querySelector("[data-autosave-coupon]");
+        if (couponInput && document.activeElement !== couponInput) couponInput.value = pedido.cupom_codigo || "";
+        const couponSummary = content?.querySelector(".ped-coupon-box strong");
+        if (couponSummary) {
+            couponSummary.textContent = pedido.cupom_codigo
+                ? `${pedido.cupom_codigo} - ${pedido.cupom_desconto}`
+                : "Nenhum cupom aplicado";
+        }
+        notifyOrdersChanged();
+    }
+
     function selectedCatalogOption(form) {
         return form.querySelector("[data-editor-catalog]")?.selectedOptions?.[0] || null;
     }
@@ -412,7 +568,6 @@
         row.dataset.preco = option.dataset.price || "0";
         row.innerHTML = `<span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span><button type="button" data-editor-remove-item>Remover</button>`;
         form.querySelector("[data-editor-items]")?.appendChild(row);
-        updateCreateOrderTotal(form);
     }
 
     function buildItemsPayload(form) {
@@ -470,6 +625,89 @@
         }
     }
 
+    async function submitAjaxForm(form, beforeSubmit, options = {}) {
+        const button = form.querySelector('button[type="submit"]');
+        const statusNode = form.querySelector("[data-inline-autosave-status], [data-editor-autosave-status], [data-coupon-autosave-status], [data-delivery-autosave-status]");
+        if (typeof beforeSubmit === "function") beforeSubmit();
+        if (button) button.disabled = true;
+        if (statusNode) statusNode.textContent = "Salvando...";
+        try {
+            const action = form.action || form.dataset.action;
+            if (!action) throw new Error("Formulario sem destino de envio.");
+            const response = await fetch(action, {
+                method: "POST",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": csrfToken,
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                },
+                body: form.__body || new URLSearchParams(new FormData(form)).toString(),
+                credentials: "same-origin",
+            });
+            if (!response.ok) throw new Error(await response.text());
+            if (form.matches("[data-new-order-finalize-form]")) {
+                await response.json();
+                closeDetail();
+                notifyOrdersChanged();
+                return;
+            }
+            const payload = await response.json();
+            applyModalPayload(payload, options);
+            if (statusNode) statusNode.textContent = "Salvo";
+            if (currentDetailUrl && form.matches("[data-modal-status-form]")) {
+                closeDetail();
+                notifyOrdersChanged();
+                return payload;
+            }
+            return payload;
+        } catch (error) {
+            if (content) {
+                content.insertAdjacentHTML("afterbegin", '<div class="ped-modal-error">Nao foi possivel salvar as alteracoes.</div>');
+            }
+            if (statusNode) statusNode.textContent = "Erro ao salvar";
+            console.error(error);
+            throw error;
+        } finally {
+            if (button) button.disabled = false;
+            if (statusNode) {
+                window.setTimeout(() => {
+                    if (statusNode.textContent === "Salvo") statusNode.textContent = "";
+                }, 1400);
+            }
+        }
+    }
+
+    async function submitInlineForm(inlineForm) {
+        if (!inlineForm || inlineForm.dataset.saving === "true") return;
+        const inlineValue = inlineForm.querySelector("[name='value']")?.value || "";
+        if (inlineForm.dataset.field === "tipo_coleta" && inlineValue === "entrega") {
+            openDeliveryEditor(true);
+            inlineForm.replaceWith(createInlineDisplay(inlineForm, { ok: true, pedido: { tipo_coleta: "retirada", tipo_coleta_label: "Retirada" } }));
+            return;
+        }
+        if (
+            inlineForm.dataset.field === "tipo_coleta"
+            && inlineValue === "retirada"
+            && !(await confirmModal("Alterar este pedido para retirada? O frete sera zerado e o endereco virara Retirada no local."))
+        ) {
+            return;
+        }
+        const formData = new URLSearchParams();
+        const param = inlineForm.dataset.param || "value";
+        if (param === "value") {
+            formData.set("field", inlineForm.dataset.field);
+        }
+        formData.set(param, inlineValue);
+        inlineForm.__body = formData.toString();
+        inlineForm.dataset.saving = "true";
+        try {
+            const payload = await submitAjaxForm(inlineForm, null, { syncEditor: false });
+            inlineForm.replaceWith(createInlineDisplay(inlineForm, payload));
+        } finally {
+            inlineForm.dataset.saving = "false";
+        }
+    }
+
     document.addEventListener("click", (event) => {
         const createButton = event.target.closest("[data-new-order-url]");
         if (createButton) {
@@ -509,7 +747,24 @@
             updateVariationSelect(form);
             return;
         }
+        const inlineForm = event.target.closest("[data-inline-edit-form]");
+        if (inlineForm && event.target.matches("select")) {
+            submitInlineForm(inlineForm);
+            return;
+        }
     });
+
+    document.addEventListener("blur", (event) => {
+        const inlineForm = event.target.closest("[data-inline-edit-form]");
+        if (inlineForm && event.target.matches("input, textarea")) {
+            submitInlineForm(inlineForm);
+            return;
+        }
+        const couponForm = event.target.closest("[data-coupon-form]");
+        if (couponForm && event.target.matches("[data-autosave-coupon]")) {
+            submitAjaxForm(couponForm);
+        }
+    }, true);
 
     document.addEventListener("click", (event) => {
         if (event.target.closest("[data-open-items-editor]")) {
@@ -539,13 +794,25 @@
         }
         const addButton = event.target.closest("[data-editor-add-item]");
         if (addButton) {
-            addEditorItem(addButton.closest("[data-items-editor]"));
+            const form = addButton.closest("[data-items-editor]");
+            addEditorItem(form);
+            submitAjaxForm(form, () => {
+                form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
+            }, { syncEditor: false }).catch(() => {});
             return;
         }
         const removeButton = event.target.closest("[data-editor-remove-item]");
         if (removeButton) {
             const form = removeButton.closest("[data-items-editor]");
+            if (form.querySelectorAll("[data-editor-row]").length <= 1) {
+                const status = form.querySelector("[data-editor-autosave-status]");
+                if (status) status.textContent = "O pedido precisa ter pelo menos um item.";
+                return;
+            }
             removeButton.closest("[data-editor-row]")?.remove();
+            submitAjaxForm(form, () => {
+                form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
+            }, { syncEditor: false }).catch(() => {});
         }
     });
 
@@ -575,27 +842,7 @@
         const inlineForm = event.target.closest("[data-inline-edit-form]");
         if (inlineForm) {
             event.preventDefault();
-            const inlineValue = inlineForm.querySelector("[name='value']")?.value || "";
-            if (inlineForm.dataset.field === "tipo_coleta" && inlineValue === "entrega") {
-                openDeliveryEditor(true);
-                return;
-            }
-            if (
-                inlineForm.dataset.field === "tipo_coleta"
-                && inlineValue === "retirada"
-                && !(await confirmModal("Alterar este pedido para retirada? O frete sera zerado e o endereco virara Retirada no local."))
-            ) {
-                return;
-            }
-            const formData = new URLSearchParams();
-            const param = inlineForm.dataset.param || "value";
-            if (param === "value") {
-                formData.set("field", inlineForm.dataset.field);
-            }
-            formData.set(param, inlineValue);
-            submitAjaxForm(inlineForm, () => {
-                inlineForm.__body = formData.toString();
-            });
+            submitInlineForm(inlineForm);
             return;
         }
         const couponForm = event.target.closest("[data-coupon-form]");

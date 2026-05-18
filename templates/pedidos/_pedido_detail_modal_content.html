@@ -35,7 +35,7 @@
     </div>
     <div class="ped-modal-total">
         <span>Total</span>
-        <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
+        <strong data-modal-total>R$ {{ pedido.total|floatformat:2 }}</strong>
     </div>
 </div>
 
@@ -45,7 +45,7 @@
             <h3>Itens</h3>
             {% if can_edit_payment %}<button class="ped-btn ped-btn-soft" type="button" data-open-items-editor>Editar</button>{% endif %}
         </div>
-        <ul class="ped-modal-items">
+        <ul class="ped-modal-items" data-modal-items-list>
             {% for item in pedido.itens.all %}
                 <li>
                     <div>
@@ -122,8 +122,8 @@
                     </div>
                     <input type="hidden" name="itens_payload" data-editor-payload>
                     <div class="ped-items-editor-footer">
-                        <button class="ped-btn ped-btn-soft" type="button" data-close-items-editor>Cancelar</button>
-                        <button class="ped-btn ped-btn-primary" type="submit">Salvar itens</button>
+                        <span class="ped-autosave-status" data-editor-autosave-status aria-live="polite">As alteracoes sao salvas automaticamente.</span>
+                        <button class="ped-btn ped-btn-soft" type="button" data-close-items-editor>Fechar</button>
                     </div>
                 </form>
             </template>
@@ -137,7 +137,7 @@
         <dl class="ped-modal-facts {% if pedido.tipo_coleta == 'retirada' %}is-pickup{% endif %}">
             <div>
                 <dt>Tipo</dt>
-                <dd>
+                <dd data-modal-fact="tipo_coleta">
                     {% if can_edit_payment %}
                         <span
                             class="ped-inline-edit"
@@ -155,7 +155,7 @@
             </div>
             <div>
                 <dt>Telefone</dt>
-                <dd>
+                <dd data-modal-fact="telefone">
                     {% if pedido.telefone and pedido.cliente and pedido.cliente.nome %}
                         <small class="ped-linked-client-name">{{ pedido.cliente.nome }}</small>
                     {% endif %}
@@ -175,7 +175,7 @@
             </div>
             <div>
                 <dt>Pagamento</dt>
-                <dd>
+                <dd data-modal-fact="forma_pagamento">
                     {% if can_edit_payment %}
                         <span
                             class="ped-inline-edit"
@@ -194,7 +194,7 @@
             </div>
             <div>
                 <dt>Talheres</dt>
-                <dd>
+                <dd data-modal-fact="enviar_talheres">
                     {% if can_edit_payment %}
                         <span
                             class="ped-inline-edit"
@@ -212,7 +212,7 @@
             </div>
             <div>
                 <dt>Endereço</dt>
-                <dd class="ped-address-row">
+                <dd class="ped-address-row" data-modal-address>
                     {% if can_edit_payment %}
                         <button class="ped-icon-edit" type="button" data-open-delivery-editor aria-label="Editar endereco" title="Editar endereco">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.25V20h3.75L18.8 8.94l-3.75-3.75L4 16.25zm2.92 2.33H6v-.92l9.05-9.05.92.92-9.05 9.05zM19.86 7.88a1 1 0 0 0 0-1.41l-2.33-2.33a1 1 0 0 0-1.41 0l-.78.78 3.75 3.75.77-.79z"/></svg>
@@ -240,7 +240,7 @@
                 </div>
             {% endif %}
         </dl>
-        <a class="ped-btn ped-btn-soft ped-modal-route {% if pedido.tipo_coleta == 'retirada' %}hidden{% endif %}" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer">Abrir rota</a>
+        <a class="ped-btn ped-btn-soft ped-modal-route {% if pedido.tipo_coleta == 'retirada' %}hidden{% endif %}" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer" data-modal-route>Abrir rota</a>
         {% if can_edit_payment %}
             <template data-delivery-editor-template>
                 <section class="profile-selector-panel" data-delivery-selector-panel>
@@ -360,8 +360,9 @@
                             </p>
                         </section>
                         <div class="profile-editor-actions">
-                            <button type="button" class="secondary-pill" data-close-delivery-editor>Cancelar</button>
-                            <button class="primary-button" type="submit">Salvar endereco</button>
+                            <span class="ped-autosave-status" data-delivery-autosave-status aria-live="polite"></span>
+                            <button type="button" class="secondary-pill" data-close-delivery-editor>Fechar</button>
+                            <button class="primary-button" type="submit">Atualizar endereco</button>
                         </div>
                     </form>
                 </section>
@@ -389,8 +390,8 @@
             {% if can_edit_payment %}
                 <form class="ped-coupon-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
                     {% csrf_token %}
-                    <input type="text" name="cupom_codigo" value="{{ pedido.cupom_codigo }}" placeholder="Codigo do cupom" aria-label="Codigo do cupom">
-                    <button class="ped-btn ped-btn-primary" type="submit">Aplicar</button>
+                    <input type="text" name="cupom_codigo" value="{{ pedido.cupom_codigo }}" placeholder="Codigo do cupom" aria-label="Codigo do cupom" data-autosave-coupon>
+                    <span class="ped-autosave-status" data-coupon-autosave-status aria-live="polite"></span>
                 </form>
                 {% if pedido.cupom_codigo %}
                     <form class="ped-coupon-remove-form" method="post" action="{% url 'pedidos:atualizar_cupom_pedido' pedido.id %}" data-coupon-form>
@@ -431,15 +432,15 @@
         </span>
     </div>
     <dl class="ped-modal-audit-list">
-        <div><dt>Subtotal</dt><dd>R$ {{ itens_subtotal|floatformat:2 }}</dd></div>
+        <div><dt>Subtotal</dt><dd data-modal-audit="subtotal">R$ {{ itens_subtotal|floatformat:2 }}</dd></div>
         <div>
             <dt>Entrega</dt>
-            <dd>
-                R$ {{ pedido.valor_frete|floatformat:2 }}
-                <small>{{ pedido.distancia_km|floatformat:2 }} km</small>
+            <dd data-modal-audit="frete">
+                <span data-modal-frete>R$ {{ pedido.valor_frete|floatformat:2 }}</span>
+                <small data-modal-distancia>{{ pedido.distancia_km|floatformat:2 }} km</small>
             </dd>
         </div>
-        <div><dt>Total</dt><dd>R$ {{ pedido.total|floatformat:2 }}</dd></div>
+        <div><dt>Total</dt><dd data-modal-audit="total">R$ {{ pedido.total|floatformat:2 }}</dd></div>
     </dl>
 </section>
 

@@ -9093,10 +9093,17 @@ fieldset.field {
     position: sticky;
     bottom: -22px;
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 10px;
     padding: 14px 0 0;
     background: linear-gradient(180deg, rgba(255, 253, 250, 0), #fffdfa 28%);
+}
+.ped-autosave-status {
+    margin-right: auto;
+    color: #7b675e;
+    font-size: 12px;
+    font-weight: 800;
 }
 .ped-modal-loading,
 .ped-modal-error {
