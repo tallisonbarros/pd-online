@@ -8009,6 +8009,11 @@ fieldset.field {
     min-height: 300px;
     padding: 14px;
     margin-top: 0;
+    min-width: 0;
+}
+
+#coz-lista {
+    min-width: 0;
 }
 
 .coz-live-grid {
@@ -8043,9 +8048,10 @@ fieldset.field {
 
 .coz-live-orders-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(240px, 1fr));
     gap: 12px;
     align-items: start;
+    min-width: 0;
 }
 
 .coz-prod-card {
@@ -8053,31 +8059,37 @@ fieldset.field {
     border-radius: 24px;
     background: #fffdfa;
     box-shadow: 0 14px 34px rgba(34, 19, 17, 0.08);
-    padding: 20px;
+    padding: 16px;
     position: relative;
+    min-width: 0;
 }
 
 .coz-prod-card-head {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     align-items: start;
-    padding-right: 270px;
+    padding-right: 160px;
 }
 
 .coz-prod-card-head .ped-client {
     min-width: 0;
 }
 
+.coz-prod-card-head .ped-client > div:last-child {
+    min-width: 0;
+}
+
 .coz-prod-card-head .ped-client h2 {
     margin-top: 0;
-    font-size: clamp(21px, 1.6vw, 32px);
+    font-size: clamp(19px, 1.15vw, 25px);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .coz-prod-card-head .ped-time {
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.2;
 }
 
 .coz-prod-card-head .ped-icon {
@@ -8091,16 +8103,17 @@ fieldset.field {
 }
 
 .coz-prod-item-list li {
-    font-size: 13px;
-    line-height: 1.25;
+    font-size: clamp(15px, 0.92vw, 18px);
+    line-height: 1.32;
+    font-weight: 800;
+    overflow-wrap: anywhere;
 }
 
 .coz-prod-item-list--stage {
     margin-top: 10px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 14px;
-    row-gap: 3px;
+    grid-template-columns: 1fr;
+    row-gap: 6px;
 }
 
 .coz-prod-top {
@@ -8335,9 +8348,7 @@ fieldset.field {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .coz-live-orders-grid {
-        grid-template-columns: 1fr;
-    }
+    .coz-live-orders-grid { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
 
     .coz-prod-title-wrap h3 { font-size: clamp(24px, 4vw, 34px); }
     .coz-prod-pratos strong { font-size: 38px; }
@@ -8347,6 +8358,10 @@ fieldset.field {
 
 @media (max-width: 760px) {
     .coz-live-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .coz-live-orders-grid {
         grid-template-columns: 1fr;
     }
 
@@ -8571,6 +8586,27 @@ fieldset.field {
     position: absolute;
     top: 18px;
     right: 18px;
+}
+
+.coz-prod-card .kitchen-type-counts {
+    gap: 5px;
+}
+
+.coz-prod-card .kitchen-type-counts span {
+    min-width: 46px;
+    height: 40px;
+    gap: 5px;
+    border-radius: 13px;
+    font-size: 19px;
+}
+
+.coz-prod-card .kitchen-type-counts svg {
+    width: 20px;
+    height: 20px;
+}
+
+.coz-prod-card .kitchen-type-counts i {
+    font-size: 23px;
 }
 
 .ops-order-card .kitchen-type-counts {

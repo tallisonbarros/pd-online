@@ -14,6 +14,25 @@
         });
     }
 
+    function formatCount(count, prefix = "") {
+        const value = Number(count || 0);
+        const label = value > 99 ? "99+" : String(value);
+        return `${prefix}${label}`;
+    }
+
+    function updateSidebarOrderBadges(data) {
+        const currentCount = data.pedidos_badge ?? 0;
+        document.querySelectorAll("[data-current-orders-badge]").forEach((badge) => {
+            badge.textContent = formatCount(currentCount);
+        });
+        if (!Object.prototype.hasOwnProperty.call(data, "aprovacao_count")) return;
+        const approvalCount = Number(data.aprovacao_count || 0);
+        document.querySelectorAll("[data-sidebar-approval-badge]").forEach((badge) => {
+            badge.textContent = formatCount(approvalCount, "+");
+            badge.classList.toggle("is-hidden", approvalCount <= 0);
+        });
+    }
+
     function setStatus(message, isError = false) {
         const node = document.querySelector("[data-metrics-status]");
         if (!node) return;
@@ -102,7 +121,7 @@
         setText("[data-metrics-peak]", data.peak?.label || "00h concentrou 0 eventos.");
         setText("[data-metric-period-label]", String(data.periodo_label || "").toLowerCase());
         setText("[data-metrics-period-strong]", data.periodo_label || "");
-        setText(".ops-nav-badge", data.pedidos_badge ?? 0);
+        updateSidebarOrderBadges(data);
         updatePeriods(data.periodo_key || currentPeriod);
         setStatus(`Atualizado ${data.updated_at || ""}`.trim());
     }

@@ -2125,6 +2125,7 @@ def _build_access_metrics_context(period):
     pedidos_abertos = Pedido.objects.exclude(
         status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
     ).count()
+    aprovacao_count = Pedido.objects.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count()
     pedidos_metricas = Pedido.objects.filter(criado_em__date__gte=inicio, criado_em__date__lte=fim).exclude(status=Pedido.Status.RASCUNHO)
     envio_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.ENTREGA).count()
     retirada_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.RETIRADA).count()
@@ -2157,6 +2158,7 @@ def _build_access_metrics_context(period):
         "metrics_payload": metrics_payload,
         "access_bars": access_bars,
         "pedidos_badge": pedidos_abertos,
+        "aprovacao_count": aprovacao_count,
     }
 
 
@@ -2197,6 +2199,7 @@ def _access_metrics_json(context):
         },
         "updated_at": timezone.localtime().strftime("%H:%M:%S"),
         "pedidos_badge": context["pedidos_badge"],
+        "aprovacao_count": context["aprovacao_count"],
     }
 
 
