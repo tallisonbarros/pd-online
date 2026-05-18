@@ -693,6 +693,62 @@
                 }, 360);
             }
         }
+        syncWhatsappCartMessage();
+    }
+
+    function buildWhatsappCartMessage(cart) {
+        const itemsTotal = cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+        const mealPromo = calculateMealPromo(cart);
+        const mealPromoDiscount = Math.min(mealPromo.discount, itemsTotal);
+        const lines = [
+            "Ola! Quero finalizar estes itens do carrinho:",
+            "",
+            "*Itens:*",
+        ];
+
+        cart.forEach((item) => {
+            const quantity = Math.max(1, Number(item.quantidade || 1));
+            const itemTotal = parsePrice(item.preco) * quantity;
+            const variation = normalizeVariationName(item.variacao || item.variacao_nome);
+            const itemName = variation ? `${item.nome} - ${variation}` : item.nome;
+            lines.push(`- ${quantity}x ${itemName} | ${money(itemTotal)}`);
+            if (item.observacao) {
+                lines.push(`  Obs: ${item.observacao}`);
+            }
+        });
+
+        lines.push("", `*Subtotal dos itens:* ${money(itemsTotal)}`);
+        if (mealPromoDiscount > 0) {
+            lines.push(`*${mealPromo.label || "Promocao especial"}:* - ${money(mealPromoDiscount)}`);
+            lines.push(`*Total parcial:* ${money(Math.max(itemsTotal - mealPromoDiscount, 0))}`);
+        }
+        lines.push("", "Ainda preciso confirmar entrega/retirada e pagamento.");
+        return lines.join("\n");
+    }
+
+    function syncWhatsappCartMessage() {
+        const whatsappFloat = document.querySelector("[data-whatsapp-float]");
+        if (!whatsappFloat) return;
+
+        if (!whatsappFloat.dataset.defaultHref) {
+            whatsappFloat.dataset.defaultHref = whatsappFloat.getAttribute("href") || "";
+        }
+
+        const defaultHref = whatsappFloat.dataset.defaultHref;
+        const baseHref = defaultHref.split("?")[0];
+        const cart = getCart();
+        const copy = whatsappFloat.querySelector(".whatsapp-float-copy");
+
+        if (!cart.length || !baseHref) {
+            whatsappFloat.setAttribute("href", defaultHref);
+            whatsappFloat.setAttribute("aria-label", "Falar com atendente pelo WhatsApp");
+            if (copy) copy.textContent = "Falar com atendente";
+            return;
+        }
+
+        whatsappFloat.setAttribute("href", `${baseHref}?text=${encodeURIComponent(buildWhatsappCartMessage(cart))}`);
+        whatsappFloat.setAttribute("aria-label", "Enviar itens do carrinho pelo WhatsApp");
+        if (copy) copy.textContent = "Enviar itens";
     }
 
     function buildCheckoutProfileId(profile) {
