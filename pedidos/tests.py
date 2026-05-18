@@ -191,6 +191,71 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_operation_metrics_count_plate_quantities_not_orders(self):
+        self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
+        bebida = Bebida.objects.create(nome="Agua", preco=Decimal("4.00"), ativo=True)
+        adicional = Adicional.objects.create(nome="Farofa", preco=Decimal("5.00"), ativo=True)
+        producao = Pedido.objects.create(
+            nome_cliente="Cliente Producao",
+            telefone="64999999999",
+            endereco="Rua Producao",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("84.00"),
+        )
+        finalizado = Pedido.objects.create(
+            nome_cliente="Cliente Entregue",
+            telefone="64888888888",
+            endereco="Rua Entregue",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("59.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=producao,
+            prato=prato,
+            nome_prato_snapshot="Executivo",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=3,
+        )
+        ItemPedido.objects.create(
+            pedido=producao,
+            bebida=bebida,
+            nome_prato_snapshot="Agua",
+            preco_snapshot=Decimal("4.00"),
+            quantidade=4,
+        )
+        ItemPedido.objects.create(
+            pedido=producao,
+            adicional=adicional,
+            nome_prato_snapshot="Farofa",
+            preco_snapshot=Decimal("5.00"),
+            quantidade=2,
+        )
+        ItemPedido.objects.create(
+            pedido=finalizado,
+            prato=prato,
+            nome_prato_snapshot="Executivo",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=2,
+        )
+        ItemPedido.objects.create(
+            pedido=finalizado,
+            bebida=bebida,
+            nome_prato_snapshot="Agua",
+            preco_snapshot=Decimal("4.00"),
+            quantidade=5,
+        )
+
+        response = self.client.get("/controle/api/operacao/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total_para_producao"], 3)
+        self.assertEqual(payload["entregues_hoje"], 2)
+        self.assertEqual(payload["pratos_em_producao"], [{"nome": "Executivo", "quantidade": 3}])
+
 
 class AccessMetricsTests(TestCase):
     def setUp(self):

@@ -47,6 +47,28 @@ Sem chave ou com chave inválida, a API retorna:
 }
 ```
 
+## Limites de Uso
+
+Para proteger o sistema contra consultas em rajada, a API aplica limites por chave de acesso.
+
+| Endpoint | Limite |
+| --- | --- |
+| `GET /api/pedidos/` | 12 consultas por minuto |
+| `GET /api/pedidos/<id>/` | 180 consultas por minuto |
+| `GET /api/pedidos/token/<public_token>/` | 180 consultas por minuto |
+| `GET /api/lista-impressao/` | 60 consultas por minuto |
+
+Ao exceder o limite, a API retorna `429` e envia o header `Retry-After`:
+
+```json
+{
+  "ok": false,
+  "error": "rate_limited",
+  "message": "Aguarde antes de consultar novamente.",
+  "retry_after": 60
+}
+```
+
 ## Gerenciamento de Chaves
 
 As chaves são gerenciadas na guia API da tela de ajustes:
@@ -69,6 +91,14 @@ Internamente, o sistema armazena somente o hash SHA-256 da chave. A chave comple
 
 ## Endpoints
 
+### Healthcheck
+
+```http
+GET /healthz/
+```
+
+Retorna `ok` em texto puro. Esse endpoint existe para monitoramento da plataforma e não exige chave de API.
+
 ### Lista de Rótulos
 
 ```http
@@ -85,6 +115,8 @@ Resposta:
 ```json
 {
   "count": 2,
+  "has_more": false,
+  "next_desde_id": 11,
   "itens": [
     {
       "id": 10,
@@ -111,11 +143,12 @@ Filtros opcionais:
 
 Fluxo recomendado para o agente de rótulos:
 
-1. Consultar `GET /api/lista-impressao/?desde_id=<ultimo_id_processado>`.
+1. Consultar `GET /api/lista-impressao/?desde_id=<ultimo_id_processado>&limit=100`.
 2. Ler cada item em ordem.
 3. Usar `public_token` em `GET /api/pedidos/token/<public_token>/`.
 4. Imprimir o rótulo no app consumidor.
-5. Guardar o maior `id` processado localmente no consumidor.
+5. Guardar o `next_desde_id` retornado pela API localmente no consumidor.
+6. Se `has_more` vier `true`, repetir a consulta usando o novo `desde_id`.
 
 Um pedido é registrado nessa lista sempre que entra em produção (`status = em_preparo`) ou quando a equipe usa o botão `Imprimir rotulo` no modal do pedido. Se o pedido sair de produção e entrar novamente, um novo registro é criado para preservar o histórico da fila.
 
@@ -128,11 +161,17 @@ Authorization: Bearer SUA_CHAVE
 
 Retorna todos os pedidos ordenados do mais recente para o mais antigo.
 
+Por compatibilidade, se nenhum parâmetro de paginação for enviado, a API continua retornando todos os pedidos filtrados. Para integrações em polling, recomenda-se usar `limit`, `offset`, `fields=summary` e/ou `updated_after`.
+
 Resposta:
 
 ```json
 {
   "count": 1,
+  "limit": null,
+  "offset": 0,
+  "has_more": false,
+  "next_offset": null,
   "pedidos": [
     {
       "id": 1,
@@ -173,6 +212,7 @@ Resposta:
       "total": "30.00",
       "public_token": "token-publico-do-pedido",
       "criado_em": "2026-05-15T12:00:00Z",
+      "atualizado_em": "2026-05-15T12:06:00Z",
       "producao_iniciada_em": "2026-05-15T12:05:00Z",
       "entregador_solicitado": true,
       "status_label_contextual": "Em preparo",
@@ -210,6 +250,42 @@ Resposta:
           "subtotal": "35.00"
         }
       ]
+    }
+  ]
+}
+```
+
+Exemplo de consulta leve para sincronização:
+
+```http
+GET /api/pedidos/?fields=summary&limit=50&updated_after=2026-05-15T12:00:00Z
+Authorization: Bearer SUA_CHAVE
+```
+
+Resposta em modo resumido:
+
+```json
+{
+  "count": 1,
+  "limit": 50,
+  "offset": 0,
+  "has_more": false,
+  "next_offset": null,
+  "pedidos": [
+    {
+      "id": 1,
+      "numero": 2240,
+      "nome_cliente": "Cliente API",
+      "telefone": "64999999999",
+      "tipo_coleta": "entrega",
+      "forma_pagamento": "pix",
+      "status": "em_preparo",
+      "status_label": "Em preparo",
+      "status_label_contextual": "Em preparo",
+      "total": "30.00",
+      "public_token": "token-publico-do-pedido",
+      "criado_em": "2026-05-15T12:00:00Z",
+      "atualizado_em": "2026-05-15T12:06:00Z"
     }
   ]
 }
@@ -275,8 +351,12 @@ Os filtros são opcionais e podem ser combinados.
 | `status` | `/api/pedidos/?status=em_preparo` | Filtra pelo status persistido do pedido. |
 | `tipo_coleta` | `/api/pedidos/?tipo_coleta=entrega` | Filtra por `entrega` ou `retirada`. |
 | `criado_em` | `/api/pedidos/?criado_em=2026-05-15` | Filtra pela data de criação no formato `YYYY-MM-DD`. |
+| `updated_after` | `/api/pedidos/?updated_after=2026-05-15T12:00:00Z` | Retorna pedidos atualizados após a data/hora informada. Também aceita o alias `atualizado_apos`. |
 | `numero` | `/api/pedidos/?numero=2240` | Filtra pelo número do pedido. |
 | `telefone` | `/api/pedidos/?telefone=64999999999` | Busca parcial no telefone do cliente. |
+| `limit` | `/api/pedidos/?limit=50` | Limita a quantidade retornada. Máximo: `100`. |
+| `offset` | `/api/pedidos/?limit=50&offset=50` | Deslocamento para paginação. |
+| `fields` | `/api/pedidos/?fields=summary` | Quando `summary`, retorna somente campos resumidos do pedido, sem itens aninhados. |
 
 Exemplo combinando filtros:
 
@@ -326,6 +406,7 @@ GET /api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999
 | `total` | string | Decimal serializado como string. |
 | `public_token` | string | Token público já existente do pedido. |
 | `criado_em` | string | Data/hora em ISO-8601. |
+| `atualizado_em` | string | Data/hora da última atualização do pedido em ISO-8601. Use com `updated_after` para sincronização incremental. |
 | `producao_iniciada_em` | string/null | Data/hora em ISO-8601. |
 | `entregador_solicitado` | boolean | Estado persistido no pedido. |
 
@@ -405,9 +486,10 @@ Consulte a API enviando a chave:
 
 ```text
 http://127.0.0.1:8000/api/pedidos/
+http://127.0.0.1:8000/api/pedidos/?fields=summary&limit=50&updated_after=2026-05-15T12:00:00Z
 http://127.0.0.1:8000/api/pedidos/1/
 http://127.0.0.1:8000/api/pedidos/token/TOKEN_DO_PEDIDO/
-http://127.0.0.1:8000/api/lista-impressao/
+http://127.0.0.1:8000/api/lista-impressao/?desde_id=0&limit=100
 ```
 
 Rode os testes:

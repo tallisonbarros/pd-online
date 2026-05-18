@@ -2646,7 +2646,14 @@ def _weekday_label_pt(date_value):
 def _cozinha_operacao_payload():
     today = timezone.localdate()
     now = timezone.localtime()
-    entregues_hoje = Pedido.objects.filter(status=Pedido.Status.FINALIZADO, criado_em__date=today).count()
+    entregues_hoje = (
+        ItemPedido.objects.filter(
+            pedido__status=Pedido.Status.FINALIZADO,
+            pedido__criado_em__date=today,
+            prato_id__isnull=False,
+        ).aggregate(total=Sum("quantidade")).get("total")
+        or 0
+    )
 
     pedidos_em_producao_qs = Pedido.objects.filter(status=Pedido.Status.EM_PREPARO)
     pedidos_em_producao = (
@@ -2655,7 +2662,7 @@ def _cozinha_operacao_payload():
         .order_by("-criado_em", "-id")[:12]
     )
     pratos_em_producao = (
-        ItemPedido.objects.filter(pedido__status=Pedido.Status.EM_PREPARO)
+        ItemPedido.objects.filter(pedido__status=Pedido.Status.EM_PREPARO, prato_id__isnull=False)
         .values("nome_prato_snapshot")
         .annotate(total=Sum("quantidade"))
         .order_by("-total", "nome_prato_snapshot")
