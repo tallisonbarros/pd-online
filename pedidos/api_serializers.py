@@ -86,6 +86,7 @@ def serialize_pedido_api(pedido):
         "total": _decimal_payload(pedido.total),
         "public_token": pedido.public_token,
         "criado_em": pedido.criado_em,
+        "atualizado_em": pedido.atualizado_em,
         "producao_iniciada_em": pedido.producao_iniciada_em,
         "entregador_solicitado": pedido.entregador_solicitado,
         "status_label_contextual": pedido.status_label_contextual,
@@ -96,4 +97,22 @@ def serialize_pedido_api(pedido):
         "stage_labels": pedido.stage_labels,
         "cupom": serialize_cupom_pedido_api(pedido.cupom),
         "itens": [serialize_item_pedido_api(item) for item in pedido.itens.all()],
+    }
+
+
+def serialize_pedido_summary_api(pedido):
+    return {
+        "id": pedido.id,
+        "numero": pedido.numero,
+        "nome_cliente": pedido.nome_cliente,
+        "telefone": pedido.telefone,
+        "tipo_coleta": pedido.tipo_coleta,
+        "forma_pagamento": pedido.forma_pagamento,
+        "status": pedido.status,
+        "status_label": pedido.get_status_display(),
+        "status_label_contextual": pedido.status_label_contextual,
+        "total": _decimal_payload(pedido.total),
+        "public_token": pedido.public_token,
+        "criado_em": pedido.criado_em,
+        "atualizado_em": pedido.atualizado_em,
     }

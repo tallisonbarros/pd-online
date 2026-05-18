@@ -407,6 +407,12 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["error"], "invalid_api_key")
 
+    def test_healthcheck_is_lightweight(self):
+        response = self.client.get("/healthz/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"ok")
+
     def test_rejects_invalid_api_key_even_when_user_is_logged_in(self):
         self.client.force_login(self.regular_user)
 
@@ -421,9 +427,70 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 1)
+        self.assertIsNone(payload["limit"])
+        self.assertFalse(payload["has_more"])
         self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+        self.assertIn("atualizado_em", payload["pedidos"][0])
         self.api_key.refresh_from_db()
         self.assertIsNotNone(self.api_key.ultimo_uso_em)
+
+    def test_authenticated_list_supports_pagination_and_summary_fields(self):
+        second = Pedido.objects.create(
+            nome_cliente="Resumo API",
+            telefone="64111111111",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.NOVO,
+            total=Decimal("22.00"),
+        )
+
+        response = self.client.get(
+            "/api/pedidos/?limit=1&offset=0&fields=summary",
+            HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}",
+        )
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["limit"], 1)
+        self.assertEqual(payload["next_offset"], 1)
+        self.assertTrue(payload["has_more"])
+        self.assertEqual(len(payload["pedidos"]), 1)
+        self.assertEqual(payload["pedidos"][0]["id"], second.id)
+        self.assertNotIn("itens", payload["pedidos"][0])
+
+    def test_authenticated_list_supports_updated_after_filter(self):
+        cutoff = timezone.now() - timedelta(minutes=10)
+        Pedido.objects.filter(id=self.pedido.id).update(atualizado_em=cutoff - timedelta(minutes=1))
+        newer = Pedido.objects.create(
+            nome_cliente="Novo Sync",
+            telefone="64222222222",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.NOVO,
+            total=Decimal("21.00"),
+        )
+
+        response = self.client.get(
+            f"/api/pedidos/?updated_after={cutoff.isoformat()}",
+            HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}",
+        )
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["pedidos"][0]["id"], newer.id)
+
+    def test_list_rate_limit_returns_retry_after(self):
+        response = None
+        for _ in range(13):
+            response = self.client.get("/api/pedidos/", HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}")
+
+        self.assertEqual(response.status_code, 429)
+        payload = response.json()
+        self.assertEqual(payload["error"], "rate_limited")
+        self.assertEqual(payload["retry_after"], 60)
+        self.assertEqual(response["Retry-After"], "60")
 
     def test_authenticated_detail_returns_main_fields_and_coupon(self):
         response = self.client.get(f"/api/pedidos/{self.pedido.id}/", HTTP_X_API_KEY=self.raw_api_key)
@@ -532,6 +599,8 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["next_desde_id"], PedidoListaImpressao.objects.order_by("id").last().id)
+        self.assertFalse(payload["has_more"])
         self.assertEqual([item["nome_cliente"] for item in payload["itens"]], ["Primeiro", "Segundo"])
         self.assertEqual(payload["itens"][0]["public_token"], first.public_token)
 
@@ -557,6 +626,8 @@ class PedidosReadOnlyApiTests(TestCase):
 
         payload = response.json()
         self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["next_desde_id"], second.id)
+        self.assertFalse(payload["has_more"])
         self.assertEqual(payload["itens"][0]["id"], second.id)
 
     def test_entering_production_registers_print_queue_without_duplicate_on_same_status(self):

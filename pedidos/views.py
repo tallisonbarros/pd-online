@@ -13,19 +13,20 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import ExtractHour, TruncDate
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.utils.dateparse import parse_date, parse_time
+from django.utils.dateparse import parse_date, parse_datetime, parse_time
 from django.utils.timesince import timesince
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
-from .api_serializers import serialize_pedido_api
+from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
 from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import (
@@ -58,6 +59,10 @@ RIO_VERDE_CENTER = {"lat": -17.7923, "lon": -50.9192}
 RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,maxLat
 OSRM_ROUTE_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
 ATENDENTE_GROUP_NAME = "Atendente"
+
+
+def healthz(request):
+    return HttpResponse("ok", content_type="text/plain")
 GERENTE_GROUP_NAME = "Gerente"
 
 RIO_VERDE_BAIRROS_OFICIAIS = [
@@ -1793,6 +1798,14 @@ def _pedidos_api_queryset(params):
         parsed_date = parse_date(criado_em)
         pedidos = pedidos.filter(criado_em__date=parsed_date) if parsed_date else pedidos.none()
 
+    updated_after = _safe_text(params.get("updated_after") or params.get("atualizado_apos"))
+    if updated_after:
+        updated_after = updated_after.replace(" ", "+")
+        parsed_datetime = parse_datetime(updated_after)
+        if parsed_datetime and timezone.is_naive(parsed_datetime):
+            parsed_datetime = timezone.make_aware(parsed_datetime, timezone.get_current_timezone())
+        pedidos = pedidos.filter(atualizado_em__gt=parsed_datetime) if parsed_datetime else pedidos.none()
+
     numero = _safe_text(params.get("numero"))
     if numero:
         try:
@@ -1807,6 +1820,23 @@ def _pedidos_api_queryset(params):
     return pedidos.order_by("-criado_em", "-id")
 
 
+def _safe_api_limit(params, default=None, max_limit=100):
+    raw_limit = _safe_text(params.get("limit"))
+    if not raw_limit:
+        return default
+    try:
+        return min(max(int(raw_limit), 1), max_limit)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_api_offset(params):
+    try:
+        return max(int(params.get("offset", 0)), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _api_key_from_request(request):
     authorization = _safe_text(request.headers.get("Authorization"))
     if authorization.lower().startswith("bearer "):
@@ -1818,7 +1848,9 @@ def _require_pedidos_api_key(request):
     api_key = PedidoApiKey.authenticate(_api_key_from_request(request))
     if not api_key:
         return None
-    PedidoApiKey.objects.filter(pk=api_key.pk).update(ultimo_uso_em=timezone.now())
+    usage_cache_key = f"pedido-api-key-usage:{api_key.pk}:{api_key.prefixo}"
+    if cache.add(usage_cache_key, "1", 60):
+        PedidoApiKey.objects.filter(pk=api_key.pk).update(ultimo_uso_em=timezone.now())
     return api_key
 
 
@@ -1835,23 +1867,73 @@ def _serialize_print_queue_item(item):
     }
 
 
+def _api_rate_limit_response(retry_after):
+    response = JsonResponse(
+        {
+            "ok": False,
+            "error": "rate_limited",
+            "message": "Aguarde antes de consultar novamente.",
+            "retry_after": retry_after,
+        },
+        status=429,
+    )
+    response["Retry-After"] = str(retry_after)
+    return response
+
+
+def _check_api_rate_limit(api_key, bucket, limit, window_seconds):
+    cache_key = f"pedido-api-rate:{api_key.pk}:{api_key.prefixo}:{bucket}"
+    current = cache.get(cache_key, 0)
+    if current >= limit:
+        return _api_rate_limit_response(window_seconds)
+    if current:
+        cache.incr(cache_key)
+    else:
+        cache.set(cache_key, 1, window_seconds)
+    return None
+
+
 @require_GET
 def api_pedidos(request):
-    if not _require_pedidos_api_key(request):
+    api_key = _require_pedidos_api_key(request)
+    if not api_key:
         return _invalid_api_key_response()
+    limited = _check_api_rate_limit(api_key, "pedidos-list", 12, 60)
+    if limited:
+        return limited
+
     pedidos = _pedidos_api_queryset(request.GET)
+    count = pedidos.count()
+    limit = _safe_api_limit(request.GET, default=None, max_limit=100)
+    offset = _safe_api_offset(request.GET)
+    has_more = False
+    if limit is not None:
+        page = list(pedidos[offset : offset + limit + 1])
+        has_more = len(page) > limit
+        pedidos_payload = page[:limit]
+    else:
+        pedidos_payload = pedidos
+    serializer = serialize_pedido_summary_api if _safe_text(request.GET.get("fields")).lower() == "summary" else serialize_pedido_api
     return JsonResponse(
         {
-            "count": pedidos.count(),
-            "pedidos": [serialize_pedido_api(pedido) for pedido in pedidos],
+            "count": count,
+            "limit": limit,
+            "offset": offset,
+            "has_more": has_more,
+            "next_offset": offset + len(pedidos_payload) if limit is not None and has_more else None,
+            "pedidos": [serializer(pedido) for pedido in pedidos_payload],
         }
     )
 
 
 @require_GET
 def api_pedido_detalhe(request, pedido_id):
-    if not _require_pedidos_api_key(request):
+    api_key = _require_pedidos_api_key(request)
+    if not api_key:
         return _invalid_api_key_response()
+    limited = _check_api_rate_limit(api_key, "pedido-detail", 180, 60)
+    if limited:
+        return limited
     pedido = get_object_or_404(
         Pedido.objects.select_related("cupom").prefetch_related("itens"),
         id=pedido_id,
@@ -1861,8 +1943,12 @@ def api_pedido_detalhe(request, pedido_id):
 
 @require_GET
 def api_pedido_detalhe_token(request, public_token):
-    if not _require_pedidos_api_key(request):
+    api_key = _require_pedidos_api_key(request)
+    if not api_key:
         return _invalid_api_key_response()
+    limited = _check_api_rate_limit(api_key, "pedido-token-detail", 180, 60)
+    if limited:
+        return limited
     pedido = get_object_or_404(
         Pedido.objects.select_related("cupom").prefetch_related("itens"),
         public_token=public_token,
@@ -1872,8 +1958,12 @@ def api_pedido_detalhe_token(request, public_token):
 
 @require_GET
 def api_lista_impressao(request):
-    if not _require_pedidos_api_key(request):
+    api_key = _require_pedidos_api_key(request)
+    if not api_key:
         return _invalid_api_key_response()
+    limited = _check_api_rate_limit(api_key, "lista-impressao", 60, 60)
+    if limited:
+        return limited
     itens = PedidoListaImpressao.objects.all()
 
     desde_id = _safe_text(request.GET.get("desde_id"))
@@ -1888,9 +1978,18 @@ def api_lista_impressao(request):
     except (TypeError, ValueError):
         limit = 100
 
-    itens = itens.order_by("criado_em", "id")[:limit]
-    data = [_serialize_print_queue_item(item) for item in itens]
-    return JsonResponse({"count": len(data), "itens": data})
+    page = list(itens.order_by("criado_em", "id")[: limit + 1])
+    has_more = len(page) > limit
+    data = [_serialize_print_queue_item(item) for item in page[:limit]]
+    next_desde_id = data[-1]["id"] if data else (int(desde_id) if desde_id.isdigit() else None)
+    return JsonResponse(
+        {
+            "count": len(data),
+            "itens": data,
+            "has_more": has_more,
+            "next_desde_id": next_desde_id,
+        }
+    )
 
 
 def _dashboard_periodo(period):

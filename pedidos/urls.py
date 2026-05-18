@@ -5,6 +5,7 @@ from . import views
 app_name = "pedidos"
 
 urlpatterns = [
+    path("healthz/", views.healthz, name="healthz"),
     path("", views.cardapio, name="cardapio"),
     path("dashboard/api/order-heatmap/", views.api_order_heatmap, name="api_order_heatmap"),
     path("dashboard/api/bairros-rio-verde/", views.api_bairros_rio_verde, name="api_bairros_rio_verde"),

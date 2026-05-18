@@ -143,6 +143,7 @@ class Pedido(models.Model):
     public_token = models.CharField(max_length=64, unique=True, blank=True, editable=False)
     checkout_key = models.CharField(max_length=80, unique=True, blank=True, null=True, db_index=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
     producao_iniciada_em = models.DateTimeField(blank=True, null=True)
     entregador_solicitado = models.BooleanField(default=False)
 
@@ -246,6 +247,8 @@ class Pedido(models.Model):
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"icone_pedido"}
         if not self.public_token:
             self.public_token = secrets.token_urlsafe(24)
+        if self.pk and kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"atualizado_em"}
         super().save(*args, **kwargs)
         if entering_production:
             PedidoListaImpressao.objects.create(

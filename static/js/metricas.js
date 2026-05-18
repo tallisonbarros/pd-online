@@ -3,7 +3,7 @@
     if (!root) return;
 
     const apiUrl = root.dataset.apiUrl;
-    const refreshMs = 3000;
+    const refreshMs = 10000;
     let currentPeriod = root.dataset.currentPeriod || "today";
     let refreshTimer = null;
     let inFlight = null;
