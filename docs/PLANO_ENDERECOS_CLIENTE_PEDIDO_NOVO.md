@@ -2,18 +2,19 @@
 
 ## Objetivo
 
-No modal de novo pedido em `controle/pedidos`, ao preencher um telefone que ja pertence a um cliente conhecido, oferecer os enderecos ja usados por esse cliente e permitir aplicar um deles ao pedido rascunho.
+No modal de novo pedido em `controle/pedidos`, ao preencher um telefone que ja pertence a um cliente conhecido, importar o nome do cliente, oferecer os enderecos ja usados por esse cliente e permitir aplicar um deles ao pedido rascunho.
 
 ## Comportamento esperado
 
 1. Atendente cria um novo pedido pelo botao `+ Adicionar pedido`.
 2. Atendente edita o campo `Telefone`.
 3. Sistema normaliza o telefone e busca cliente conhecido.
-4. Se houver cliente com enderecos salvos, abre um modal pequeno:
+4. Se encontrar cliente conhecido, o pedido novo recebe o nome desse cliente.
+5. Se houver cliente com enderecos salvos, abre um modal pequeno:
    - pergunta se deseja usar um endereco conhecido;
    - lista os enderecos do cliente, ordenados do mais recente para o mais antigo;
    - permite selecionar um endereco ou ignorar.
-5. Ao selecionar um endereco, o pedido novo recebe:
+6. Ao selecionar um endereco, o pedido novo recebe:
    - tipo de coleta `entrega`;
    - rua;
    - numero;
@@ -25,7 +26,7 @@ No modal de novo pedido em `controle/pedidos`, ao preencher um telefone que ja p
    - lote/quadra;
    - ponto de referencia;
    - latitude/longitude, quando existirem.
-6. O modal do pedido e atualizado com o endereco aplicado.
+7. O modal do pedido e atualizado com o nome e o endereco aplicado.
 
 ## Escopo recomendado
 
@@ -123,7 +124,8 @@ static/js/pedido_detail_modal.js
 Apos salvar inline o campo `telefone`, se o pedido atual for rascunho ou novo pedido:
 
 1. chamar endpoint de enderecos por telefone;
-2. se `enderecos.length > 0`, abrir modal de selecao.
+2. se retornar `cliente.nome`, importar/preencher o nome do cliente no pedido novo;
+3. se `enderecos.length > 0`, abrir modal de selecao.
 
 Possiveis formas de identificar novo pedido:
 
@@ -183,6 +185,10 @@ ponto_referencia=...
 
 Depois aplicar o payload retornado com `applyModalPayload`.
 
+### Ao reconhecer cliente pelo telefone
+
+Quando o endpoint retornar um cliente conhecido, o frontend deve preencher tambem o campo de nome do pedido novo com `cliente.nome`, antes ou junto da sugestao de endereco. Esse preenchimento deve acontecer mesmo que o cliente nao tenha enderecos salvos, desde que o telefone normalizado identifique um cliente.
+
 ## UX
 
 Regras para nao incomodar:
@@ -223,11 +229,12 @@ Adicionar testes em `pedidos/tests.py`:
 2. Abrir `controle/pedidos`.
 3. Clicar `+ Adicionar pedido`.
 4. Editar telefone para o telefone do cliente.
-5. Confirmar que modal de enderecos aparece.
-6. Selecionar endereco.
-7. Confirmar que o pedido muda para entrega e preenche o endereco.
-8. Confirmar que frete/distancia recalculam quando ha coordenadas.
-9. Confirmar que `Ignorar` nao muda o pedido.
+5. Confirmar que o nome do cliente e preenchido no pedido novo.
+6. Confirmar que modal de enderecos aparece.
+7. Selecionar endereco.
+8. Confirmar que o pedido muda para entrega e preenche o endereco.
+9. Confirmar que frete/distancia recalculam quando ha coordenadas.
+10. Confirmar que `Ignorar` nao muda o endereco do pedido.
 
 ## Complexidade
 

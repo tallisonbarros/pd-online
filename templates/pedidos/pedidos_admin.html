@@ -165,6 +165,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/order_alert_sounds.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/pedidos_admin.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/pedido_detail_modal.js' %}?v={% now 'U' %}"></script>
 <script src="{% static 'js/context_actions.js' %}?v={% now 'U' %}"></script>

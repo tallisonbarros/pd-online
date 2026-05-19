@@ -1,4 +1,11 @@
-<div class="ped-modal-head" data-current-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}">
+<div
+    class="ped-modal-head"
+    data-current-detail-url="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}"
+    data-order-status="{{ pedido.status }}"
+    data-is-new-order="{% if is_new_order %}true{% else %}false{% endif %}"
+    data-customer-address-url="{% url 'pedidos:api_cliente_enderecos_por_telefone' %}"
+    data-delivery-action-url="{% url 'pedidos:atualizar_entrega_pedido' pedido.id %}"
+>
     <div>
         <div class="ped-modal-kicker-row">
             <span class="ped-modal-kicker">{% if is_new_order %}Novo pedido{% else %}Pedido #{{ pedido.numero }}{% endif %}</span>

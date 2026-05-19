@@ -10,6 +10,8 @@
     const listaNode = document.getElementById("coz-lista");
     const shellNode = root.closest(".ops-shell--cozinha");
     const fullscreenButton = document.querySelector("[data-cozinha-fullscreen-toggle]");
+    let knownProductionOrderIds = new Set();
+    let productionOrdersInitialized = false;
 
     function pad(value) {
         return String(value).padStart(2, "0");
@@ -139,6 +141,24 @@
         listaNode.innerHTML = `<div class="coz-live-orders-grid">${html}</div>`;
     }
 
+    function orderId(pedido) {
+        return String(pedido?.id || pedido?.pedido_numero || "");
+    }
+
+    function notifyNewProductionOrders(pedidosCards) {
+        const ids = new Set((Array.isArray(pedidosCards) ? pedidosCards : []).map(orderId).filter(Boolean));
+        if (!productionOrdersInitialized) {
+            knownProductionOrderIds = ids;
+            productionOrdersInitialized = true;
+            return;
+        }
+        const hasNewOrder = Array.from(ids).some((id) => !knownProductionOrderIds.has(id));
+        knownProductionOrderIds = ids;
+        if (hasNewOrder) {
+            window.PRATO_ALERT_SOUNDS?.bell?.();
+        }
+    }
+
     async function syncOperação() {
         if (!apiUrl) return;
         try {
@@ -153,7 +173,9 @@
             if (payload.weekday_label && payload.date_label) {
                 diaNode.textContent = `${payload.weekday_label}, ${payload.date_label}`;
             }
-            renderList(payload.pedidos_cards || []);
+            const pedidosCards = payload.pedidos_cards || [];
+            notifyNewProductionOrders(pedidosCards);
+            renderList(pedidosCards);
         } catch (error) {
             console.error(error);
         }

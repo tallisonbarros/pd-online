@@ -12,6 +12,7 @@
     let lastFocus = null;
     let currentDetailUrl = "";
     let latestDetailPayload = null;
+    const suggestedCustomerPhones = new Set();
 
     function setOpen(isOpen) {
         modal.classList.toggle("hidden", !isOpen);
@@ -161,6 +162,207 @@
         });
     }
 
+    function normalizePhone(value) {
+        let digits = String(value || "").replace(/\D/g, "");
+        if (digits.length > 11 && digits.startsWith("55")) digits = digits.slice(2);
+        return digits;
+    }
+
+    function detailMeta() {
+        return content?.querySelector("[data-current-detail-url]") || null;
+    }
+
+    function isDraftOrder() {
+        const meta = detailMeta();
+        return meta?.dataset.isNewOrder === "true" || meta?.dataset.orderStatus === "rascunho";
+    }
+
+    function currentAddressAllowsSuggestion() {
+        const meta = detailMeta();
+        if (meta?.dataset.isNewOrder === "true") return true;
+        const address = content?.querySelector("[data-modal-address] > span")?.textContent?.trim() || "";
+        return !address || address === "Retirada no local";
+    }
+
+    function updateLinkedCustomerName(name) {
+        const phoneFact = content?.querySelector("[data-modal-fact='telefone']");
+        if (!phoneFact || !name) return;
+        let linked = phoneFact.querySelector(".ped-linked-client-name");
+        if (!linked) {
+            linked = document.createElement("small");
+            linked.className = "ped-linked-client-name";
+            phoneFact.prepend(linked);
+        }
+        linked.textContent = name;
+    }
+
+    function buildAddressMeta(endereco) {
+        return [endereco.complemento, endereco.lote_quadra, endereco.ponto_referencia].filter(Boolean).join(" - ");
+    }
+
+    function chooseCustomerAddressModal(cliente, enderecos) {
+        return new Promise((resolve) => {
+            const backdrop = document.createElement("div");
+            backdrop.className = "modal-backdrop ped-confirm-modal";
+            backdrop.innerHTML = `
+                <div class="modal-card ped-confirm-card" role="dialog" aria-modal="true" aria-labelledby="customer-address-title">
+                    <div class="modal-content ped-confirm-content">
+                        <strong id="customer-address-title">Endereco encontrado</strong>
+                        <p>Esse telefone ja tem enderecos salvos${cliente?.nome ? ` para ${escapeHtml(cliente.nome)}` : ""}. Quer usar um deles neste pedido?</p>
+                        <div class="saved-profile-list">
+                            ${enderecos.map((endereco, index) => `
+                                <article class="saved-profile-entry">
+                                    <button type="button" class="saved-profile-button" data-customer-address-index="${index}">
+                                        <span class="saved-profile-meta">
+                                            <span class="saved-profile-text">
+                                                <strong>${escapeHtml(endereco.endereco_formatado || endereco.endereco)}</strong>
+                                                ${buildAddressMeta(endereco) ? `<small>${escapeHtml(buildAddressMeta(endereco))}</small>` : ""}
+                                            </span>
+                                        </span>
+                                    </button>
+                                </article>
+                            `).join("")}
+                        </div>
+                        <div class="ped-confirm-actions">
+                            <button type="button" class="ped-btn ped-btn-soft" data-customer-address-new>Cadastrar outro endereco</button>
+                            <button type="button" class="ped-btn ped-btn-soft" data-customer-address-ignore>Ignorar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const onKeydown = (event) => {
+                if (event.key === "Escape") close(null);
+            };
+
+            function close(value) {
+                document.removeEventListener("keydown", onKeydown);
+                backdrop.remove();
+                resolve(value);
+            }
+
+            backdrop.addEventListener("click", (event) => {
+                if (event.target === backdrop || event.target.closest("[data-customer-address-ignore]")) {
+                    close(null);
+                    return;
+                }
+                if (event.target.closest("[data-customer-address-new]")) {
+                    close("new");
+                    return;
+                }
+                const button = event.target.closest("[data-customer-address-index]");
+                if (!button) return;
+                close(enderecos[Number(button.dataset.customerAddressIndex)]);
+            });
+
+            document.addEventListener("keydown", onKeydown);
+            document.body.appendChild(backdrop);
+            backdrop.querySelector("[data-customer-address-ignore]")?.focus();
+        });
+    }
+
+    function addressToFormBody(endereco) {
+        const body = new URLSearchParams();
+        body.set("tipo_coleta", "entrega");
+        body.set("rua", endereco.rua || "");
+        body.set("numero", endereco.numero_endereco || "");
+        body.set("bairro", endereco.bairro || "");
+        body.set("cidade", endereco.cidade || "Rio Verde");
+        body.set("estado", endereco.estado || "GO");
+        body.set("endereco_formatado", endereco.endereco_formatado || endereco.endereco || "");
+        body.set("latitude", endereco.latitude || "");
+        body.set("longitude", endereco.longitude || "");
+        body.set("complemento", endereco.complemento || "");
+        body.set("lote_quadra", endereco.lote_quadra || "");
+        body.set("ponto_referencia", endereco.ponto_referencia || "");
+        return body;
+    }
+
+    function addressHasCoordinates(endereco) {
+        return Boolean(endereco?.latitude && endereco?.longitude);
+    }
+
+    function fillDeliveryFormFromAddress(form, endereco) {
+        if (!form || !endereco) return;
+        const values = {
+            rua: endereco.rua || "",
+            numero: endereco.numero_endereco || "",
+            bairro: endereco.bairro || "",
+            cidade: endereco.cidade || "Rio Verde",
+            estado: endereco.estado || "GO",
+            endereco_formatado: endereco.endereco_formatado || endereco.endereco || "",
+            latitude: endereco.latitude || "",
+            longitude: endereco.longitude || "",
+            complemento: endereco.complemento || "",
+            lote_quadra: endereco.lote_quadra || "",
+            ponto_referencia: endereco.ponto_referencia || "",
+        };
+        Object.entries(values).forEach(([name, value]) => {
+            const input = form.querySelector(`[name='${name}']`);
+            if (input) input.value = value;
+        });
+        const searchInput = form.querySelector("#operator-address-query");
+        if (searchInput) searchInput.value = values.endereco_formatado || values.rua;
+        const districtInput = form.querySelector("#operator-district-query");
+        if (districtInput) districtInput.value = values.bairro;
+    }
+
+    function openDeliveryEditorWithAddress(endereco) {
+        openDeliveryEditor(false, endereco);
+        const form = deliveryEditorHost?.querySelector("[data-delivery-editor]");
+        const feedback = form?.querySelector("#address-map-feedback");
+        if (feedback) {
+            feedback.textContent = "Endereco preenchido. Confirme o ponto no mapa para calcular a entrega.";
+        }
+    }
+
+    async function applySuggestedAddress(endereco) {
+        const action = detailMeta()?.dataset.deliveryActionUrl;
+        if (!action || !endereco) return;
+        const response = await fetch(action, {
+            method: "POST",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            },
+            body: addressToFormBody(endereco).toString(),
+            credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error(await response.text());
+        applyModalPayload(await response.json(), { syncEditor: false });
+    }
+
+    async function suggestCustomerFromPhone(phone) {
+        if (!isDraftOrder() || !currentAddressAllowsSuggestion()) return;
+        const normalized = normalizePhone(phone);
+        if (!normalized || suggestedCustomerPhones.has(normalized)) return;
+        suggestedCustomerPhones.add(normalized);
+
+        const url = detailMeta()?.dataset.customerAddressUrl;
+        if (!url) return;
+        const response = await fetch(`${url}?telefone=${encodeURIComponent(phone)}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin",
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (payload?.cliente?.nome) updateLinkedCustomerName(payload.cliente.nome);
+        const enderecos = Array.isArray(payload?.enderecos) ? payload.enderecos : [];
+        if (!enderecos.length) return;
+        const selected = await chooseCustomerAddressModal(payload.cliente, enderecos);
+        if (selected === "new") {
+            openDeliveryEditor(true);
+            return;
+        }
+        if (!selected) return;
+        if (!addressHasCoordinates(selected)) {
+            openDeliveryEditorWithAddress(selected);
+            return;
+        }
+        await applySuggestedAddress(selected);
+    }
+
     async function submitPaymentForm(form) {
         const button = form.querySelector("button");
         if (button) button.disabled = true;
@@ -300,12 +502,13 @@
         if (itemsEditorHost) itemsEditorHost.innerHTML = "";
     }
 
-    function openDeliveryEditor(clearFields) {
+    function openDeliveryEditor(clearFields, prefillAddress) {
         const template = content.querySelector("[data-delivery-editor-template]");
         if (!template || !deliveryEditorHost) return;
         deliveryEditorHost.innerHTML = "";
         deliveryEditorHost.appendChild(template.content.cloneNode(true));
         const form = deliveryEditorHost.querySelector("[data-delivery-editor]");
+        if (prefillAddress) fillDeliveryFormFromAddress(form, prefillAddress);
         deliveryEditorHost.querySelector("#address-step-map")?.classList.add("is-operator-search-mode");
         const controller = window.PRATO_ADDRESS_EDITOR?.initAddressEditor?.(form, {
             isOperatorCheckout: true,
@@ -519,6 +722,7 @@
             node.dataset.value = fieldValueFromPayload(field, pedido);
             node.textContent = fieldLabelFromPayload(field, pedido);
         });
+        if (pedido.cliente_nome) updateLinkedCustomerName(pedido.cliente_nome);
 
         const facts = content?.querySelector(".ped-modal-facts");
         facts?.classList.toggle("is-pickup", pedido.tipo_coleta === "retirada");
@@ -721,6 +925,9 @@
         try {
             const payload = await submitAjaxForm(inlineForm, null, { syncEditor: false });
             inlineForm.replaceWith(createInlineDisplay(inlineForm, payload));
+            if (inlineForm.dataset.field === "telefone") {
+                await suggestCustomerFromPhone(inlineValue);
+            }
         } finally {
             inlineForm.dataset.saving = "false";
         }

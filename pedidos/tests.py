@@ -817,6 +817,97 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
+    def test_customer_addresses_api_requires_staff_authentication(self):
+        response = self.client.get("/controle/api/clientes/enderecos/?telefone=64999999999")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_customer_addresses_api_returns_empty_for_unknown_phone(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/controle/api/clientes/enderecos/?telefone=64999999999")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True, "cliente": None, "enderecos": []})
+
+    def test_customer_addresses_api_returns_customer_without_addresses(self):
+        self.client.force_login(self.staff_user)
+        Cliente.objects.create(telefone_normalizado="64999999999", telefone="(64) 99999-9999", nome="Beth")
+
+        response = self.client.get("/controle/api/clientes/enderecos/?telefone=(64) 99999-9999")
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["cliente"]["nome"], "Beth")
+        self.assertEqual(payload["enderecos"], [])
+
+    def test_customer_addresses_api_returns_normalized_phone_addresses_ordered(self):
+        self.client.force_login(self.staff_user)
+        cliente = Cliente.objects.create(telefone_normalizado="64999999999", telefone="64999999999", nome="Beth")
+        older = EnderecoCliente.objects.create(
+            cliente=cliente,
+            endereco="Rua Antiga, 10 - Centro, Rio Verde - GO",
+            endereco_formatado="Rua Antiga, 10 - Centro, Rio Verde - GO",
+            rua="Rua Antiga",
+            numero_endereco="10",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            ultimo_uso_em=timezone.now() - timedelta(days=2),
+        )
+        newer = EnderecoCliente.objects.create(
+            cliente=cliente,
+            endereco="Rua Nova, 20 - Centro, Rio Verde - GO",
+            endereco_formatado="Rua Nova, 20 - Centro, Rio Verde - GO",
+            rua="Rua Nova",
+            numero_endereco="20",
+            bairro="Centro",
+            cidade="Rio Verde",
+            estado="GO",
+            complemento="Casa",
+            lote_quadra="Lote 3",
+            ponto_referencia="Perto da escola",
+            latitude=Decimal("-17.0000000"),
+            longitude=Decimal("-50.0000000"),
+            ultimo_uso_em=timezone.now(),
+        )
+
+        response = self.client.get("/controle/api/clientes/enderecos/?telefone=+55 (64) 99999-9999")
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["cliente"], {"id": cliente.id, "nome": "Beth", "telefone": "64999999999"})
+        self.assertEqual([item["id"] for item in payload["enderecos"]], [newer.id, older.id])
+        self.assertEqual(payload["enderecos"][0]["latitude"], "-17.0000000")
+        self.assertEqual(payload["enderecos"][0]["longitude"], "-50.0000000")
+
+    def test_draft_order_imports_customer_name_when_phone_is_saved(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        Cliente.objects.create(telefone_normalizado="64999999999", telefone="64999999999", nome="Beth")
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="",
+            endereco="Retirada no local",
+            endereco_formatado="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.RASCUNHO,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "telefone", "value": "(64) 99999-9999"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.nome_cliente, "Beth")
+        self.assertEqual(response.json()["pedido"]["nome_cliente"], "Beth")
+
     def test_superuser_can_delete_order_from_context_action(self):
         superuser = get_user_model().objects.create_superuser(username="admin_delete", password="senha")
         self.client.force_login(superuser)

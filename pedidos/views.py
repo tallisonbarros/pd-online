@@ -28,12 +28,13 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
+from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
     money_decimal,
     normalize_coupon_code,
+    normalize_phone,
     recalculate_order_totals,
     reprice_order_items_from_catalog,
     replace_order_items,
@@ -2711,6 +2712,7 @@ def _cozinha_operacao_payload():
         elapsed_min = max(0, int((now - timezone.localtime(tempo_base)).total_seconds() // 60))
         pedidos_cards.append(
             {
+                "id": pedido.id,
                 "pedido_numero": pedido.numero,
                 "cliente": pedido.nome_cliente,
                 "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
@@ -2940,6 +2942,9 @@ def _pedido_admin_summary(pedido):
 def _pedidos_base_counts(base):
     return {
         "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+        "aprovacao_ids": list(
+            base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id").values_list("id", flat=True)[:20]
+        ),
         "pedidos_badge": base.exclude(
             status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
         ).count(),
@@ -3005,6 +3010,50 @@ def api_pedido_copias(request, pedido_id):
         {
             "cliente": montar_mensagem_whatsapp(pedido),
             "entregador": montar_mensagem_entregador(pedido),
+        }
+    )
+
+
+def _serialize_cliente_endereco(endereco):
+    return {
+        "id": endereco.id,
+        "endereco": endereco.endereco,
+        "endereco_formatado": endereco.endereco_formatado,
+        "rua": endereco.rua,
+        "numero_endereco": endereco.numero_endereco,
+        "bairro": endereco.bairro,
+        "cidade": endereco.cidade,
+        "estado": endereco.estado,
+        "complemento": endereco.complemento,
+        "lote_quadra": endereco.lote_quadra,
+        "ponto_referencia": endereco.ponto_referencia,
+        "latitude": str(endereco.latitude) if endereco.latitude is not None else "",
+        "longitude": str(endereco.longitude) if endereco.longitude is not None else "",
+        "ultimo_uso_em": endereco.ultimo_uso_em.isoformat() if endereco.ultimo_uso_em else "",
+    }
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def api_cliente_enderecos_por_telefone(request):
+    telefone_normalizado = normalize_phone(request.GET.get("telefone"))
+    if not telefone_normalizado:
+        return JsonResponse({"ok": True, "cliente": None, "enderecos": []})
+
+    cliente = Cliente.objects.filter(telefone_normalizado=telefone_normalizado).first()
+    if not cliente:
+        return JsonResponse({"ok": True, "cliente": None, "enderecos": []})
+
+    enderecos = EnderecoCliente.objects.filter(cliente=cliente).order_by("-ultimo_uso_em", "-id")[:5]
+    return JsonResponse(
+        {
+            "ok": True,
+            "cliente": {
+                "id": cliente.id,
+                "nome": cliente.nome,
+                "telefone": cliente.telefone,
+            },
+            "enderecos": [_serialize_cliente_endereco(endereco) for endereco in enderecos],
         }
     )
 
@@ -3307,7 +3356,13 @@ def atualizar_dados_pedido(request, pedido_id):
         sync_customer_from_order(pedido)
     elif field == "telefone":
         pedido.telefone = _safe_text(request.POST.get("value"))
-        pedido.save(update_fields=["telefone"])
+        update_fields = ["telefone"]
+        if pedido.status == Pedido.Status.RASCUNHO:
+            cliente = Cliente.objects.filter(telefone_normalizado=normalize_phone(pedido.telefone)).first()
+            if cliente and pedido.nome_cliente.strip().casefold() in {"", "cliente"}:
+                pedido.nome_cliente = cliente.nome
+                update_fields.append("nome_cliente")
+        pedido.save(update_fields=update_fields)
         sync_customer_from_order(pedido)
     elif field == "enviar_talheres":
         pedido.enviar_talheres = request.POST.get("value") == "sim"

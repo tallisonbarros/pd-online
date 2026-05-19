@@ -15,6 +15,8 @@
     let googleGeocoder = null;
     let pollHandle = null;
     let isSyncing = false;
+    let knownApprovalOrderIds = new Set();
+    let approvalOrdersInitialized = false;
 
     const defaultStages = [
         ["novo", "1", "Pedido recebido"],
@@ -388,6 +390,24 @@
         });
     }
 
+    function notifyNewApprovalOrders(payload) {
+        const payloadIds = Array.isArray(payload.aprovacao_ids) ? payload.aprovacao_ids : null;
+        const sourceIds = payloadIds || (page === "pedidos-approval-admin" && Array.isArray(payload.pedidos)
+            ? payload.pedidos.map((pedido) => pedido.id)
+            : []);
+        const ids = new Set(sourceIds.map((id) => String(id || "")).filter(Boolean));
+        if (!approvalOrdersInitialized) {
+            knownApprovalOrderIds = ids;
+            approvalOrdersInitialized = true;
+            return;
+        }
+        const hasNewApproval = Array.from(ids).some((id) => !knownApprovalOrderIds.has(id));
+        knownApprovalOrderIds = ids;
+        if (hasNewApproval) {
+            window.PRATO_ALERT_SOUNDS?.horn?.();
+        }
+    }
+
     function renderCurrentOrders(payload) {
         if (!listNode) return;
         const pedidos = Array.isArray(payload.pedidos) ? payload.pedidos : [];
@@ -465,6 +485,7 @@
     function renderOrders(payload) {
         updateSidebarBadge(payload.pedidos_badge);
         updateApprovalBadges(payload.aprovacao_count);
+        notifyNewApprovalOrders(payload);
         if (page === "pedidos-approval-admin") {
             renderApprovalOrders(payload);
             return;
