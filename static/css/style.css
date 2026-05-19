@@ -924,11 +924,9 @@ textarea {
 
 .quality-signature {
     width: min(calc(100% - 48px), 540px);
-    margin: 18px auto 20px;
-    padding: 14px 0 12px;
+    margin: 0 auto 16px;
+    padding: 4px 0 10px;
     text-align: center;
-    border-top: 1px solid rgba(86, 55, 47, 0.08);
-    border-bottom: 1px solid rgba(86, 55, 47, 0.08);
 }
 
 .quality-signature-text {
@@ -948,7 +946,7 @@ textarea {
 .quality-marquee {
     position: relative;
     height: 42px;
-    margin-top: 10px;
+    margin-bottom: 10px;
     overflow: hidden;
     opacity: 0.9;
     mask-image: linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%);
@@ -11209,8 +11207,9 @@ fieldset.field {
 
     .quality-signature {
         width: min(calc(100% - 36px), 540px);
-        margin-top: 16px;
+        margin-top: 0;
         margin-bottom: 18px;
+        padding-top: 2px;
     }
 
     .quality-signature-text {
