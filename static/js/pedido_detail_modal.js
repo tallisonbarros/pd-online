@@ -589,10 +589,10 @@
         });
         if (!response.ok) return;
         const payload = await response.json();
-        const useIfood = content?.querySelector("[data-inline-edit][data-field='ifood']")?.dataset.value === "sim";
+        const canal = content?.querySelector("[data-inline-edit][data-field='canal']")?.dataset.value || "balcao";
         select.innerHTML = (payload.items || []).map((item) => {
             const variations = encodeURIComponent(JSON.stringify(item.variacoes || []));
-            const price = useIfood ? item.preco_ifood : item.preco;
+            const price = item[`preco_${canal}`] || item.preco;
             return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(price)}" data-price-ifood="${escapeHtml(item.preco_ifood)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(price).replace(".", ",")}</option>`;
         }).join("");
         select.dataset.loaded = "true";
@@ -617,6 +617,7 @@
         if (field === "telefone") return pedido.telefone || "";
         if (field === "forma_pagamento") return pedido.forma_pagamento || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres || "nao";
+        if (field === "canal") return pedido.canal || "balcao";
         if (field === "ifood") return pedido.ifood || "nao";
         if (field === "tipo_coleta") return pedido.tipo_coleta || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "";
@@ -628,6 +629,7 @@
         if (field === "telefone") return pedido.telefone || "Adicionar telefone";
         if (field === "forma_pagamento") return pedido.forma_pagamento_label || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres_label || "";
+        if (field === "canal") return pedido.canal_label || "";
         if (field === "ifood") return pedido.ifood_label || "";
         if (field === "tipo_coleta") return pedido.tipo_coleta_label || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "Adicionar observacao";

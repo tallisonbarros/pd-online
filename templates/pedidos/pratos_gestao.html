@@ -45,6 +45,8 @@
                             </div>
                             <div class="management-meta">
                                 <p><strong>Preço:</strong> {% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
+                                <p><strong>Preço balcão:</strong> {% if prato.preco_balcao %}R$ {{ prato.preco_balcao|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
+                                <p><strong>Preço site:</strong> {% if prato.preco_site %}R$ {{ prato.preco_site|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Preço iFood:</strong> {% if prato.preco_ifood %}R$ {{ prato.preco_ifood|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Dias:</strong> {{ prato.dias_disponiveis|default:"Todos os dias" }}</p>
                                 {% if prato.variacoes %}
@@ -109,12 +111,23 @@
                         {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=prato_edicao.imagem delete_url=delete_image_url %}
 
                         <label class="field">
-                            <span>Preço</span>
+                            <span>Preço padrão</span>
                             {{ form.preco }}
+                        </label>
+                        <label class="field">
+                            <span>Preço balcão</span>
+                            {{ form.preco_balcao }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
+                        </label>
+                        <label class="field">
+                            <span>Preço site</span>
+                            {{ form.preco_site }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
                         </label>
                         <label class="field">
                             <span>Preço iFood</span>
                             {{ form.preco_ifood }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
                         </label>
 
                         <label class="field">

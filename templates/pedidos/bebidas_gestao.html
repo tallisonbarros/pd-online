@@ -45,6 +45,8 @@
                             </div>
                             <div class="management-meta">
                                 <p><strong>Preço:</strong> {% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% else %}Não informado{% endif %}</p>
+                                <p><strong>Preço balcão:</strong> {% if bebida.preco_balcao %}R$ {{ bebida.preco_balcao|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
+                                <p><strong>Preço site:</strong> {% if bebida.preco_site %}R$ {{ bebida.preco_site|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Preço iFood:</strong> {% if bebida.preco_ifood %}R$ {{ bebida.preco_ifood|floatformat:2 }}{% else %}Usa preço padrão{% endif %}</p>
                                 <p><strong>Ordem:</strong> {{ bebida.ordem }}</p>
                             </div>
@@ -100,12 +102,23 @@
                         {% include "pedidos/_management_image_field.html" with field=form.imagem current_image=bebida_edicao.imagem delete_url=delete_image_url %}
 
                         <label class="field">
-                            <span>Preço</span>
+                            <span>Preço padrão</span>
                             {{ form.preco }}
+                        </label>
+                        <label class="field">
+                            <span>Preço balcão</span>
+                            {{ form.preco_balcao }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
+                        </label>
+                        <label class="field">
+                            <span>Preço site</span>
+                            {{ form.preco_site }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
                         </label>
                         <label class="field">
                             <span>Preço iFood</span>
                             {{ form.preco_ifood }}
+                            <small>Opcional. Se vazio, usa o preço padrão.</small>
                         </label>
 
                         <label class="field">

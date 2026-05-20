@@ -1185,7 +1185,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(detail_response, "data-field=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-param=\"forma_pagamento\"")
         self.assertContains(detail_response, "data-field=\"enviar_talheres\"")
-        self.assertContains(detail_response, "data-field=\"ifood\"")
+        self.assertContains(detail_response, "data-field=\"canal\"")
         self.assertContains(detail_response, "data-field=\"tipo_coleta\"")
         self.assertContains(detail_response, "data-field=\"observacao_geral\"")
         self.assertContains(detail_response, "data-open-delivery-editor")
@@ -1413,6 +1413,63 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(pedido.total, Decimal("40.00"))
         self.assertEqual(response.json()["pedido"]["ifood"], "sim")
         self.assertEqual(response.json()["pedido"]["ifood_label"], "iFood")
+        self.assertEqual(response.json()["pedido"]["canal"], "ifood")
+        self.assertEqual(response.json()["pedido"]["canal_label"], "iFood")
+
+    def test_manager_can_change_order_channel_and_reprice_items(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(
+            nome="Carreteiro",
+            preco=Decimal("25.00"),
+            preco_balcao=Decimal("24.00"),
+            preco_site=Decimal("27.00"),
+            preco_ifood=Decimal("32.00"),
+            ativo=True,
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Site",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.BALCAO,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("0.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("24.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "canal", "value": "site"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.canal, Pedido.Canal.SITE)
+        self.assertFalse(pedido.ifood)
+        self.assertEqual(pedido.itens.get(prato=prato).preco_snapshot, Decimal("27.00"))
+        self.assertEqual(pedido.total, Decimal("27.00"))
+
+    def test_ifood_shortcut_creates_draft_order_with_ifood_channel(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        response = self.client.get("/controle/pedidos/novo/?canal=ifood", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.latest("id")
+        self.assertEqual(pedido.canal, Pedido.Canal.IFOOD)
+        self.assertTrue(pedido.ifood)
+        self.assertContains(response, 'data-field="canal"')
+        self.assertContains(response, 'data-value="ifood"')
 
     def test_ifood_order_uses_ifood_price_when_replacing_items(self):
         self.client.force_login(self.staff_user)
@@ -2634,6 +2691,17 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, "whatsapp-float")
         self.assertContains(response, "https://wa.me/5564999999999")
         self.assertContains(response, "Falar com atendente")
+
+    def test_public_menu_uses_site_price_when_configured(self):
+        Prato.objects.all().delete()
+        Prato.objects.create(nome="Marmita Site", preco=Decimal("24.90"), preco_site=Decimal("27.50"), ativo=True)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "R$ 27,50")
+        self.assertContains(response, '\\"preco\\": \\"27.50\\"')
+        self.assertNotContains(response, "R$ 24,90")
 
     @override_settings(RESTAURANT_WHATSAPP="")
     def test_cardapio_hides_whatsapp_float_without_configured_number(self):

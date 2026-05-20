@@ -219,19 +219,19 @@
             </div>
             <div>
                 <dt>Canal</dt>
-                <dd data-modal-fact="ifood">
+                <dd data-modal-fact="canal">
                     {% if can_edit_payment %}
                         <span
                             class="ped-inline-edit"
                             data-inline-edit
-                            data-field="ifood"
+                            data-field="canal"
                             data-type="select"
-                            data-value="{% if pedido.ifood %}sim{% else %}nao{% endif %}"
-                            data-options="nao:Balcao/PD|sim:iFood"
+                            data-value="{{ pedido.canal }}"
+                            data-options="{% for value, label in canal_choices %}{{ value }}:{{ label }}{% if not forloop.last %}|{% endif %}{% endfor %}"
                             data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
-                        >{% if pedido.ifood %}iFood{% else %}Balcao/PD{% endif %}</span>
+                        >{{ pedido.get_canal_display }}</span>
                     {% else %}
-                        {% if pedido.ifood %}iFood{% else %}Balcao/PD{% endif %}
+                        {{ pedido.get_canal_display }}
                     {% endif %}
                 </dd>
             </div>

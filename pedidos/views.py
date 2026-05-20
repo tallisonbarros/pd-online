@@ -184,35 +184,38 @@ def _cart_closed_notice(config=None, now=None):
 
 
 def serializar_prato(prato):
+    preco = prato.preco_site_resolvido
     return {
         "id": prato.id,
         "nome": prato.nome,
         "descricao": prato.descricao,
         "variacoes": prato.variacoes,
-        "preco": f"{prato.preco:.2f}" if prato.preco is not None else "",
-        "preco_formatado": f"R$ {prato.preco:.2f}".replace(".", ",") if prato.preco is not None else "",
+        "preco": f"{preco:.2f}" if preco is not None else "",
+        "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
         "imagem": prato.imagem.url if prato.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
     }
 
 
 def serializar_bebida(bebida):
+    preco = bebida.preco_site_resolvido
     return {
         "id": bebida.id,
         "nome": bebida.nome,
         "descricao": bebida.descricao,
-        "preco": f"{bebida.preco:.2f}" if bebida.preco is not None else "",
-        "preco_formatado": f"R$ {bebida.preco:.2f}".replace(".", ",") if bebida.preco is not None else "",
+        "preco": f"{preco:.2f}" if preco is not None else "",
+        "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
         "imagem": bebida.imagem.url if bebida.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
     }
 
 
 def serializar_adicional(adicional):
+    preco = adicional.preco_site_resolvido
     return {
         "id": adicional.id,
         "nome": adicional.nome,
         "descricao": adicional.descricao,
-        "preco": f"{adicional.preco:.2f}" if adicional.preco is not None else "",
-        "preco_formatado": f"R$ {adicional.preco:.2f}".replace(".", ",") if adicional.preco is not None else "",
+        "preco": f"{preco:.2f}" if preco is not None else "",
+        "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
         "imagem": adicional.imagem.url if adicional.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
     }
 
@@ -1628,6 +1631,8 @@ def criar_pedido(request):
                 tipo_coleta=Pedido.TipoColeta.ENTREGA,
                 forma_pagamento=forma_pagamento,
                 enviar_talheres=enviar_talheres,
+                canal=Pedido.Canal.SITE,
+                ifood=False,
                 observacao_geral=observacao_geral,
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=valor_frete,
@@ -1686,6 +1691,8 @@ def criar_retirada(request):
                 tipo_coleta=Pedido.TipoColeta.RETIRADA,
                 forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
                 enviar_talheres=enviar_talheres_raw != "nao",
+                canal=Pedido.Canal.SITE,
+                ifood=False,
                 observacao_geral=observacao_geral,
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=Decimal("0.00"),
@@ -3101,6 +3108,7 @@ def _pedido_detail_context(request, pedido, *, is_new_order=False):
         "total_confere": total_recalculado == pedido.total,
         "can_edit_payment": _user_can_manage_order_payment(request.user),
         "payment_choices": Pedido.FormaPagamento.choices,
+        "canal_choices": Pedido.Canal.choices,
         "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
         "is_new_order": is_new_order,
     }
@@ -3127,6 +3135,8 @@ def _pedido_modal_payload(pedido):
             "forma_pagamento_label": pedido.get_forma_pagamento_display(),
             "enviar_talheres": "sim" if pedido.enviar_talheres else "nao",
             "enviar_talheres_label": "Enviar" if pedido.enviar_talheres else "Nao enviar",
+            "canal": pedido.canal,
+            "canal_label": pedido.get_canal_display(),
             "ifood": "sim" if pedido.ifood else "nao",
             "ifood_label": "iFood" if pedido.ifood else "Balcao/PD",
             "observacao_geral": pedido.observacao_geral,
@@ -3163,6 +3173,9 @@ def _pedido_modal_payload(pedido):
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def pedido_novo_admin(request):
+    canal = _safe_text(request.GET.get("canal")) or Pedido.Canal.BALCAO
+    if canal not in dict(Pedido.Canal.choices):
+        canal = Pedido.Canal.BALCAO
     pedido = Pedido.objects.create(
         nome_cliente="Cliente",
         telefone="",
@@ -3176,7 +3189,8 @@ def pedido_novo_admin(request):
         tipo_coleta=Pedido.TipoColeta.RETIRADA,
         forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
         enviar_talheres=True,
-        ifood=False,
+        canal=canal,
+        ifood=canal == Pedido.Canal.IFOOD,
         status=Pedido.Status.RASCUNHO,
         valor_frete=Decimal("0.00"),
         distancia_km=Decimal("0.00"),
@@ -3233,6 +3247,7 @@ def _clone_order_as_draft(pedido):
         tipo_coleta=pedido.tipo_coleta,
         forma_pagamento=pedido.forma_pagamento,
         enviar_talheres=pedido.enviar_talheres,
+        canal=pedido.canal,
         ifood=pedido.ifood,
         observacao_geral=pedido.observacao_geral,
         status=Pedido.Status.RASCUNHO,
@@ -3369,7 +3384,21 @@ def atualizar_dados_pedido(request, pedido_id):
         pedido.save(update_fields=["enviar_talheres"])
     elif field == "ifood":
         pedido.ifood = request.POST.get("value") == "sim"
-        pedido.save(update_fields=["ifood"])
+        pedido.canal = Pedido.Canal.IFOOD if pedido.ifood else Pedido.Canal.BALCAO
+        pedido.save(update_fields=["ifood", "canal"])
+        try:
+            reprice_order_items_from_catalog(pedido)
+            recalculate_order_totals(pedido)
+        except ValueError as exc:
+            transaction.set_rollback(True)
+            return HttpResponseBadRequest(str(exc))
+    elif field == "canal":
+        canal = _safe_text(request.POST.get("value"))
+        if canal not in dict(Pedido.Canal.choices):
+            return HttpResponseBadRequest("Canal invalido.")
+        pedido.canal = canal
+        pedido.ifood = canal == Pedido.Canal.IFOOD
+        pedido.save(update_fields=["canal", "ifood"])
         try:
             reprice_order_items_from_catalog(pedido)
             recalculate_order_totals(pedido)
@@ -3878,6 +3907,8 @@ def duplicar_prato(request, prato_id):
         variacoes=prato.variacoes,
         imagem=prato.imagem,
         preco=prato.preco,
+        preco_balcao=prato.preco_balcao,
+        preco_site=prato.preco_site,
         preco_ifood=prato.preco_ifood,
         ativo=False,
         dias_disponiveis=prato.dias_disponiveis,
@@ -3987,6 +4018,8 @@ def duplicar_bebida(request, bebida_id):
         descricao=bebida.descricao,
         imagem=bebida.imagem,
         preco=bebida.preco,
+        preco_balcao=bebida.preco_balcao,
+        preco_site=bebida.preco_site,
         preco_ifood=bebida.preco_ifood,
         ativo=False,
         ordem=bebida.ordem,
@@ -4050,6 +4083,8 @@ def duplicar_adicional(request, adicional_id):
         descricao=adicional.descricao,
         imagem=adicional.imagem,
         preco=adicional.preco,
+        preco_balcao=adicional.preco_balcao,
+        preco_site=adicional.preco_site,
         preco_ifood=adicional.preco_ifood,
         ativo=False,
         ordem=adicional.ordem,

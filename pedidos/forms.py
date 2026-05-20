@@ -23,7 +23,18 @@ class PratoForm(forms.ModelForm):
 
     class Meta:
         model = Prato
-        fields = ["nome", "descricao", "variacoes", "imagem", "preco", "preco_ifood", "ativo", "dias_disponiveis"]
+        fields = [
+            "nome",
+            "descricao",
+            "variacoes",
+            "imagem",
+            "preco",
+            "preco_balcao",
+            "preco_site",
+            "preco_ifood",
+            "ativo",
+            "dias_disponiveis",
+        ]
         widgets = {
             "nome": forms.TextInput(attrs={"placeholder": "Ex.: Frango Guisado"}),
             "descricao": forms.Textarea(
@@ -39,6 +50,8 @@ class PratoForm(forms.ModelForm):
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
+            "preco_balcao": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
+            "preco_site": forms.NumberInput(attrs={"step": "0.01", "placeholder": "24.90"}),
             "preco_ifood": forms.NumberInput(attrs={"step": "0.01", "placeholder": "29.90"}),
         }
 
@@ -78,7 +91,7 @@ class PratoForm(forms.ModelForm):
 class BebidaForm(forms.ModelForm):
     class Meta:
         model = Bebida
-        fields = ["nome", "descricao", "imagem", "preco", "preco_ifood", "ativo", "ordem"]
+        fields = ["nome", "descricao", "imagem", "preco", "preco_balcao", "preco_site", "preco_ifood", "ativo", "ordem"]
         widgets = {
             "nome": forms.TextInput(attrs={"placeholder": "Ex.: Coca-Cola 350ml"}),
             "descricao": forms.Textarea(
@@ -88,6 +101,8 @@ class BebidaForm(forms.ModelForm):
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "6.00"}),
+            "preco_balcao": forms.NumberInput(attrs={"step": "0.01", "placeholder": "6.00"}),
+            "preco_site": forms.NumberInput(attrs={"step": "0.01", "placeholder": "6.00"}),
             "preco_ifood": forms.NumberInput(attrs={"step": "0.01", "placeholder": "8.00"}),
             "ordem": forms.NumberInput(attrs={"min": "0", "placeholder": "10"}),
         }
@@ -96,7 +111,7 @@ class BebidaForm(forms.ModelForm):
 class AdicionalForm(forms.ModelForm):
     class Meta:
         model = Adicional
-        fields = ["nome", "descricao", "imagem", "preco", "preco_ifood", "ativo", "ordem"]
+        fields = ["nome", "descricao", "imagem", "preco", "preco_balcao", "preco_site", "preco_ifood", "ativo", "ordem"]
         widgets = {
             "nome": forms.TextInput(attrs={"placeholder": "Ex.: Porcao extra de arroz"}),
             "descricao": forms.Textarea(
@@ -106,6 +121,8 @@ class AdicionalForm(forms.ModelForm):
                 }
             ),
             "preco": forms.NumberInput(attrs={"step": "0.01", "placeholder": "5.00"}),
+            "preco_balcao": forms.NumberInput(attrs={"step": "0.01", "placeholder": "5.00"}),
+            "preco_site": forms.NumberInput(attrs={"step": "0.01", "placeholder": "5.00"}),
             "preco_ifood": forms.NumberInput(attrs={"step": "0.01", "placeholder": "7.00"}),
             "ordem": forms.NumberInput(attrs={"min": "0", "placeholder": "10"}),
         }

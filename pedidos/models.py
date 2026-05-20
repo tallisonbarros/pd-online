@@ -19,6 +19,8 @@ class Prato(models.Model):
     )
     imagem = models.ImageField(upload_to="pratos/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_balcao = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_site = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     dias_disponiveis = models.CharField(
@@ -34,12 +36,18 @@ class Prato(models.Model):
     def __str__(self):
         return self.nome
 
+    @property
+    def preco_site_resolvido(self):
+        return self.preco_site if self.preco_site is not None else self.preco
+
 
 class Bebida(models.Model):
     nome = models.CharField(max_length=120)
     descricao = models.CharField(max_length=255, blank=True)
     imagem = models.ImageField(upload_to="bebidas/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_balcao = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_site = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveSmallIntegerField(default=0)
@@ -50,6 +58,10 @@ class Bebida(models.Model):
 
     def __str__(self):
         return self.nome
+
+    @property
+    def preco_site_resolvido(self):
+        return self.preco_site if self.preco_site is not None else self.preco
 
 
 class Adicional(models.Model):
@@ -57,6 +69,8 @@ class Adicional(models.Model):
     descricao = models.CharField(max_length=255, blank=True)
     imagem = models.ImageField(upload_to="adicionais/", blank=True, null=True)
     preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_balcao = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    preco_site = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
     ordem = models.PositiveSmallIntegerField(default=0)
@@ -67,6 +81,10 @@ class Adicional(models.Model):
 
     def __str__(self):
         return self.nome
+
+    @property
+    def preco_site_resolvido(self):
+        return self.preco_site if self.preco_site is not None else self.preco
 
 
 class Cliente(models.Model):
@@ -89,6 +107,11 @@ class Cliente(models.Model):
 
 
 class Pedido(models.Model):
+    class Canal(models.TextChoices):
+        BALCAO = "balcao", "Balcao"
+        SITE = "site", "Site"
+        IFOOD = "ifood", "iFood"
+
     class FormaPagamento(models.TextChoices):
         PIX = "pix", "Online Pix"
         DINHEIRO = "dinheiro", "Dinheiro"
@@ -128,6 +151,7 @@ class Pedido(models.Model):
     icone_pedido = models.CharField(max_length=80, blank=True)
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
     enviar_talheres = models.BooleanField(default=True)
+    canal = models.CharField(max_length=12, choices=Canal.choices, default=Canal.BALCAO)
     ifood = models.BooleanField(default=False)
     observacao_geral = models.TextField(blank=True)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOVO)

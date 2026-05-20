@@ -39,13 +39,13 @@
                 <article
                     class="dish-card"
                     data-prato-card
-                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco":"{{ prato.preco|default_if_none:'' }}","preco_formatado":"{% if prato.preco %}R$ {{ prato.preco|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco":"{{ prato.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if prato.preco_site_resolvido %}R$ {{ prato.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-price-badge">
-                                {% if prato.preco %}
-                                    <strong>R$ {{ prato.preco|floatformat:2 }}</strong>
+                                {% if prato.preco_site_resolvido %}
+                                    <strong>R$ {{ prato.preco_site_resolvido|floatformat:2 }}</strong>
                                 {% else %}
                                     <span>Consulte</span>
                                 {% endif %}
@@ -107,13 +107,13 @@
                 <article
                     class="dish-card reveal-on-scroll"
                     data-prato-card
-                    data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco":"{{ adicional.preco|default_if_none:'' }}","preco_formatado":"{% if adicional.preco %}R$ {{ adicional.preco|floatformat:2 }}{% endif %}","imagem":"{% if adicional.imagem %}{{ adicional.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco":"{{ adicional.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if adicional.preco_site_resolvido %}R$ {{ adicional.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if adicional.imagem %}{{ adicional.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-price-badge">
-                                {% if adicional.preco %}
-                                    <strong>R$ {{ adicional.preco|floatformat:2 }}</strong>
+                                {% if adicional.preco_site_resolvido %}
+                                    <strong>R$ {{ adicional.preco_site_resolvido|floatformat:2 }}</strong>
                                 {% else %}
                                     <span>Consulte</span>
                                 {% endif %}
@@ -157,13 +157,13 @@
                 <article
                     class="dish-card reveal-on-scroll"
                     data-prato-card
-                    data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco":"{{ bebida.preco|default_if_none:'' }}","preco_formatado":"{% if bebida.preco %}R$ {{ bebida.preco|floatformat:2 }}{% endif %}","imagem":"{% if bebida.imagem %}{{ bebida.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco":"{{ bebida.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if bebida.preco_site_resolvido %}R$ {{ bebida.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if bebida.imagem %}{{ bebida.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-price-badge">
-                                {% if bebida.preco %}
-                                    <strong>R$ {{ bebida.preco|floatformat:2 }}</strong>
+                                {% if bebida.preco_site_resolvido %}
+                                    <strong>R$ {{ bebida.preco_site_resolvido|floatformat:2 }}</strong>
                                 {% else %}
                                     <span>Consulte</span>
                                 {% endif %}

@@ -21,9 +21,16 @@ def normalize_coupon_code(value):
     return safe_text(value).upper()
 
 
-def catalog_price(item, use_ifood=False):
-    if use_ifood and getattr(item, "preco_ifood", None) is not None:
-        return item.preco_ifood
+def catalog_price(item, canal=None, use_ifood=False):
+    if use_ifood:
+        canal = Pedido.Canal.IFOOD
+    channel_field = {
+        Pedido.Canal.BALCAO: "preco_balcao",
+        Pedido.Canal.SITE: "preco_site",
+        Pedido.Canal.IFOOD: "preco_ifood",
+    }.get(canal)
+    if channel_field and getattr(item, channel_field, None) is not None:
+        return getattr(item, channel_field)
     return getattr(item, "preco", None) or Decimal("0.00")
 
 
@@ -236,7 +243,7 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False)
         else:
             variacao_nome = ""
 
-        preco = catalog_price(catalog_item, pedido.ifood)
+        preco = catalog_price(catalog_item, pedido.canal, pedido.ifood)
         item_pedido = ItemPedido.objects.create(
             pedido=pedido,
             prato=prato,
@@ -257,7 +264,7 @@ def reprice_order_items_from_catalog(pedido):
         catalog_item = item.prato or item.bebida or item.adicional
         if not catalog_item:
             continue
-        item.preco_snapshot = catalog_price(catalog_item, pedido.ifood)
+        item.preco_snapshot = catalog_price(catalog_item, pedido.canal, pedido.ifood)
         item.save(update_fields=["preco_snapshot", "subtotal"])
 
 
@@ -347,6 +354,8 @@ def serialize_editor_catalog():
             "id": item.id,
             "nome": item.nome,
             "preco": f"{(item.preco or Decimal('0.00')):.2f}",
+            "preco_balcao": f"{catalog_price(item, Pedido.Canal.BALCAO):.2f}",
+            "preco_site": f"{catalog_price(item, Pedido.Canal.SITE):.2f}",
             "preco_ifood": f"{(item.preco_ifood or item.preco or Decimal('0.00')):.2f}",
             "variacoes": [
                 safe_text(line)
