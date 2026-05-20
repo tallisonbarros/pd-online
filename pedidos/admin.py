@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import AccessEvent, Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato
+from .models import AccessEvent, Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato, ResumoOperacionalDia
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -131,6 +131,15 @@ class PedidoAdmin(admin.ModelAdmin):
             '<a href="{}" target="_blank" rel="noopener noreferrer">Abrir rota no Google Maps</a>',
             obj.google_maps_route_url,
         )
+
+
+@admin.register(ResumoOperacionalDia)
+class ResumoOperacionalDiaAdmin(admin.ModelAdmin):
+    list_display = ("data", "marmitas_produzidas", "atualizado_em")
+    list_editable = ("marmitas_produzidas",)
+    search_fields = ("data", "observacao")
+    readonly_fields = ("criado_em", "atualizado_em")
+    list_per_page = 31
 
 
 @admin.register(ItemPedido)

@@ -1,20 +1,16 @@
 {% extends "base.html" %}
-{% load static %}
 
-{% block title %}Dashboard da Cozinha | PRATO-DELIVERY{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-{% endblock %}
+{% block title %}Dashboard diaria | PRATO-DELIVERY{% endblock %}
 
 {% block content %}
 <div class="ops-shell ops-shell--cozinha">
-    {% include "pedidos/_ops_sidebar.html" with active="dashboard" dashboard_badge=vendas_hoje pedidos_badge=pedidos_novos pratos_badge=pratos_ativos %}
+    {% include "pedidos/_ops_sidebar.html" with active="dashboard" dashboard_badge=dashboard.total_pedidos pedidos_badge=pedidos_novos %}
 
     <main class="ops-main">
         <header class="ops-session">
             <div>
-                <p class="ops-session-kicker">Sessao</p>
-                <h1>Equipe de Cozinha</h1>
+                <p class="ops-session-kicker">Dashboard diaria</p>
+                <h1>{{ data_selecionada|date:"d/m/Y" }}</h1>
             </div>
             <div class="ops-session-actions">
                 <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
@@ -25,203 +21,60 @@
             </div>
         </header>
 
-        <section class="ops-headline">
-            <p class="ops-kicker">Operação</p>
-            <h2>Dashboard da cozinha</h2>
-            <p>Acompanhe vendas, comportamento por horário, ranking de pratos e indicadores principais da operação.</p>
-        </section>
+        <nav class="ops-period-switch" aria-label="Navegar por dia">
+            <a class="ops-period-btn" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_anterior|date:'Y-m-d' }}">Dia anterior</a>
+            <a class="ops-period-btn {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+            <a class="ops-period-btn" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_proxima|date:'Y-m-d' }}">Proximo dia</a>
+        </nav>
 
-        <div class="ops-period-switch">
-            <a class="ops-period-btn {% if periodo_key == '7d' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=7d">Últimos 7 dias</a>
-            <a class="ops-period-btn {% if periodo_key == 'month' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?period=month">Este mês</a>
-        </div>
-
-        <section class="ops-card ops-heatmap-card" data-heatmap-url="{% url 'pedidos:api_order_heatmap' %}">
-            <div class="ops-heatmap-head">
-                <div>
-                    <p class="ops-kicker">Mapa de calor</p>
-                    <h3>Mapa de calor dos pedidos</h3>
-                </div>
-                <div class="ops-heatmap-filters" role="group" aria-label="Filtrar período do mapa de calor">
-                    <button type="button" class="ops-heatmap-filter-btn" data-period="today">Hoje</button>
-                    <button type="button" class="ops-heatmap-filter-btn" data-period="7d">7 dias</button>
-                    <button type="button" class="ops-heatmap-filter-btn" data-period="30d">30 dias</button>
-                    <button type="button" class="ops-heatmap-filter-btn is-active" data-period="all">Tudo</button>
-                </div>
-            </div>
-            <div class="ops-heatmap-layout">
-                <div>
-                    <p id="orders-heatmap-empty" class="ops-heatmap-empty hidden">Ainda não há pedidos com localização confirmada para gerar o mapa de calor.</p>
-                    <div class="ops-heatmap-map-shell">
-                        <div id="orders-heatmap" class="ops-heatmap-map" aria-label="Mapa de calor das entregas em Rio Verde"></div>
-                    </div>
-                </div>
-                <aside class="ops-heatmap-side">
-                    <section class="ops-heatmap-list-card">
-                        <p class="ops-kicker">Bairros com mais pedidos</p>
-                        <ol class="ops-heatmap-list">
-                            {% for row in bairros_top %}
-                                <li>
-                                    <span>{{ row.bairro }}</span>
-                                    <strong>R$ {{ row.total|floatformat:2 }}</strong>
-                                </li>
-                            {% empty %}
-                                <li class="is-empty">Sem compras no período.</li>
-                            {% endfor %}
-                        </ol>
-                    </section>
-                    <section class="ops-heatmap-list-card">
-                        <p class="ops-kicker">Bairros sem compra</p>
-                        <ul class="ops-heatmap-list is-plain">
-                            {% for bairro in bairros_sem_compra %}
-                                <li><span>{{ bairro }}</span></li>
-                            {% empty %}
-                                <li class="is-empty">Todos os bairros do histórico compraram neste periodo.</li>
-                            {% endfor %}
-                        </ul>
-                    </section>
-                </aside>
-            </div>
-        </section>
-
-        <section class="ops-kpis">
-            <article class="ops-kpi-card">
-                <p>Hoje</p>
-                <strong>{{ vendas_hoje }}</strong>
-                <span>Quantidade de pratos vendidos hoje</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Média diária</p>
-                <strong>{{ media_diaria|floatformat:1 }}</strong>
-                <span>Média do período selecionado</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Vs. ontem</p>
-                <strong class="{% if variacao_percentual < 0 %}is-down{% elif variacao_percentual > 0 %}is-up{% endif %}">{{ variacao_percentual }}%</strong>
-                <span>Comparação entre hoje e ontem</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Faturamento do dia</p>
-                <strong>{{ faturamento_hoje_fmt }}</strong>
-                <span>Receita gerada por pratos hoje</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Ticket medio</p>
-                <strong>{{ ticket_medio_fmt }}</strong>
-                <span>Valor médio por pedido no periodo</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Meta diária</p>
-                <strong>{{ vendas_hoje }}/{{ meta_diaria }}</strong>
-                <div class="ops-goal-bar"><span style="width: {{ percentual_meta }}%;"></span></div>
-                <span>{{ percentual_meta }}% da meta atingida hoje</span>
-            </article>
-        </section>
-
-        <section class="ops-card ops-chart-wrap">
-            <div class="ops-chart-head">
-                <div>
-                    <p class="ops-kicker">Vendas de pratos</p>
-                    <h3>Quantidade vendida ao longo do tempo</h3>
-                    <p>Histórico dos {{ periodo_label|lower }}.</p>
-                </div>
-                <aside class="ops-period-pill">
-                    <p>Período analisado</p>
-                    <strong>{{ total_vendido_periodo }}</strong>
-                    <span>pratos vendidos</span>
-                </aside>
-            </div>
-            <div class="ops-chart-legend">
-                <span><i class="dot"></i> Pratos vendidos</span>
-                <span><i class="line"></i> Média diária</span>
-            </div>
-            <div class="ops-chart-stage">
-                <svg id="dash-sales-chart" viewBox="0 0 960 320" preserveAspectRatio="xMidYMid meet" aria-label="Grafico de vendas"></svg>
-            </div>
-        </section>
-
-        <section class="ops-insight">
-            <div>
-                <p class="ops-kicker">Insight automatico</p>
-                <h3>{{ insight_texto }}</h3>
-            </div>
-            <aside class="ops-period-pill">
-                <p>Pico do período</p>
-                <strong>{{ pico_periodo }}</strong>
-                <span>pratos em um unico dia</span>
-            </aside>
+        <section class="ops-kpis" aria-label="Resumo do dia">
+            {% for card in dashboard.cards %}
+                <article class="ops-kpi-card">
+                    <p>{{ card.label }}</p>
+                    <strong data-dashboard-card="{{ card.label }}">{{ card.value }}</strong>
+                    <span>{{ card.caption }}</span>
+                </article>
+            {% endfor %}
         </section>
 
         <section class="ops-bottom-grid">
-            <article class="ops-card ops-chart-wrap">
-                <div class="ops-chart-head">
-                    <div>
-                        <p class="ops-kicker">Vendas por horário</p>
-                        <h3>Distribuição ao longo do dia</h3>
-                        <p>Maior pico em {{ pico_hora_indice|stringformat:"02d" }}h com {{ pico_hora_valor }} pratos</p>
-                    </div>
-                </div>
-                <div class="ops-chart-stage is-compact">
-                    <svg id="dash-hour-chart" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet" aria-label="Gráfico por horário"></svg>
-                </div>
-            </article>
-
             <article class="ops-card">
-                <p class="ops-kicker">Ranking de pratos</p>
-                <h3>Top 5 mais vendidos</h3>
+                <p class="ops-kicker">Canais</p>
+                <h3>Pedidos finalizados por canal</h3>
                 <ol class="ops-ranking-list">
-                    {% for item in ranking_pratos %}
+                    {% for canal in dashboard.canais %}
                         <li>
-                            <span>#{{ forloop.counter }}</span>
-                            <strong>{{ item.nome_prato_snapshot }}</strong>
-                            <b>{{ item.total }}</b>
+                            <span>{{ canal.label }}</span>
+                            <strong data-dashboard-channel="{{ canal.key }}">{{ canal.total }}</strong>
+                            <b>{{ canal.key }}</b>
                         </li>
-                    {% empty %}
-                        <li class="is-empty">Sem vendas no período selecionado.</li>
                     {% endfor %}
                 </ol>
             </article>
+
+            <article class="ops-card">
+                <p class="ops-kicker">Producao</p>
+                <h3>Marmitas produzidas</h3>
+                <form method="post" class="checkout-form">
+                    {% csrf_token %}
+                    <label class="field">
+                        <span>Quantidade produzida no dia</span>
+                        <input type="number" name="marmitas_produzidas" min="0" step="1" value="{{ dashboard.marmitas_produzidas }}">
+                    </label>
+                    <button type="submit" class="primary-button wide">Salvar producao</button>
+                </form>
+            </article>
         </section>
 
-        <section class="ops-kpis">
-            <article class="ops-kpi-card">
-                <p>Pratos ativos</p>
-                <strong>{{ pratos_ativos }}</strong>
-                <span>Disponíveis para montagem no cardapio</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Itens de cozinha</p>
-                <strong>{{ itens_cozinha }}</strong>
-                <span>Base usada na composicao dos pratos</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Adicionais</p>
-                <strong>{{ adicionais_count }}</strong>
-                <span>Complementos extras cadastrados</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Outros</p>
-                <strong>{{ outros_count }}</strong>
-                <span>Produtos avulsos cadastrados</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Mais vendido</p>
-                <strong>{% if mais_vendidos_footer %}{{ mais_vendidos_footer.0.total }}x{% else %}0x{% endif %}</strong>
-                <span>{% if mais_vendidos_footer %}{{ mais_vendidos_footer.0.nome_prato_snapshot }}{% else %}Sem dados{% endif %}</span>
-            </article>
-            <article class="ops-kpi-card">
-                <p>Pedidos novos</p>
-                <strong>{{ pedidos_novos }}</strong>
-                <span>Pedidos aguardando acao da cozinha</span>
-            </article>
+        <section class="ops-card">
+            <p class="ops-kicker">Base pronta para expansao</p>
+            <h3>Proximos blocos</h3>
+            <ol class="ops-ranking-list">
+                <li><span>Vendas</span><strong>Faturamento e ticket medio</strong><b>futuro</b></li>
+                <li><span>Produtos</span><strong>Itens mais vendidos no dia</strong><b>futuro</b></li>
+                <li><span>Operacao</span><strong>Sobras, perdas e metas</strong><b>futuro</b></li>
+            </ol>
         </section>
     </main>
 </div>
-
-{{ dashboard_payload|json_script:"dashboard-payload" }}
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="{% static 'js/dashboard.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

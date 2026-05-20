@@ -1,7 +1,7 @@
 import json
 
 from decimal import Decimal
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -13,7 +13,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
+from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
@@ -199,6 +199,73 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/")
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Dashboard diaria")
+
+    def test_dashboard_counts_finished_daily_orders_by_channel_and_phone_recurrence(self):
+        self.client.force_login(self.staff_user)
+        selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
+        previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
+
+        previous = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="(64) 99999-9999",
+            endereco="Rua Antiga",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            canal=Pedido.Canal.SITE,
+        )
+        balcao = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente Hoje",
+            telefone="64999999999",
+            endereco="Rua Hoje",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            canal=Pedido.Canal.BALCAO,
+        )
+        site = Pedido.objects.create(
+            nome_cliente="Cliente Novo",
+            telefone="64888888888",
+            endereco="Rua Site",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            canal=Pedido.Canal.SITE,
+        )
+        ifood = Pedido.objects.create(
+            nome_cliente="Cliente iFood",
+            telefone="64777777777",
+            endereco="Rua iFood",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            canal=Pedido.Canal.IFOOD,
+        )
+        Pedido.objects.create(
+            nome_cliente="Cliente Em Preparo",
+            telefone="64666666666",
+            endereco="Rua Preparo",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            canal=Pedido.Canal.SITE,
+        )
+        Pedido.objects.filter(id=previous.id).update(criado_em=previous_day)
+        Pedido.objects.filter(id__in=[balcao.id, site.id, ifood.id]).update(criado_em=selected_day)
+
+        response = self.client.get("/controle/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados">3</strong>')
+        self.assertContains(response, 'data-dashboard-card="Pedidos recorrentes">1</strong>')
+        self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
+        self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
+        self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
+
+    def test_dashboard_saves_manual_daily_production(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post("/controle/?data=2026-05-20", {"marmitas_produzidas": "87"})
+
+        self.assertEqual(response.status_code, 302)
+        resumo = ResumoOperacionalDia.objects.get(data=date(2026, 5, 20))
+        self.assertEqual(resumo.marmitas_produzidas, 87)
 
     def test_operation_metrics_count_plate_quantities_not_orders(self):
         self.client.force_login(self.staff_user)
@@ -2631,7 +2698,7 @@ class FrontendConfigTests(TestCase):
         self.assertNotContains(response, "Itens escolhidos")
         self.assertContains(response, "Entrega")
         self.assertContains(response, "Pagamento")
-        self.assertContains(response, "Online Pix")
+        self.assertContains(response, "Pix")
         self.assertContains(response, "pix@pratodelivery.test")
         self.assertContains(response, "Copiar chave Pix")
         self.assertContains(response, 'data-copy-pix="pix@pratodelivery.test"')
@@ -2668,17 +2735,20 @@ class FrontendConfigTests(TestCase):
         self.assertContains(response, 'data-operator-checkout="false"')
         self.assertNotContains(response, "Busque o endereco do cliente")
 
-    def test_cardapio_displays_opening_hours_when_configured(self):
+    @patch("pedidos.views.timezone.localtime")
+    def test_cardapio_displays_opening_hours_when_configured(self, mock_localtime):
         config = ConfiguracaoEntrega.get_solo()
         config.horario_abertura = time(10, 30)
         config.horario_fechamento = time(14, 45)
         config.save()
+        mock_localtime.return_value = timezone.make_aware(datetime(2026, 5, 20, 11, 0))
 
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CARDÁPIO")
-        self.assertContains(response, "Aberto 10:30 às 14:45")
+        self.assertContains(response, "Aberto agora")
+        self.assertContains(response, "até 14:45")
 
     def test_cardapio_displays_whatsapp_float_when_number_is_configured(self):
         config = ConfiguracaoEntrega.get_solo()

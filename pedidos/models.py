@@ -106,6 +106,22 @@ class Cliente(models.Model):
         return f"{self.nome} - {self.telefone}"
 
 
+class ResumoOperacionalDia(models.Model):
+    data = models.DateField(unique=True)
+    marmitas_produzidas = models.PositiveIntegerField(default=0)
+    observacao = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data"]
+        verbose_name = "Resumo operacional do dia"
+        verbose_name_plural = "Resumos operacionais do dia"
+
+    def __str__(self):
+        return f"Resumo operacional - {self.data:%d/%m/%Y}"
+
+
 class Pedido(models.Model):
     class Canal(models.TextChoices):
         BALCAO = "balcao", "Balcao"

@@ -27,8 +27,9 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
+from .dashboard import get_dashboard_diaria
 from .forms import AdicionalForm, BebidaForm, PratoForm
-from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato
+from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -2440,162 +2441,30 @@ def api_metricas_acesso(request):
 
 @staff_member_required(login_url="/admin/login/")
 def cozinha(request):
-    periodo = _dashboard_periodo(request.GET.get("period", "7d"))
-    inicio = periodo["inicio"]
-    fim = periodo["fim"]
-    days = _dashboard_days(inicio, fim)
-
-    itens_periodo = ItemPedido.objects.filter(
-        pedido__criado_em__date__gte=inicio,
-        pedido__criado_em__date__lte=fim,
-    )
-    pedidos_periodo = Pedido.objects.filter(
-        criado_em__date__gte=inicio,
-        criado_em__date__lte=fim,
-    )
-
-    vendas_por_dia_raw = (
-        itens_periodo.annotate(day=TruncDate("pedido__criado_em"))
-        .values("day")
-        .annotate(total=Sum("quantidade"))
-        .order_by("day")
-    )
-    vendas_por_dia_map = {row["day"]: int(row["total"] or 0) for row in vendas_por_dia_raw}
-    vendas_diarias = [vendas_por_dia_map.get(day, 0) for day in days]
-    labels_diarias = [day.strftime("%d/%m") for day in days]
-
-    total_vendido_periodo = int(sum(vendas_diarias))
-    media_diaria = round(total_vendido_periodo / len(days), 1) if days else 0
-
     hoje = timezone.localdate()
-    ontem = hoje - timedelta(days=1)
-    vendidos_hoje = int(
-        ItemPedido.objects.filter(pedido__criado_em__date=hoje).aggregate(total=Sum("quantidade")).get("total") or 0
-    )
-    vendidos_ontem = int(
-        ItemPedido.objects.filter(pedido__criado_em__date=ontem).aggregate(total=Sum("quantidade")).get("total") or 0
-    )
-    variacao_percentual = _dashboard_percentual_vs_ontem(vendidos_hoje, vendidos_ontem)
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
 
-    faturamento_hoje = Pedido.objects.filter(criado_em__date=hoje).aggregate(total=Sum("total")).get("total") or Decimal("0.00")
-    faturamento_periodo = pedidos_periodo.aggregate(total=Sum("total")).get("total") or Decimal("0.00")
-    total_pedidos_periodo = pedidos_periodo.count()
-    ticket_medio = (
-        (faturamento_periodo / total_pedidos_periodo).quantize(Decimal("0.01"))
-        if total_pedidos_periodo
-        else Decimal("0.00")
-    )
+    if request.method == "POST":
+        try:
+            marmitas_produzidas = max(int(request.POST.get("marmitas_produzidas") or 0), 0)
+        except (TypeError, ValueError):
+            return HttpResponseBadRequest("Quantidade de marmitas invalida.")
+        resumo, _created = ResumoOperacionalDia.objects.get_or_create(data=data_selecionada)
+        resumo.marmitas_produzidas = marmitas_produzidas
+        resumo.save(update_fields=["marmitas_produzidas", "atualizado_em"])
+        return redirect(f"{reverse('pedidos:cozinha')}?data={data_selecionada.isoformat()}")
 
-    meta_diaria = 20
-    percentual_meta = min(100, int(round((vendidos_hoje / meta_diaria) * 100))) if meta_diaria else 0
-
-    ranking_pratos = list(
-        itens_periodo.values("nome_prato_snapshot")
-        .annotate(total=Sum("quantidade"))
-        .order_by("-total", "nome_prato_snapshot")[:5]
-    )
-    ranking_pratos_top3 = ranking_pratos[:3]
-
-    bairros_top = list(
-        pedidos_periodo.exclude(bairro__isnull=True)
-        .exclude(bairro__exact="")
-        .values("bairro")
-        .annotate(total=Sum("total"))
-        .order_by("-total", "bairro")
-    )
-    bairros_periodo_set = {row["bairro"].strip().lower() for row in bairros_top if row.get("bairro")}
-    bairros_historico = (
-        Pedido.objects.exclude(bairro__isnull=True)
-        .exclude(bairro__exact="")
-        .values_list("bairro", flat=True)
-        .distinct()
-    )
-    bairros_mapa = sorted(
-        {(bairro or "").strip() for bairro in bairros_historico if (bairro or "").strip()},
-        key=lambda item: item.lower(),
-    )
-    bairros_sem_compra = []
-    for bairro in bairros_historico:
-        nome = (bairro or "").strip()
-        if not nome:
-            continue
-        if nome.lower() in bairros_periodo_set:
-            continue
-        bairros_sem_compra.append(nome)
-    bairros_sem_compra = sorted(set(bairros_sem_compra), key=lambda item: item.lower())
-
-    vendas_por_hora_raw = (
-        itens_periodo.annotate(hour=ExtractHour("pedido__criado_em"))
-        .values("hour")
-        .annotate(total=Sum("quantidade"))
-        .order_by("hour")
-    )
-    vendas_por_hora_map = {int(row["hour"] or 0): int(row["total"] or 0) for row in vendas_por_hora_raw}
-    horas_labels = [f"{hour:02d}h" for hour in range(24)]
-    vendas_por_hora = [vendas_por_hora_map.get(hour, 0) for hour in range(24)]
-
-    pico_periodo = max(vendas_diarias) if vendas_diarias else 0
-    pico_hora_valor = max(vendas_por_hora) if vendas_por_hora else 0
-    pico_hora_indice = vendas_por_hora.index(pico_hora_valor) if pico_hora_valor > 0 else 0
-
+    dashboard = get_dashboard_diaria(data_selecionada)
     pedidos_novos = Pedido.objects.filter(status=Pedido.Status.NOVO).count()
-    pratos_ativos = Prato.objects.filter(ativo=True).count()
-    itens_cozinha = itens_periodo.count()
-    adicionais_count = 1
-    outros_count = max(0, FaixaFrete.objects.filter(ativo=True).count() - 1)
-
-    mais_vendidos_footer = ranking_pratos_top3 if ranking_pratos_top3 else []
-    mais_utilizados_footer = ranking_pratos_top3 if ranking_pratos_top3 else []
-    outros_footer_nome = ranking_pratos[0]["nome_prato_snapshot"] if ranking_pratos else "Sem dados"
-    outros_footer_total = ranking_pratos[0]["total"] if ranking_pratos else 0
-    dashboard_payload = {
-        "labels": labels_diarias,
-        "series": vendas_diarias,
-        "average": media_diaria,
-        "hour_labels": horas_labels,
-        "hour_series": vendas_por_hora,
-    }
-    sales_chart = _build_sales_chart_context(labels_diarias, vendas_diarias, media_diaria)
-    hour_chart = _build_hour_chart_context(horas_labels, vendas_por_hora)
 
     return render(
         request,
         "pedidos/cozinha_dashboard.html",
         {
-            "periodo_key": periodo["key"],
-            "periodo_label": periodo["label"],
-            "vendas_hoje": vendidos_hoje,
-            "media_diaria": media_diaria,
-            "variacao_percentual": variacao_percentual,
-            "faturamento_hoje": faturamento_hoje,
-            "faturamento_hoje_fmt": f"R$ {faturamento_hoje:.2f}".replace(".", ","),
-            "ticket_medio": ticket_medio,
-            "ticket_medio_fmt": f"R$ {ticket_medio:.2f}".replace(".", ","),
-            "meta_diaria": meta_diaria,
-            "percentual_meta": percentual_meta,
-            "total_vendido_periodo": total_vendido_periodo,
-            "total_pedidos_periodo": total_pedidos_periodo,
-            "insight_texto": _dashboard_insight(variacao_percentual),
-            "ranking_pratos": ranking_pratos,
-            "ranking_pratos_top3": ranking_pratos_top3,
-            "pico_periodo": pico_periodo,
-            "pico_hora_indice": pico_hora_indice,
-            "pico_hora_valor": pico_hora_valor,
+            "dashboard": dashboard,
+            "data_selecionada": data_selecionada,
+            "hoje": hoje,
             "pedidos_novos": pedidos_novos,
-            "pratos_ativos": pratos_ativos,
-            "itens_cozinha": itens_cozinha,
-            "adicionais_count": adicionais_count,
-            "outros_count": outros_count,
-            "mais_vendidos_footer": mais_vendidos_footer,
-            "mais_utilizados_footer": mais_utilizados_footer,
-            "outros_footer_nome": outros_footer_nome,
-            "outros_footer_total": outros_footer_total,
-            "sales_chart": sales_chart,
-            "hour_chart": hour_chart,
-            "dashboard_payload": dashboard_payload,
-            "bairros_top": bairros_top,
-            "bairros_sem_compra": bairros_sem_compra,
-            "bairros_mapa": bairros_mapa,
         },
     )
 
