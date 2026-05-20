@@ -2669,17 +2669,24 @@ def pedidos_aprovacao_admin(request):
 
 @staff_member_required(login_url="/admin/login/")
 def pedidos_concluidos_admin(request):
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or timezone.localdate()
     base = Pedido.objects.prefetch_related("itens")
+    concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada)
+    cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada)
     return render(
         request,
         "pedidos/pedidos_concluidos_admin.html",
         {
-            "pedidos_concluidos": base.filter(status=Pedido.Status.FINALIZADO).order_by("-criado_em", "-id")[:20],
-            "pedidos_cancelados": base.filter(status=Pedido.Status.CANCELADO).order_by("-criado_em", "-id")[:20],
+            "pedidos_concluidos": concluidos.order_by("-criado_em", "-id"),
+            "pedidos_cancelados": cancelados.order_by("-criado_em", "-id"),
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
-            "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
-            "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),
+            "concluidos_count": concluidos.count(),
+            "cancelados_count": cancelados.count(),
+            "data_selecionada": data_selecionada,
+            "data_anterior": data_selecionada - timedelta(days=1),
+            "data_proxima": data_selecionada + timedelta(days=1),
+            "hoje": timezone.localdate(),
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
@@ -2859,15 +2866,16 @@ def api_pedidos_aprovacao_admin(request):
     return JsonResponse(_pedidos_aprovacao_payload())
 
 
-def _pedidos_concluidos_payload():
+def _pedidos_concluidos_payload(data_selecionada=None):
+    data_selecionada = data_selecionada or timezone.localdate()
     base = Pedido.objects.prefetch_related("itens")
-    concluidos = base.filter(status=Pedido.Status.FINALIZADO).order_by("-criado_em", "-id")[:20]
-    cancelados = base.filter(status=Pedido.Status.CANCELADO).order_by("-criado_em", "-id")[:20]
+    concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
+    cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
     return {
         "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos],
         "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados],
-        "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO).count(),
-        "cancelados_count": base.filter(status=Pedido.Status.CANCELADO).count(),
+        "concluidos_count": concluidos.count(),
+        "cancelados_count": cancelados.count(),
         **_pedidos_base_counts(base),
     }
 
@@ -2875,7 +2883,8 @@ def _pedidos_concluidos_payload():
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_pedidos_concluidos_admin(request):
-    return JsonResponse(_pedidos_concluidos_payload())
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or timezone.localdate()
+    return JsonResponse(_pedidos_concluidos_payload(data_selecionada))
 
 
 @staff_member_required(login_url="/admin/login/")

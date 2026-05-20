@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Sum
 
 from .models import Pedido, ResumoOperacionalDia
 from .order_services import normalize_phone
@@ -53,6 +53,14 @@ def get_dashboard_diaria(data):
 
     total_pedidos = len(pedidos_do_dia)
     pedidos_recorrentes = _recurring_order_count(pedidos_do_dia, data)
+    marmitas_vendidas = int(
+        _finished_orders_for_day(data)
+        .filter(itens__prato__isnull=False)
+        .aggregate(total=Sum("itens__quantidade"))
+        .get("total")
+        or 0
+    )
+    marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas
 
     return {
         "data": data,
@@ -61,23 +69,25 @@ def get_dashboard_diaria(data):
         "total_pedidos": total_pedidos,
         "canais": canais,
         "pedidos_recorrentes": pedidos_recorrentes,
+        "marmitas_vendidas": marmitas_vendidas,
         "marmitas_produzidas": operacional.marmitas_produzidas,
+        "marmitas_excedentes": marmitas_excedentes,
         "operacional": operacional,
         "cards": [
             {
                 "label": "Pedidos finalizados",
                 "value": total_pedidos,
-                "caption": "Total fechado no dia selecionado",
+                "details": [{"label": "Marmitas", "value": marmitas_vendidas}],
             },
             {
                 "label": "Pedidos recorrentes",
                 "value": pedidos_recorrentes,
-                "caption": "Telefone com pedido anterior",
+                "details": [],
             },
             {
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
-                "caption": "Informado manualmente",
+                "details": [{"label": "Excedente", "value": marmitas_excedentes}],
             },
         ],
     }

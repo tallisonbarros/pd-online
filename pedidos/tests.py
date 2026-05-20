@@ -205,6 +205,8 @@ class CozinhaAccessTests(TestCase):
         self.client.force_login(self.staff_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
+        prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
+        ResumoOperacionalDia.objects.create(data=date(2026, 5, 20), marmitas_produzidas=8)
 
         previous = Pedido.objects.create(
             nome_cliente="Cliente Recorrente",
@@ -248,6 +250,20 @@ class CozinhaAccessTests(TestCase):
         )
         Pedido.objects.filter(id=previous.id).update(criado_em=previous_day)
         Pedido.objects.filter(id__in=[balcao.id, site.id, ifood.id]).update(criado_em=selected_day)
+        ItemPedido.objects.create(
+            pedido=balcao,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=2,
+        )
+        ItemPedido.objects.create(
+            pedido=site,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=3,
+        )
 
         response = self.client.get("/controle/?data=2026-05-20")
 
@@ -257,6 +273,8 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
+        self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">3</b>')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.staff_user)
@@ -1945,6 +1963,38 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Concluídos")
         self.assertIn(pedido, list(response.context["pedidos_concluidos"]))
+        self.assertContains(response, 'data-concluded-badge')
+        self.assertContains(response, 'data-closed-total')
+
+    def test_completed_orders_admin_filters_by_selected_day(self):
+        self.client.force_login(self.staff_user)
+        selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
+        other_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
+        selected = Pedido.objects.create(
+            nome_cliente="Cliente Do Dia",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+        older = Pedido.objects.create(
+            nome_cliente="Cliente Antigo",
+            telefone="64888888888",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("40.00"),
+        )
+        Pedido.objects.filter(id=selected.id).update(criado_em=selected_day)
+        Pedido.objects.filter(id=older.id).update(criado_em=other_day)
+
+        response = self.client.get("/controle/pedidos-concluidos/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(selected, list(response.context["pedidos_concluidos"]))
+        self.assertNotIn(older, list(response.context["pedidos_concluidos"]))
+        self.assertContains(response, 'data-closed-total>1</strong>')
 
     def test_orders_admin_api_returns_only_active_orders(self):
         self.client.force_login(self.staff_user)

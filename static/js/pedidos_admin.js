@@ -390,6 +390,14 @@
         });
     }
 
+    function updateConcludedBadges(count) {
+        const value = Number(count || 0);
+        document.querySelectorAll("[data-concluded-badge]").forEach((badge) => {
+            badge.textContent = formatCount(value);
+            badge.classList.toggle("is-hidden", value <= 0);
+        });
+    }
+
     function notifyNewApprovalOrders(payload) {
         const payloadIds = Array.isArray(payload.aprovacao_ids) ? payload.aprovacao_ids : null;
         const sourceIds = payloadIds || (page === "pedidos-approval-admin" && Array.isArray(payload.pedidos)
@@ -459,15 +467,6 @@
         const canceledMarkup = cancelados.map((pedido) => buildClosedCard(pedido, cancelIcon)).join("");
 
         listNode.innerHTML = `
-            <details class="ped-collapse" open>
-                <summary>
-                    <div>
-                        <h3>Concluídos</h3>
-                        <p>${escapeHtml(payload.concluidos_count || 0)} pedido(s) entregue(s)</p>
-                    </div>
-                    <span class="ped-badge done">${escapeHtml(payload.concluidos_count || 0)}</span>
-                </summary>
-            </details>
             ${concludedMarkup}
             <details class="ped-collapse" open>
                 <summary>
@@ -479,12 +478,17 @@
                 </summary>
             </details>
             ${canceledMarkup}
+            <footer class="pedidos-list-footer">
+                <span>Total de pedidos</span>
+                <strong data-closed-total>${escapeHtml(payload.concluidos_count || 0)}</strong>
+            </footer>
         `;
     }
 
     function renderOrders(payload) {
         updateSidebarBadge(payload.pedidos_badge);
         updateApprovalBadges(payload.aprovacao_count);
+        updateConcludedBadges(payload.concluidos_count);
         notifyNewApprovalOrders(payload);
         if (page === "pedidos-approval-admin") {
             renderApprovalOrders(payload);

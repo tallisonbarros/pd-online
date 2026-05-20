@@ -21,10 +21,10 @@
             </div>
         </header>
 
-        <nav class="ops-period-switch" aria-label="Navegar por dia">
-            <a class="ops-period-btn" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_anterior|date:'Y-m-d' }}">Dia anterior</a>
+        <nav class="ops-period-switch dashboard-date-nav" aria-label="Navegar por dia">
+            <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior" title="Dia anterior">←</a>
             <a class="ops-period-btn {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
-            <a class="ops-period-btn" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_proxima|date:'Y-m-d' }}">Proximo dia</a>
+            <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia" title="Proximo dia">→</a>
         </nav>
 
         <section class="ops-kpis" aria-label="Resumo do dia">
@@ -32,7 +32,11 @@
                 <article class="ops-kpi-card">
                     <p>{{ card.label }}</p>
                     <strong data-dashboard-card="{{ card.label }}">{{ card.value }}</strong>
-                    <span>{{ card.caption }}</span>
+                    {% for detail in card.details %}
+                        <span class="dashboard-card-detail">
+                            {{ detail.label }} <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                        </span>
+                    {% endfor %}
                 </article>
             {% endfor %}
         </section>

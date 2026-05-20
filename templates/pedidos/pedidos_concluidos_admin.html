@@ -10,23 +10,19 @@
     <main
         class="ops-main pedidos-admin-page"
         data-page="pedidos-closed-admin"
-        data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}"
+        data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}?data={{ data_selecionada|date:'Y-m-d' }}"
         data-status-url-template="{% url 'pedidos:atualizar_status_pedido' 0 %}"
     >
         <div class="pedidos-workspace">
-            {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" %}
+            {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" concluidos_count=concluidos_count %}
+
+            <nav class="ops-period-switch dashboard-date-nav" aria-label="Navegar por dia">
+                <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior" title="Dia anterior">←</a>
+                <a class="ops-period-btn {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+                <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia" title="Proximo dia">→</a>
+            </nav>
 
             <section id="pedidos-concluidos-lista" class="ped-live-list pedidos-content-panel" data-orders-list>
-                <details class="ped-collapse" open>
-                    <summary>
-                        <div>
-                            <h3>Concluídos</h3>
-                            <p>{{ concluidos_count }} pedido(s) entregue(s)</p>
-                        </div>
-                        <span class="ped-badge done">{{ concluidos_count }}</span>
-                    </summary>
-                </details>
-
                 {% for pedido in pedidos_concluidos %}
             <article
                 class="ped-card ped-card--clickable"
@@ -132,6 +128,11 @@
                 </div>
             </article>
                 {% endfor %}
+
+                <footer class="pedidos-list-footer">
+                    <span>Total de pedidos</span>
+                    <strong data-closed-total>{{ concluidos_count }}</strong>
+                </footer>
             </section>
         </div>
     </main>

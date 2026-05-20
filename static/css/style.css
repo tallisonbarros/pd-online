@@ -5927,6 +5927,17 @@ fieldset.field {
     color: #fff;
 }
 
+.dashboard-date-nav {
+    justify-content: center;
+}
+
+.dashboard-date-arrow {
+    width: 56px;
+    text-align: center;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
 .ops-heatmap-card {
     padding: 16px;
     display: grid;
@@ -6294,6 +6305,19 @@ fieldset.field {
 .ops-kpi-card span {
     color: var(--text-muted);
     font-size: 0.93rem;
+}
+
+.ops-kpi-card .dashboard-card-detail {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--text-soft);
+    font-weight: 700;
+}
+
+.dashboard-card-detail b {
+    color: var(--text);
+    font-size: 1rem;
 }
 
 .ops-kpi-card--fulfillment {
@@ -8691,6 +8715,23 @@ fieldset.field {
 .ped-live-list {
     display: grid;
     gap: 12px;
+}
+.pedidos-list-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 8px;
+    padding: 16px 18px;
+    border: 1px solid #eae3dd;
+    border-radius: 18px;
+    background: #fffdfa;
+    color: #5f4b42;
+    font-weight: 700;
+}
+.pedidos-list-footer strong {
+    color: #221311;
+    font-size: 1.4rem;
 }
 .ped-headline h1 {
     margin: 6px 0 4px;
