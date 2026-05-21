@@ -109,6 +109,7 @@ class Cliente(models.Model):
 class ResumoOperacionalDia(models.Model):
     data = models.DateField(unique=True)
     marmitas_produzidas = models.PositiveIntegerField(default=0)
+    consumo_interno = models.PositiveIntegerField(default=0)
     observacao = models.TextField(blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)

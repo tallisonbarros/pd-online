@@ -199,14 +199,25 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Dashboard diaria")
+        self.assertContains(response, 'aria-label="Navegar por dia"')
+
+    def test_dashboard_header_uses_selected_day_context(self):
+        self.client.force_login(self.staff_user)
+        ontem = timezone.localdate() - timedelta(days=1)
+        dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
+
+        response = self.client.get(f"/controle/?data={ontem.isoformat()}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'aria-current="date">{ontem:%d}</span>')
+        self.assertContains(response, dias_semana[ontem.weekday()])
 
     def test_dashboard_counts_finished_daily_orders_by_channel_and_phone_recurrence(self):
         self.client.force_login(self.staff_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
         prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
-        ResumoOperacionalDia.objects.create(data=date(2026, 5, 20), marmitas_produzidas=8)
+        ResumoOperacionalDia.objects.create(data=date(2026, 5, 20), marmitas_produzidas=8, consumo_interno=1)
 
         previous = Pedido.objects.create(
             nome_cliente="Cliente Recorrente",
@@ -274,16 +285,18 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
-        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">3</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Consumo interno">1</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.staff_user)
 
-        response = self.client.post("/controle/?data=2026-05-20", {"marmitas_produzidas": "87"})
+        response = self.client.post("/controle/?data=2026-05-20", {"marmitas_produzidas": "87", "consumo_interno": "4"})
 
         self.assertEqual(response.status_code, 302)
         resumo = ResumoOperacionalDia.objects.get(data=date(2026, 5, 20))
         self.assertEqual(resumo.marmitas_produzidas, 87)
+        self.assertEqual(resumo.consumo_interno, 4)
 
     def test_operation_metrics_count_plate_quantities_not_orders(self):
         self.client.force_login(self.staff_user)
@@ -1994,7 +2007,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(selected, list(response.context["pedidos_concluidos"]))
         self.assertNotIn(older, list(response.context["pedidos_concluidos"]))
-        self.assertContains(response, 'data-closed-total>1</strong>')
+        self.assertContains(response, 'data-closed-total>2</strong>')
 
     def test_orders_admin_api_returns_only_active_orders(self):
         self.client.force_login(self.staff_user)
@@ -2314,6 +2327,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["concluidos_count"], 1)
+        self.assertEqual(payload["total_concluidos_geral"], 1)
         self.assertEqual(payload["cancelados_count"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_concluidos"]], [done.id])
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_cancelados"]], [canceled.id])

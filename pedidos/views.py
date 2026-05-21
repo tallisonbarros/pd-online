@@ -2443,15 +2443,26 @@ def api_metricas_acesso(request):
 def cozinha(request):
     hoje = timezone.localdate()
     data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
+    dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
+    if data_selecionada == hoje:
+        rotulo_data_dashboard = "Hoje"
+    elif data_selecionada == hoje - timedelta(days=1):
+        rotulo_data_dashboard = "Ontem"
+    elif data_selecionada == hoje + timedelta(days=1):
+        rotulo_data_dashboard = "Amanha"
+    else:
+        rotulo_data_dashboard = "Dia selecionado"
 
     if request.method == "POST":
         try:
             marmitas_produzidas = max(int(request.POST.get("marmitas_produzidas") or 0), 0)
+            consumo_interno = max(int(request.POST.get("consumo_interno") or 0), 0)
         except (TypeError, ValueError):
             return HttpResponseBadRequest("Quantidade de marmitas invalida.")
         resumo, _created = ResumoOperacionalDia.objects.get_or_create(data=data_selecionada)
         resumo.marmitas_produzidas = marmitas_produzidas
-        resumo.save(update_fields=["marmitas_produzidas", "atualizado_em"])
+        resumo.consumo_interno = consumo_interno
+        resumo.save(update_fields=["marmitas_produzidas", "consumo_interno", "atualizado_em"])
         return redirect(f"{reverse('pedidos:cozinha')}?data={data_selecionada.isoformat()}")
 
     dashboard = get_dashboard_diaria(data_selecionada)
@@ -2463,6 +2474,8 @@ def cozinha(request):
         {
             "dashboard": dashboard,
             "data_selecionada": data_selecionada,
+            "dia_semana_dashboard": dias_semana[data_selecionada.weekday()],
+            "rotulo_data_dashboard": rotulo_data_dashboard,
             "hoje": hoje,
             "pedidos_novos": pedidos_novos,
         },
@@ -2673,6 +2686,7 @@ def pedidos_concluidos_admin(request):
     base = Pedido.objects.prefetch_related("itens")
     concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada)
     cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada)
+    total_concluidos_geral = base.filter(status=Pedido.Status.FINALIZADO).count()
     return render(
         request,
         "pedidos/pedidos_concluidos_admin.html",
@@ -2682,6 +2696,7 @@ def pedidos_concluidos_admin(request):
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "concluidos_count": concluidos.count(),
+            "total_concluidos_geral": total_concluidos_geral,
             "cancelados_count": cancelados.count(),
             "data_selecionada": data_selecionada,
             "data_anterior": data_selecionada - timedelta(days=1),
@@ -2875,6 +2890,7 @@ def _pedidos_concluidos_payload(data_selecionada=None):
         "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos],
         "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados],
         "concluidos_count": concluidos.count(),
+        "total_concluidos_geral": base.filter(status=Pedido.Status.FINALIZADO).count(),
         "cancelados_count": cancelados.count(),
         **_pedidos_base_counts(base),
     }

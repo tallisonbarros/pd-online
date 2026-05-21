@@ -480,7 +480,7 @@
             ${canceledMarkup}
             <footer class="pedidos-list-footer">
                 <span>Total de pedidos</span>
-                <strong data-closed-total>${escapeHtml(payload.concluidos_count || 0)}</strong>
+                <strong data-closed-total>${escapeHtml(payload.total_concluidos_geral || 0)}</strong>
             </footer>
         `;
     }

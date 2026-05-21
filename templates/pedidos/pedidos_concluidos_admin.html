@@ -13,7 +13,7 @@
         data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}?data={{ data_selecionada|date:'Y-m-d' }}"
         data-status-url-template="{% url 'pedidos:atualizar_status_pedido' 0 %}"
     >
-        <div class="pedidos-workspace">
+        <div class="pedidos-workspace pedidos-workspace--dated">
             {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" concluidos_count=concluidos_count %}
 
             <nav class="ops-period-switch dashboard-date-nav" aria-label="Navegar por dia">
@@ -131,7 +131,7 @@
 
                 <footer class="pedidos-list-footer">
                     <span>Total de pedidos</span>
-                    <strong data-closed-total>{{ concluidos_count }}</strong>
+                    <strong data-closed-total>{{ total_concluidos_geral }}</strong>
                 </footer>
             </section>
         </div>

@@ -60,7 +60,7 @@ def get_dashboard_diaria(data):
         .get("total")
         or 0
     )
-    marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas
+    marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas - operacional.consumo_interno
 
     return {
         "data": data,
@@ -71,6 +71,7 @@ def get_dashboard_diaria(data):
         "pedidos_recorrentes": pedidos_recorrentes,
         "marmitas_vendidas": marmitas_vendidas,
         "marmitas_produzidas": operacional.marmitas_produzidas,
+        "consumo_interno": operacional.consumo_interno,
         "marmitas_excedentes": marmitas_excedentes,
         "operacional": operacional,
         "cards": [
@@ -87,7 +88,10 @@ def get_dashboard_diaria(data):
             {
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
-                "details": [{"label": "Excedente", "value": marmitas_excedentes}],
+                "details": [
+                    {"label": "Consumo interno", "value": operacional.consumo_interno},
+                    {"label": "Excedente", "value": marmitas_excedentes},
+                ],
             },
         ],
     }
