@@ -12,6 +12,7 @@
     let lastFocus = null;
     let currentDetailUrl = "";
     let latestDetailPayload = null;
+    const pendingInlineSaves = new Set();
     const suggestedCustomerPhones = new Set();
 
     function setOpen(isOpen) {
@@ -164,8 +165,19 @@
 
     function normalizePhone(value) {
         let digits = String(value || "").replace(/\D/g, "");
-        if (digits.length > 11 && digits.startsWith("55")) digits = digits.slice(2);
-        return digits;
+        const defaultDdd = "64";
+        if (digits.startsWith("00")) digits = digits.slice(2);
+        if (digits.startsWith("55") && [8, 9, 10, 11].includes(digits.length - 2)) {
+            digits = digits.slice(2);
+        }
+        if (digits.length === 8) {
+            digits = `${defaultDdd}9${digits}`;
+        } else if (digits.length === 9) {
+            digits = `${defaultDdd}${digits}`;
+        } else if (digits.length === 10) {
+            digits = `${digits.slice(0, 2)}9${digits.slice(2)}`;
+        }
+        return digits.length === 11 ? digits : "";
     }
 
     function detailMeta() {
@@ -924,14 +936,28 @@
         formData.set(param, inlineValue);
         inlineForm.__body = formData.toString();
         inlineForm.dataset.saving = "true";
+        let savePromise = null;
         try {
-            const payload = await submitAjaxForm(inlineForm, null, { syncEditor: false });
+            savePromise = submitAjaxForm(inlineForm, null, { syncEditor: false });
+            pendingInlineSaves.add(savePromise);
+            const payload = await savePromise;
             inlineForm.replaceWith(createInlineDisplay(inlineForm, payload));
             if (inlineForm.dataset.field === "telefone") {
-                await suggestCustomerFromPhone(inlineValue);
+                await suggestCustomerFromPhone(modalPedido(payload).telefone || inlineValue);
             }
         } finally {
+            if (savePromise) pendingInlineSaves.delete(savePromise);
             inlineForm.dataset.saving = "false";
+        }
+    }
+
+    async function flushInlineEdits() {
+        const activeInlineForm = document.activeElement?.closest("[data-inline-edit-form]");
+        if (activeInlineForm) {
+            await submitInlineForm(activeInlineForm);
+        }
+        if (pendingInlineSaves.size) {
+            await Promise.allSettled(Array.from(pendingInlineSaves));
         }
     }
 
@@ -1087,6 +1113,7 @@
         const newOrderFinalizeForm = event.target.closest("[data-new-order-finalize-form]");
         if (newOrderFinalizeForm) {
             event.preventDefault();
+            await flushInlineEdits();
             submitAjaxForm(newOrderFinalizeForm);
             return;
         }

@@ -105,8 +105,11 @@ Função: `pedidos.order_services.normalize_phone`
 Regra atual:
 
 1. Remove tudo que não for dígito.
-2. Se o resultado tiver mais de 11 dígitos e começar com `55`, remove o prefixo `55`.
-3. Retorna a sequência final de dígitos.
+2. Remove o prefixo internacional `00` quando existir.
+3. Remove o DDI `55` quando a parte restante tem tamanho compatível com telefone nacional.
+4. Se faltar DDD, assume `64`.
+5. Se vier com 8 dígitos locais, insere o nono dígito `9`.
+6. Retorna somente telefones móveis canônicos com 11 dígitos; entradas incompletas retornam vazio.
 
 Exemplos:
 
@@ -115,6 +118,9 @@ Exemplos:
 | `(64) 99999-0000` | `64999990000` |
 | `64 99999-0000` | `64999990000` |
 | `5564999990000` | `64999990000` |
+| `+55999990000` | `64999990000` |
+| `64 9999-0000` | `64999990000` |
+| `9999-0000` | `64999990000` |
 
 Essa saída alimenta `Cliente.telefone_normalizado`, que é único no banco.
 
@@ -161,7 +167,7 @@ Se já existir, reutiliza o cliente.
 
 ### Atualização de telefone
 
-Se o telefone textual do pedido estiver preenchido e diferente de `cliente.telefone`, o cliente recebe o telefone do pedido.
+Se o telefone do pedido for normalizável e diferente de `cliente.telefone`, o cliente recebe o telefone canônico normalizado.
 
 O identificador real de deduplicação continua sendo `telefone_normalizado`.
 

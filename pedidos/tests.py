@@ -14,7 +14,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
-from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, sync_customer_from_order
+from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, normalize_phone, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
 
@@ -25,6 +25,28 @@ class ProductionHostSettingsTests(SimpleTestCase):
         self.assertIn("www.pratodelivery.com.br", settings.ALLOWED_HOSTS)
         self.assertIn("pratodelivery.com.br", settings.ALLOWED_HOSTS)
         self.assertIn("https://www.pratodelivery.com.br", settings.CSRF_TRUSTED_ORIGINS)
+
+
+class PhoneNormalizationTests(SimpleTestCase):
+    def test_normalizes_mobile_phone_variants_to_canonical_digits(self):
+        variants = [
+            "64992926704",
+            "+55 64 99292-6704",
+            "+5564992926704",
+            "+5592926704",
+            "64 992926704",
+            "992926704",
+            "92926704",
+            "(64) 9292-6704",
+            "0055 64 99292-6704",
+        ]
+
+        for value in variants:
+            with self.subTest(value=value):
+                self.assertEqual(normalize_phone(value), "64992926704")
+
+    def test_rejects_values_that_cannot_be_completed_to_mobile_phone(self):
+        self.assertEqual(normalize_phone("123"), "")
 
 
 class GoogleMapsRouteUrlTests(TestCase):
@@ -280,10 +302,10 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-dashboard-card="Pedidos finalizados">3</strong>')
-        self.assertContains(response, 'data-dashboard-card="Pedidos recorrentes">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
+        self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Recorrentes">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Consumo interno">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
@@ -1004,7 +1026,9 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         pedido.refresh_from_db()
         self.assertEqual(pedido.nome_cliente, "Beth")
+        self.assertEqual(pedido.telefone, "64999999999")
         self.assertEqual(response.json()["pedido"]["nome_cliente"], "Beth")
+        self.assertEqual(response.json()["pedido"]["telefone"], "64999999999")
 
     def test_superuser_can_delete_order_from_context_action(self):
         superuser = get_user_model().objects.create_superuser(username="admin_delete", password="senha")
@@ -1313,7 +1337,7 @@ class PedidoDetalheAdminTests(TestCase):
 
         pedido.refresh_from_db()
         self.assertEqual(pedido.nome_cliente, "Cliente Editado")
-        self.assertEqual(pedido.telefone, "6411112222")
+        self.assertEqual(pedido.telefone, "64911112222")
         self.assertFalse(pedido.enviar_talheres)
         self.assertEqual(pedido.observacao_geral, "Sem cebola")
 
@@ -1774,6 +1798,7 @@ class PedidoDetalheAdminTests(TestCase):
 
         self.assertEqual(first_customer.id, second_customer.id)
         self.assertEqual(Cliente.objects.count(), 1)
+        self.assertEqual(Cliente.objects.get().telefone, "64999990000")
         self.assertEqual(Cliente.objects.get().pedidos.count(), 2)
         self.assertEqual(EnderecoCliente.objects.count(), 2)
         self.assertEqual(second.cliente_id, first_customer.id)
@@ -2222,6 +2247,42 @@ class PedidoDetalheAdminTests(TestCase):
         entry = PedidoListaImpressao.objects.get()
         self.assertEqual(response.json()["id"], entry.id)
         self.assertEqual(entry.nome_cliente, "Cliente Manual")
+        self.assertEqual(entry.public_token, pedido.public_token)
+
+    def test_finalizing_draft_print_queue_uses_synced_customer_name(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        PedidoListaImpressao.objects.all().delete()
+        Cliente.objects.create(
+            telefone_normalizado="64999999999",
+            telefone="(64) 99999-9999",
+            nome="Cliente Sincronizado",
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="(64) 99999-9999",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.RASCUNHO,
+            total=Decimal("0.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Marmita",
+            preco_snapshot=Decimal("20.00"),
+            quantidade=1,
+            subtotal=Decimal("20.00"),
+        )
+
+        response = self.client.post(f"/controle/pedido/{pedido.id}/finalizar-novo/")
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        entry = PedidoListaImpressao.objects.get()
+        self.assertEqual(pedido.nome_cliente, "Cliente Sincronizado")
+        self.assertEqual(entry.nome_cliente, "Cliente Sincronizado")
         self.assertEqual(entry.public_token, pedido.public_token)
 
     def test_approval_orders_admin_api_returns_realtime_queue(self):

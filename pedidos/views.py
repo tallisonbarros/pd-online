@@ -1522,7 +1522,7 @@ def criar_pedido(request):
         return HttpResponseBadRequest("Carrinho vazio.")
 
     nome_cliente = request.POST.get("nome_cliente", "").strip() or "Cliente"
-    telefone = request.POST.get("telefone", "").strip()
+    telefone = normalize_phone(request.POST.get("telefone", ""))
     rua = request.POST.get("rua", "").strip()
     numero = request.POST.get("numero", "").strip()
     bairro = request.POST.get("bairro", "").strip()
@@ -3264,7 +3264,7 @@ def atualizar_dados_pedido(request, pedido_id):
         pedido.save(update_fields=["nome_cliente"])
         sync_customer_from_order(pedido)
     elif field == "telefone":
-        pedido.telefone = _safe_text(request.POST.get("value"))
+        pedido.telefone = normalize_phone(request.POST.get("value"))
         update_fields = ["telefone"]
         if pedido.status == Pedido.Status.RASCUNHO:
             cliente = Cliente.objects.filter(telefone_normalizado=normalize_phone(pedido.telefone)).first()

@@ -34,11 +34,23 @@ def catalog_price(item, canal=None, use_ifood=False):
     return getattr(item, "preco", None) or Decimal("0.00")
 
 
-def normalize_phone(value):
+def normalize_phone(value, default_ddd="64"):
     digits = "".join(char for char in str(value or "") if char.isdigit())
-    if len(digits) > 11 and digits.startswith("55"):
+    ddd = "".join(char for char in str(default_ddd or "") if char.isdigit())
+
+    if digits.startswith("00"):
         digits = digits[2:]
-    return digits
+    if digits.startswith("55") and len(digits[2:]) in {8, 9, 10, 11}:
+        digits = digits[2:]
+
+    if len(digits) == 8:
+        digits = f"{ddd}9{digits}"
+    elif len(digits) == 9:
+        digits = f"{ddd}{digits}"
+    elif len(digits) == 10:
+        digits = f"{digits[:2]}9{digits[2:]}"
+
+    return digits if len(digits) == 11 else ""
 
 
 def _order_name_is_placeholder(value):
@@ -75,7 +87,7 @@ def sync_customer_from_order(pedido):
     cliente, created = Cliente.objects.get_or_create(
         telefone_normalizado=telefone_normalizado,
         defaults={
-            "telefone": safe_text(pedido.telefone),
+            "telefone": telefone_normalizado,
             "nome": nome_cliente,
             "primeiro_pedido_em": pedido.criado_em,
             "ultimo_pedido_em": pedido.criado_em,
@@ -83,8 +95,8 @@ def sync_customer_from_order(pedido):
     )
 
     update_fields = []
-    if safe_text(pedido.telefone) and cliente.telefone != safe_text(pedido.telefone):
-        cliente.telefone = safe_text(pedido.telefone)
+    if cliente.telefone != telefone_normalizado:
+        cliente.telefone = telefone_normalizado
         update_fields.append("telefone")
     if not should_inherit_customer_name and not cliente.nome_editado_manualmente and nome_cliente and cliente.nome != nome_cliente:
         cliente.nome = nome_cliente

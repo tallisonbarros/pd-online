@@ -78,12 +78,10 @@ def get_dashboard_diaria(data):
             {
                 "label": "Pedidos finalizados",
                 "value": total_pedidos,
-                "details": [{"label": "Marmitas", "value": marmitas_vendidas}],
-            },
-            {
-                "label": "Pedidos recorrentes",
-                "value": pedidos_recorrentes,
-                "details": [],
+                "details": [
+                    {"label": "Recorrentes", "value": pedidos_recorrentes},
+                    {"label": "Marmitas", "value": marmitas_vendidas},
+                ],
             },
             {
                 "label": "Marmitas produzidas",

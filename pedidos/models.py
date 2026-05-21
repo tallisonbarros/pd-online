@@ -292,6 +292,9 @@ class Pedido(models.Model):
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"atualizado_em"}
         super().save(*args, **kwargs)
         if entering_production:
+            from .order_services import sync_customer_from_order
+
+            sync_customer_from_order(self)
             PedidoListaImpressao.objects.create(
                 pedido=self,
                 numero=self.numero,
