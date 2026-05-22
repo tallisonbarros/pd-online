@@ -216,6 +216,12 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
+    def test_admin_login_defaults_to_control_area(self):
+        response = self.client.get("/admin/login/?next=/admin/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="next" value="/controle/"')
+
     def test_live_orders_api_requires_staff_authentication(self):
         response = self.client.get("/controle/api/pedidos/")
 
@@ -238,6 +244,17 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-label="Navegar por dia"')
+
+    def test_dashboard_logout_returns_to_login_page(self):
+        self.client.force_login(self.gerente_user)
+
+        page_response = self.client.get("/controle/")
+        self.assertContains(page_response, 'name="next" value="/admin/login/"')
+
+        response = self.client.post("/admin/logout/", {"next": "/admin/login/"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/admin/login/")
 
     def test_dashboard_header_uses_selected_day_context(self):
         self.client.force_login(self.gerente_user)
@@ -323,16 +340,21 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-dashboard-card="Pedidos finalizados"')
-        self.assertContains(response, "\n                        3\n                        ")
+        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados">\n                            3')
         self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Recorrentes">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
-        self.assertContains(response, 'data-dashboard-card-cost="Marmitas produzidas">R$ 20,00</span>')
-        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Custo insumos">R$ 160,00</b>')
+        self.assertNotContains(response, 'data-dashboard-card-cost="Marmitas produzidas"')
+        self.assertNotContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Custo insumos"')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Consumo interno">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
+        self.assertNotContains(response, 'data-dashboard-card="Custos"')
+        self.assertContains(response, "<p>Custos</p>")
+        self.assertContains(response, 'data-dashboard-card-detail="Custos:Por marmita">R$ 20,00</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Custos:Consumo interno">R$ 20,00</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Custos:Excedente">R$ 40,00</b>')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.gerente_user)
@@ -1758,6 +1780,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(response, "/controle/api/catalogo-editor/")
         pedido = Pedido.objects.get()
         self.assertEqual(pedido.status, Pedido.Status.RASCUNHO)
+        self.assertFalse(pedido.enviar_talheres)
 
     def test_manager_can_finalize_new_order_from_detail_modal_context(self):
         self.client.force_login(self.staff_user)
@@ -3257,6 +3280,7 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(payload["pedido"]["token"], pedido.public_token)
         self.assertEqual(payload["success_url"], f"/pedido/{pedido.public_token}/sucesso/")
         self.assertEqual(pedido.checkout_key, "entrega:checkout-key-1234567890")
+        self.assertFalse(pedido.enviar_talheres)
         self.assertIn(ORDER_HISTORY_COOKIE, response.cookies)
 
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
@@ -3521,6 +3545,19 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(pedido.total, Decimal("24.90"))
         self.assertFalse(pedido.enviar_talheres)
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
+
+    def test_pickup_order_defaults_to_no_cutlery_when_field_is_missing(self):
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "Retiro no balcao",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Pedido.objects.get().enviar_talheres)
 
     def test_pickup_order_applies_fifth_meal_promotion(self):
         response = self.client.post(

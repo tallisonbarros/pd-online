@@ -100,8 +100,10 @@
                     <span>Senha</span>
                     <input type="password" name="password" autocomplete="current-password" required id="id_password">
                 </label>
-                {% if next %}
+                {% if next and next != "/admin/" %}
                     <input type="hidden" name="next" value="{{ next }}">
+                {% else %}
+                    <input type="hidden" name="next" value="{% url 'pedidos:cozinha' %}">
                 {% endif %}
                 <button type="submit" class="primary-button wide">Entrar</button>
             </form>

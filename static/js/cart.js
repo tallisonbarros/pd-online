@@ -558,7 +558,7 @@
                 JSON.stringify({
                     nome,
                     observacao_geral: String(draft?.observacao_geral || "").trim(),
-                    enviar_talheres: draft?.enviar_talheres === "nao" ? "nao" : "sim",
+                    enviar_talheres: draft?.enviar_talheres === "sim" ? "sim" : "nao",
                 })
             );
         } catch (error) {
@@ -3364,7 +3364,7 @@
         const draft = getCheckoutDraft();
         if (checkoutNamePayloadInput) checkoutNamePayloadInput.value = draft.nome || getCheckoutCustomerName();
         if (orderNotePayloadInput) orderNotePayloadInput.value = draft.observacao_geral || "";
-        if (talheresPayloadInput) talheresPayloadInput.value = draft.enviar_talheres === "nao" ? "nao" : "sim";
+        if (talheresPayloadInput) talheresPayloadInput.value = draft.enviar_talheres === "sim" ? "sim" : "nao";
         checkoutNameInput?.addEventListener("input", clearCheckoutFieldHighlights);
         savedProfileOpenButton?.addEventListener("click", clearCheckoutFieldHighlights);
         checkoutAddressSummary?.addEventListener("click", clearCheckoutFieldHighlights);
@@ -3608,7 +3608,7 @@
             if (pickupPayloadInput) pickupPayloadInput.value = JSON.stringify(cart);
             if (pickupNameInput) pickupNameInput.value = String(draftPayload.nome || "").trim();
             if (pickupNoteInput) pickupNoteInput.value = String(draftPayload.observacao_geral || "").trim();
-            if (pickupTalheresInput) pickupTalheresInput.value = draftPayload.enviar_talheres === "nao" ? "nao" : "sim";
+            if (pickupTalheresInput) pickupTalheresInput.value = draftPayload.enviar_talheres === "sim" ? "sim" : "nao";
             if (pickupCouponInput) pickupCouponInput.value = getCheckoutCouponCode();
             if (pickupKnownOrderTokensInput) pickupKnownOrderTokensInput.value = JSON.stringify(getKnownOrderTokens());
             if (pickupCheckoutKeyInput) pickupCheckoutKeyInput.value = getOrCreateCheckoutKey("retirada");
@@ -3707,7 +3707,7 @@
         const draft = getCheckoutDraft();
         if (nameInput) nameInput.value = draft.nome || getCheckoutCustomerName();
         if (orderNoteInput) orderNoteInput.value = draft.observacao_geral || "";
-        if (talheresToggleInput) talheresToggleInput.checked = draft.enviar_talheres !== "nao";
+        if (talheresToggleInput) talheresToggleInput.checked = draft.enviar_talheres === "sim";
         syncCartCouponUi();
 
         function render() {

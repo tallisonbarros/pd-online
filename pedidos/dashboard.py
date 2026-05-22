@@ -66,6 +66,8 @@ def get_dashboard_diaria(data):
     if operacional.marmitas_produzidas:
         custo_unitario_marmita = (operacional.custo_insumos / Decimal(operacional.marmitas_produzidas)).quantize(Decimal("0.01"))
     custo_unitario_marmita_label = f"R$ {custo_unitario_marmita:.2f}".replace(".", ",")
+    custo_consumo_interno = (custo_unitario_marmita * Decimal(operacional.consumo_interno)).quantize(Decimal("0.01"))
+    custo_excedente = (custo_unitario_marmita * Decimal(max(marmitas_excedentes, 0))).quantize(Decimal("0.01"))
 
     return {
         "data": data,
@@ -80,6 +82,8 @@ def get_dashboard_diaria(data):
         "custo_insumos": operacional.custo_insumos,
         "custo_unitario_marmita": custo_unitario_marmita,
         "custo_unitario_marmita_label": custo_unitario_marmita_label,
+        "custo_consumo_interno": custo_consumo_interno,
+        "custo_excedente": custo_excedente,
         "marmitas_excedentes": marmitas_excedentes,
         "operacional": operacional,
         "cards": [
@@ -94,11 +98,19 @@ def get_dashboard_diaria(data):
             {
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
-                "value_badge": custo_unitario_marmita_label,
                 "details": [
-                    {"label": "Custo insumos", "value": f"R$ {operacional.custo_insumos:.2f}".replace(".", ",")},
                     {"label": "Consumo interno", "value": operacional.consumo_interno},
                     {"label": "Excedente", "value": marmitas_excedentes},
+                ],
+            },
+            {
+                "label": "Custos",
+                "value": "",
+                "variant": "discreet",
+                "details": [
+                    {"label": "Por marmita", "value": custo_unitario_marmita_label},
+                    {"label": "Consumo interno", "value": f"R$ {custo_consumo_interno:.2f}".replace(".", ",")},
+                    {"label": "Excedente", "value": f"R$ {custo_excedente:.2f}".replace(".", ",")},
                 ],
             },
         ],

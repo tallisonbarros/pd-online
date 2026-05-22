@@ -6404,6 +6404,21 @@ fieldset.field {
     font-size: 1rem;
 }
 
+.ops-kpi-card--discreet {
+    background: rgba(255, 253, 250, 0.82);
+    box-shadow: 0 8px 18px rgba(34, 19, 17, 0.045);
+}
+
+.ops-kpi-card--discreet .dashboard-kpi-value {
+    color: #6f574d;
+    font-size: 2rem;
+}
+
+.ops-kpi-card--discreet p,
+.ops-kpi-card--discreet span {
+    color: #7b675d;
+}
+
 .ops-kpi-card--fulfillment {
     position: relative;
     overflow: hidden;

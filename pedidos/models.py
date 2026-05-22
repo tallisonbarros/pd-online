@@ -168,7 +168,7 @@ class Pedido(models.Model):
     tipo_coleta = models.CharField(max_length=8, choices=TipoColeta.choices, default=TipoColeta.ENTREGA)
     icone_pedido = models.CharField(max_length=80, blank=True)
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
-    enviar_talheres = models.BooleanField(default=True)
+    enviar_talheres = models.BooleanField(default=False)
     canal = models.CharField(max_length=12, choices=Canal.choices, default=Canal.BALCAO)
     ifood = models.BooleanField(default=False)
     observacao_geral = models.TextField(blank=True)

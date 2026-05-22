@@ -21,6 +21,7 @@
                 <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
                 <form method="post" action="/admin/logout/">
                     {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'admin:login' %}">
                     <button type="submit" class="ops-logout">Sair</button>
                 </form>
             </div>
@@ -28,14 +29,16 @@
 
         <section class="ops-kpis" aria-label="Resumo do dia">
             {% for card in dashboard.cards %}
-                <article class="ops-kpi-card">
+                <article class="ops-kpi-card{% if card.variant %} ops-kpi-card--{{ card.variant }}{% endif %}">
                     <p>{{ card.label }}</p>
-                    <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.label }}">
-                        {{ card.value }}
-                        {% if card.value_badge %}
-                            <span class="dashboard-kpi-cost" data-dashboard-card-cost="{{ card.label }}">{{ card.value_badge }}</span>
-                        {% endif %}
-                    </strong>
+                    {% if card.value %}
+                        <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.label }}">
+                            {{ card.value }}
+                            {% if card.value_badge %}
+                                <span class="dashboard-kpi-cost" data-dashboard-card-cost="{{ card.label }}">{{ card.value_badge }}</span>
+                            {% endif %}
+                        </strong>
+                    {% endif %}
                     {% for detail in card.details %}
                         <span class="dashboard-card-detail">
                             {{ detail.label }} <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>

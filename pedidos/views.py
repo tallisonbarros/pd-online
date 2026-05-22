@@ -1545,7 +1545,7 @@ def criar_pedido(request):
     lote_quadra = request.POST.get("lote_quadra", "").strip()
     complemento = request.POST.get("complemento", "").strip()
     ponto_referencia = request.POST.get("ponto_referencia", "").strip()
-    enviar_talheres_raw = request.POST.get("enviar_talheres", "sim").strip().lower()
+    enviar_talheres_raw = request.POST.get("enviar_talheres", "nao").strip().lower()
     observacao_geral = request.POST.get("observacao_geral", "").strip()
     valor_frete_raw = request.POST.get("valor_frete", "").strip()
     distancia_km_raw = request.POST.get("distancia_km", "").strip()
@@ -1679,7 +1679,7 @@ def criar_retirada(request):
 
     nome_cliente = request.POST.get("nome_cliente", "").strip() or "Cliente"
     observacao_geral = request.POST.get("observacao_geral", "").strip()
-    enviar_talheres_raw = request.POST.get("enviar_talheres", "sim").strip().lower()
+    enviar_talheres_raw = request.POST.get("enviar_talheres", "nao").strip().lower()
     cupom_codigo = _normalize_coupon_code(request.POST.get("cupom_codigo"))
     checkout_key = _checkout_key_from_request(request, "retirada")
     if checkout_key:
@@ -3097,7 +3097,7 @@ def pedido_novo_admin(request):
         endereco="Retirada no local",
         tipo_coleta=Pedido.TipoColeta.RETIRADA,
         forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
-        enviar_talheres=True,
+        enviar_talheres=False,
         canal=canal,
         ifood=canal == Pedido.Canal.IFOOD,
         status=Pedido.Status.RASCUNHO,
