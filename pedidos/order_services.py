@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import unicodedata
 
 from django.db.models import Sum
 from django.utils import timezone
@@ -6,8 +7,19 @@ from django.utils import timezone
 from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
 
 
+DUPLA_VARIACOES_DESCONTO = Decimal("5.10")
+DUPLA_VARIACOES_PRATOS = ("estrogonofe", "picadinho")
+DUPLA_VARIACOES_OPCOES = ("frango", "fraldinha")
+
+
 def safe_text(value):
     return str(value or "").strip()
+
+
+def normalize_text_key(value):
+    normalized = unicodedata.normalize("NFD", safe_text(value))
+    without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return without_accents.casefold().strip()
 
 
 def money_decimal(value):
@@ -294,6 +306,44 @@ def calcular_promocao_marmitas(pedido):
     return {"descricao": descricao, "discount": desconto}
 
 
+def calcular_promocao_dupla_variacoes(pedido):
+    pares_por_prato = {}
+    for item in pedido.itens.all():
+        if not item.prato_id:
+            continue
+        nome_key = normalize_text_key(item.nome_prato_snapshot)
+        if not any(prato_key in nome_key for prato_key in DUPLA_VARIACOES_PRATOS):
+            continue
+        variacao_key = normalize_text_key(item.variacao_nome_snapshot)
+        if variacao_key not in DUPLA_VARIACOES_OPCOES:
+            continue
+        prato_promocao = next(prato_key for prato_key in DUPLA_VARIACOES_PRATOS if prato_key in nome_key)
+        pares_por_prato.setdefault(prato_promocao, {opcao: 0 for opcao in DUPLA_VARIACOES_OPCOES})
+        pares_por_prato[prato_promocao][variacao_key] += max(item.quantidade, 0)
+
+    pares = sum(min(quantidades.values()) for quantidades in pares_por_prato.values())
+    if pares <= 0:
+        return {"descricao": "", "discount": Decimal("0.00")}
+
+    desconto = (DUPLA_VARIACOES_DESCONTO * pares).quantize(Decimal("0.01"))
+    descricao = "Dupla frango + fraldinha" if pares == 1 else f"{pares} duplas frango + fraldinha"
+    return {"descricao": descricao, "discount": desconto}
+
+
+def calcular_promocoes_pedido(pedido):
+    promocoes = [
+        calcular_promocao_marmitas(pedido),
+        calcular_promocao_dupla_variacoes(pedido),
+    ]
+    promocoes = [promo for promo in promocoes if promo["discount"] > 0]
+    if not promocoes:
+        return {"descricao": "", "discount": Decimal("0.00")}
+    return {
+        "descricao": " + ".join(promo["descricao"] for promo in promocoes if promo["descricao"]),
+        "discount": sum((promo["discount"] for promo in promocoes), Decimal("0.00")).quantize(Decimal("0.01")),
+    }
+
+
 def validar_cupom(codigo, subtotal, frete=Decimal("0.00"), pedido=None):
     codigo = normalize_coupon_code(codigo)
     subtotal = money_decimal(subtotal)
@@ -326,7 +376,7 @@ def validar_cupom(codigo, subtotal, frete=Decimal("0.00"), pedido=None):
 
 def recalculate_order_totals(pedido, cupom_codigo=None):
     subtotal = pedido.itens.aggregate(total_sum=Sum("subtotal")).get("total_sum") or Decimal("0.00")
-    promocao_result = calcular_promocao_marmitas(pedido)
+    promocao_result = calcular_promocoes_pedido(pedido)
     promocao_desconto = min(promocao_result["discount"], subtotal)
     subtotal_com_promocao = max(subtotal - promocao_desconto, Decimal("0.00"))
     codigo = normalize_coupon_code(cupom_codigo if cupom_codigo is not None else pedido.cupom_codigo)

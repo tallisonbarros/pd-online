@@ -222,13 +222,14 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
-    def test_staff_without_gerente_class_cannot_access_dashboard(self):
+    def test_staff_without_gerente_class_enters_operational_control(self):
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/controle/")
+        response = self.client.get("/controle/", follow=True)
 
-        self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "classe Gerente", status_code=403)
+        self.assertRedirects(response, "/controle/operacao/")
+        self.assertContains(response, 'data-page="cozinha-operacao"')
+        self.assertNotContains(response, ">Dashboard<")
 
     def test_gerente_can_access_dashboard(self):
         self.client.force_login(self.gerente_user)
@@ -3541,6 +3542,70 @@ class CriarPedidoFreteTests(TestCase):
         success_response = self.client.get(response.url)
         self.assertContains(success_response, "5ª marmita grátis")
         self.assertContains(success_response, "- R$ 24,90")
+
+    def test_pickup_order_applies_frango_fraldinha_pair_promotion(self):
+        prato = Prato.objects.create(
+            nome="Estrogonofe",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 1, "preco": "25.00", "variacao": "Frango"},
+                        {"prato_id": prato.id, "quantidade": 1, "preco": "25.00", "variacao": "Fraldinha"},
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.itens.count(), 2)
+        self.assertEqual(pedido.total_sem_desconto, Decimal("50.00"))
+        self.assertEqual(pedido.promocao_descricao, "Dupla frango + fraldinha")
+        self.assertEqual(pedido.promocao_desconto, Decimal("5.10"))
+        self.assertEqual(pedido.total, Decimal("44.90"))
+        success_response = self.client.get(response.url)
+        self.assertContains(success_response, "Dupla frango + fraldinha")
+        self.assertContains(success_response, "- R$ 5,10")
+
+    def test_pickup_order_applies_one_pair_discount_per_matching_variation_pair(self):
+        prato = Prato.objects.create(
+            nome="Picadinho",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 2, "preco": "25.00", "variacao": "Frango"},
+                        {"prato_id": prato.id, "quantidade": 1, "preco": "25.00", "variacao": "Fraldinha"},
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.total_sem_desconto, Decimal("75.00"))
+        self.assertEqual(pedido.promocao_descricao, "Dupla frango + fraldinha")
+        self.assertEqual(pedido.promocao_desconto, Decimal("5.10"))
+        self.assertEqual(pedido.total, Decimal("69.90"))
 
     @override_settings(RESTAURANT_WHATSAPP="556488887777")
     def test_pickup_order_creation_uses_whatsapp_env_fallback(self):

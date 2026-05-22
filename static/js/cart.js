@@ -100,6 +100,37 @@
         return amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     }
 
+    const pairedVariationPromo = {
+        discountPerPair: 5.10,
+        dishKeys: ["estrogonofe", "picadinho"],
+        variationKeys: ["frango", "fraldinha"],
+    };
+
+    function calculatePairedVariationPromo(cart) {
+        const pairsByDish = {};
+        (Array.isArray(cart) ? cart : []).forEach((item) => {
+            if (cartItemType(item) !== "prato") return;
+            const nameKey = normalizeText(item.nome);
+            const dishKey = pairedVariationPromo.dishKeys.find((candidate) => nameKey.includes(candidate));
+            if (!dishKey) return;
+            const variationKey = normalizeText(item.variacao || item.variacao_nome);
+            if (!pairedVariationPromo.variationKeys.includes(variationKey)) return;
+            if (!pairsByDish[dishKey]) {
+                pairsByDish[dishKey] = Object.fromEntries(pairedVariationPromo.variationKeys.map((key) => [key, 0]));
+            }
+            pairsByDish[dishKey][variationKey] += Math.max(0, Number(item.quantidade || 0));
+        });
+
+        const pairs = Object.values(pairsByDish).reduce((total, quantities) => {
+            return total + Math.min(...pairedVariationPromo.variationKeys.map((key) => quantities[key] || 0));
+        }, 0);
+        return {
+            pairs,
+            discount: pairs * pairedVariationPromo.discountPerPair,
+            label: pairs === 1 ? "Dupla frango + fraldinha" : `${pairs} duplas frango + fraldinha`,
+        };
+    }
+
     function calculateMealPromo(cart) {
         const mealItems = (Array.isArray(cart) ? cart : []).filter((item) => cartItemType(item) === "prato");
         const mealCount = mealItems.reduce((total, item) => total + Number(item.quantidade || 0), 0);
@@ -107,27 +138,26 @@
         const cycleCount = mealCount % 5;
         const progressCount = freeMeals > 0 && cycleCount === 0 ? 4 : Math.min(cycleCount, 4);
         const remaining = Math.max(4 - progressCount, 0);
-        if (freeMeals <= 0) {
-            return {
-                freeMeals: 0,
-                discount: 0,
-                mealCount,
-                progressCount,
-                remaining,
-                readyForFreeMeal: progressCount >= 4,
-                label: "",
-            };
-        }
+        const pairedPromo = calculatePairedVariationPromo(cart);
         const mealPrices = mealItems.map((item) => parsePrice(item.preco)).filter((price) => price > 0);
         const unitPrice = mealPrices.length ? Math.min(...mealPrices) : 0;
+        const freeMealDiscount = freeMeals > 0 ? unitPrice * freeMeals : 0;
+        const labels = [];
+        if (freeMeals > 0) {
+            labels.push(freeMeals === 1 ? "5ª marmita grátis" : `${freeMeals} marmitas grátis`);
+        }
+        if (pairedPromo.pairs > 0) {
+            labels.push(pairedPromo.label);
+        }
         return {
             freeMeals,
-            discount: unitPrice * freeMeals,
+            pairedVariationPairs: pairedPromo.pairs,
+            discount: freeMealDiscount + pairedPromo.discount,
             mealCount,
             progressCount,
             remaining,
-            readyForFreeMeal: progressCount >= 4 && cycleCount !== 0,
-            label: freeMeals === 1 ? "5ª marmita grátis" : `${freeMeals} marmitas grátis`,
+            readyForFreeMeal: freeMeals > 0 ? progressCount >= 4 && cycleCount !== 0 : progressCount >= 4,
+            label: labels.join(" + "),
         };
     }
 

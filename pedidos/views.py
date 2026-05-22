@@ -17,7 +17,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import ExtractHour, TruncDate
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -2452,7 +2452,7 @@ def api_metricas_acesso(request):
 @staff_member_required(login_url="/admin/login/")
 def cozinha(request):
     if not user_is_gerente(request.user):
-        return HttpResponseForbidden("Dashboard disponivel apenas para usuarios da classe Gerente.")
+        return redirect("pedidos:cozinha_operacao")
 
     hoje = timezone.localdate()
     data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
