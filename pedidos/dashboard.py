@@ -51,8 +51,13 @@ def get_dashboard_diaria(data):
         }
         for value, label in Pedido.Canal.choices
     ]
+    principal_canal = max(canais, key=lambda canal: canal["total"]) if canais else None
+    for canal in canais:
+        canal["is_primary"] = bool(principal_canal and principal_canal["total"] > 0 and canal["key"] == principal_canal["key"])
 
     total_pedidos = len(pedidos_do_dia)
+    faturamento_total = sum((pedido.total or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
+    custo_entrega = sum((pedido.valor_frete or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
     pedidos_recorrentes = _recurring_order_count(pedidos_do_dia, data)
     marmitas_vendidas = int(
         _finished_orders_for_day(data)
@@ -62,18 +67,25 @@ def get_dashboard_diaria(data):
         or 0
     )
     marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas - operacional.consumo_interno
+    custo_total_producao = operacional.custo_insumos
+    custo_total_operacional = (custo_total_producao + custo_entrega).quantize(Decimal("0.01"))
     custo_unitario_marmita = Decimal("0.00")
     if operacional.marmitas_produzidas:
-        custo_unitario_marmita = (operacional.custo_insumos / Decimal(operacional.marmitas_produzidas)).quantize(Decimal("0.01"))
+        custo_unitario_marmita = (custo_total_producao / Decimal(operacional.marmitas_produzidas)).quantize(Decimal("0.01"))
     custo_unitario_marmita_label = f"R$ {custo_unitario_marmita:.2f}".replace(".", ",")
-    custo_consumo_interno = (custo_unitario_marmita * Decimal(operacional.consumo_interno)).quantize(Decimal("0.01"))
-    custo_excedente = (custo_unitario_marmita * Decimal(max(marmitas_excedentes, 0))).quantize(Decimal("0.01"))
+    custo_unitario_marmita_vendida = Decimal("0.00")
+    if marmitas_vendidas:
+        custo_unitario_marmita_vendida = (custo_total_producao / Decimal(marmitas_vendidas)).quantize(Decimal("0.01"))
+    custo_unitario_marmita_vendida_label = f"R$ {custo_unitario_marmita_vendida:.2f}".replace(".", ",")
+    resultado_operacional = (faturamento_total - custo_total_operacional).quantize(Decimal("0.01"))
 
     return {
         "data": data,
         "data_anterior": data - timedelta(days=1),
         "data_proxima": data + timedelta(days=1),
         "total_pedidos": total_pedidos,
+        "faturamento_total": faturamento_total,
+        "custo_entrega": custo_entrega,
         "canais": canais,
         "pedidos_recorrentes": pedidos_recorrentes,
         "marmitas_vendidas": marmitas_vendidas,
@@ -82,35 +94,62 @@ def get_dashboard_diaria(data):
         "custo_insumos": operacional.custo_insumos,
         "custo_unitario_marmita": custo_unitario_marmita,
         "custo_unitario_marmita_label": custo_unitario_marmita_label,
-        "custo_consumo_interno": custo_consumo_interno,
-        "custo_excedente": custo_excedente,
+        "custo_unitario_marmita_vendida": custo_unitario_marmita_vendida,
+        "custo_unitario_marmita_vendida_label": custo_unitario_marmita_vendida_label,
+        "custo_total_producao": custo_total_producao,
+        "custo_total_operacional": custo_total_operacional,
+        "resultado_operacional": resultado_operacional,
         "marmitas_excedentes": marmitas_excedentes,
         "operacional": operacional,
+        "balanco": {
+            "label": "Balanco geral",
+            "value": f"R$ {resultado_operacional:.2f}".replace(".", ","),
+            "details": [
+                {"label": "Receita", "value": f"+ R$ {faturamento_total:.2f}".replace(".", ",")},
+                {"label": "Custos producao", "value": f"- R$ {custo_total_producao:.2f}".replace(".", ",")},
+                {"label": "Custo entrega", "value": f"- R$ {custo_entrega:.2f}".replace(".", ",")},
+            ],
+            "footer_details": [
+                {"label": "Resultado", "value": f"R$ {resultado_operacional:.2f}".replace(".", ",")},
+            ],
+        },
         "cards": [
             {
-                "label": "Pedidos finalizados",
-                "value": total_pedidos,
+                "label": "Marmitas vendidas",
+                "value": marmitas_vendidas,
                 "details": [
-                    {"label": "Recorrentes", "value": pedidos_recorrentes},
-                    {"label": "Marmitas", "value": marmitas_vendidas},
+                    {
+                        "label": "Pedidos",
+                        "value": total_pedidos,
+                        "secondary_label": "Recorrentes",
+                        "secondary_value": pedidos_recorrentes,
+                    },
                 ],
+                "channels": canais,
             },
             {
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
                 "details": [
+                    {"label": "Vendidas", "value": marmitas_vendidas},
                     {"label": "Consumo interno", "value": operacional.consumo_interno},
                     {"label": "Excedente", "value": marmitas_excedentes},
                 ],
             },
             {
-                "label": "Custos",
-                "value": "",
+                "label": "Custos de producao",
+                "value": f"R$ {custo_total_producao:.2f}".replace(".", ","),
                 "variant": "discreet",
+                "is_wide": True,
+                "group": "costs",
                 "details": [
-                    {"label": "Por marmita", "value": custo_unitario_marmita_label},
-                    {"label": "Consumo interno", "value": f"R$ {custo_consumo_interno:.2f}".replace(".", ",")},
-                    {"label": "Excedente", "value": f"R$ {custo_excedente:.2f}".replace(".", ",")},
+                    {"label": "Insumos", "value": f"R$ {operacional.custo_insumos:.2f}".replace(".", ","), "muted": True},
+                    {"label": "Equipe", "value": "R$ 0,00", "muted": True, "mock": True},
+                    {"label": "Embalagens", "value": "R$ 0,00", "muted": True, "mock": True},
+                ],
+                "footer_details": [
+                    {"label": "Custo por marmita produzida", "value": custo_unitario_marmita_label, "hint": "Custos / produzidas"},
+                    {"label": "Custo por marmita vendida", "value": custo_unitario_marmita_vendida_label, "hint": "Custos / vendidas"},
                 ],
             },
         ],

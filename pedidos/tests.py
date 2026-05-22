@@ -294,6 +294,8 @@ class CozinhaAccessTests(TestCase):
             forma_pagamento=Pedido.FormaPagamento.PIX,
             status=Pedido.Status.FINALIZADO,
             canal=Pedido.Canal.BALCAO,
+            total=Decimal("100.00"),
+            valor_frete=Decimal("10.00"),
         )
         site = Pedido.objects.create(
             nome_cliente="Cliente Novo",
@@ -302,6 +304,8 @@ class CozinhaAccessTests(TestCase):
             forma_pagamento=Pedido.FormaPagamento.PIX,
             status=Pedido.Status.FINALIZADO,
             canal=Pedido.Canal.SITE,
+            total=Decimal("80.00"),
+            valor_frete=Decimal("5.00"),
         )
         ifood = Pedido.objects.create(
             nome_cliente="Cliente iFood",
@@ -310,6 +314,8 @@ class CozinhaAccessTests(TestCase):
             forma_pagamento=Pedido.FormaPagamento.PIX,
             status=Pedido.Status.FINALIZADO,
             canal=Pedido.Canal.IFOOD,
+            total=Decimal("40.00"),
+            valor_frete=Decimal("0.00"),
         )
         Pedido.objects.create(
             nome_cliente="Cliente Em Preparo",
@@ -339,22 +345,57 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/?data=2026-05-20")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados"')
-        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados">\n                            3')
+        self.assertContains(response, 'data-open-management-modal="#dashboard-production-modal"')
+        self.assertContains(response, 'id="dashboard-production-modal"')
+        self.assertContains(response, 'role="dialog"')
+        self.assertContains(response, 'static/js/management_modal.js')
+        self.assertContains(response, 'class="dashboard-balance-layout"')
+        self.assertContains(response, 'class="dashboard-kpi-quadrants"')
+        self.assertContains(response, "<p class=\"ops-kicker\">Balanco geral</p>")
+        self.assertContains(response, 'data-dashboard-balance="resultado">R$ 45,00</strong>')
+        self.assertContains(response, 'data-dashboard-balance-detail="Receita">+ R$ 220,00</b>')
+        self.assertContains(response, 'data-dashboard-balance-detail="Custos producao">- R$ 160,00</b>')
+        self.assertContains(response, 'data-dashboard-balance-detail="Custo entrega">- R$ 15,00</b>')
+        self.assertNotContains(response, 'data-dashboard-balance-detail="Custos totais"')
+        self.assertNotContains(response, 'data-dashboard-balance-detail="Resultado"')
+        self.assertContains(response, 'data-dashboard-balance-footer="Resultado">R$ 45,00</b>')
+        self.assertContains(response, 'data-dashboard-card="Marmitas vendidas"')
+        self.assertContains(response, "\n                5\n")
+        self.assertNotContains(response, 'data-dashboard-card="Pedidos finalizados"')
+        self.assertNotContains(response, "<p>Canais</p>")
+        self.assertNotContains(response, "Principal canal do dia:")
+        self.assertContains(response, 'data-dashboard-channel-card="balcao"')
+        self.assertContains(response, "Canais de venda")
         self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
-        self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Recorrentes">1</b>')
-        self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
+        self.assertContains(response, 'dashboard-channel-mini-card is-primary" data-dashboard-channel-card="balcao"')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas vendidas:Pedidos">3</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas vendidas:Recorrentes">1</b>')
+        self.assertNotContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas"')
         self.assertNotContains(response, 'data-dashboard-card-cost="Marmitas produzidas"')
         self.assertNotContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Custo insumos"')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Vendidas">5</b>')
+        self.assertNotContains(response, 'data-dashboard-card-detail-cost="Marmitas produzidas:Vendidas"')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Consumo interno">1</b>')
+        self.assertNotContains(response, 'data-dashboard-card-detail-cost="Marmitas produzidas:Consumo interno"')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
-        self.assertNotContains(response, 'data-dashboard-card="Custos"')
-        self.assertContains(response, "<p>Custos</p>")
-        self.assertContains(response, 'data-dashboard-card-detail="Custos:Por marmita">R$ 20,00</b>')
-        self.assertContains(response, 'data-dashboard-card-detail="Custos:Consumo interno">R$ 20,00</b>')
-        self.assertContains(response, 'data-dashboard-card-detail="Custos:Excedente">R$ 40,00</b>')
+        self.assertNotContains(response, 'data-dashboard-card-detail-cost="Marmitas produzidas:Excedente"')
+        self.assertNotContains(response, "<p>Custo por marmita</p>")
+        self.assertNotContains(response, 'data-dashboard-card="Custo por marmita"')
+        self.assertContains(response, 'data-dashboard-card="Custos de producao"')
+        self.assertContains(response, 'data-dashboard-card="Custos de producao">\n                R$ 160,00')
+        self.assertContains(response, 'ops-kpi-card ops-kpi-card--discreet is-wide')
+        self.assertContains(response, "<p>Custos de producao</p>")
+        self.assertContains(response, 'data-dashboard-card-footer="Custos de producao:Custo por marmita produzida">R$ 20,00</b>')
+        self.assertContains(response, 'data-dashboard-card-footer="Custos de producao:Custo por marmita vendida">R$ 32,00</b>')
+        self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Por marmita"')
+        self.assertContains(response, 'data-dashboard-card-detail="Custos de producao:Insumos">R$ 160,00</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Custos de producao:Equipe">R$ 0,00</b>')
+        self.assertContains(response, 'data-dashboard-card-detail="Custos de producao:Embalagens">R$ 0,00</b>')
+        self.assertContains(response, "mockup")
+        self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Consumo interno"')
+        self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Excedente"')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.gerente_user)

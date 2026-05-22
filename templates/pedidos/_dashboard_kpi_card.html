@@ -1,0 +1,77 @@
+<article class="ops-kpi-card{% if card.variant %} ops-kpi-card--{{ card.variant }}{% endif %}{% if card.is_wide %} is-wide{% endif %}">
+    {% if card.secondary_label %}
+        <div class="dashboard-kpi-split">
+            <div>
+                <p>{{ card.secondary_label }}</p>
+                <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.secondary_label }}">{{ card.secondary_value }}</strong>
+            </div>
+            <div>
+                <p>{{ card.label }}</p>
+                <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.label }}">{{ card.value }}</strong>
+            </div>
+        </div>
+    {% else %}
+        <p>{{ card.label }}</p>
+        {% if card.value %}
+            <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.label }}">
+                {{ card.value }}
+                {% if card.value_badge %}
+                    <span class="dashboard-kpi-cost" data-dashboard-card-cost="{{ card.label }}">{{ card.value_badge }}</span>
+                {% endif %}
+            </strong>
+        {% endif %}
+    {% endif %}
+    {% for detail in card.details %}
+        {% if detail.secondary_label %}
+            <div class="dashboard-metric-pair">
+                <span>
+                    {{ detail.label }}
+                    <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                </span>
+                <span>
+                    {{ detail.secondary_label }}
+                    <b data-dashboard-card-detail="{{ card.label }}:{{ detail.secondary_label }}">{{ detail.secondary_value }}</b>
+                </span>
+            </div>
+        {% else %}
+            <span class="dashboard-card-detail{% if detail.muted %} is-muted{% endif %}">
+                {{ detail.label }}
+                <span class="dashboard-card-detail-values">
+                    <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                    {% if detail.mock %}
+                        <em>mockup</em>
+                    {% endif %}
+                    {% if detail.value_badge %}
+                        <small data-dashboard-card-detail-cost="{{ card.label }}:{{ detail.label }}">{{ detail.value_badge }}</small>
+                    {% endif %}
+                </span>
+            </span>
+        {% endif %}
+    {% endfor %}
+    {% if card.channels %}
+        <p class="dashboard-channel-label">Canais de venda</p>
+        <div class="dashboard-channel-grid dashboard-channel-grid--kpi" aria-label="Pedidos finalizados por canal">
+            {% for canal in card.channels %}
+                <div class="dashboard-channel-mini-card{% if canal.is_primary %} is-primary{% endif %}" data-dashboard-channel-card="{{ canal.key }}">
+                    <span>{{ canal.label }}</span>
+                    <strong data-dashboard-channel="{{ canal.key }}">{{ canal.total }}</strong>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if card.footer_details %}
+        <div class="dashboard-card-footer">
+            {% for detail in card.footer_details %}
+                <span>
+                    {{ detail.label }}
+                    <span class="dashboard-card-detail-values">
+                        <b data-dashboard-card-footer="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                        {% if detail.hint %}
+                            <small>{{ detail.hint }}</small>
+                        {% endif %}
+                    </span>
+                </span>
+            {% endfor %}
+        </div>
+    {% endif %}
+</article>
