@@ -648,181 +648,324 @@
                 </article>
             </section>
         {% elif ajustes_aba == 'usuarios' %}
-            <section class="ajustes-grid">
+            <section class="usuarios-page">
                 {% if not can_manage_users %}
-                    <div class="ajustes-feedback is-error ajustes-field--wide">
-                        Somente superusuários podem criar usuários e gerenciar classes.
+                    <div class="ajustes-feedback is-error usuarios-permission-alert">
+                        Somente superusuarios podem criar usuarios e gerenciar classes.
                     </div>
                 {% endif %}
 
-                <article class="ped-detail-card ajustes-card ajustes-card--wide">
-                    <header class="ped-detail-card-head">
-                        <div>
-                            <p class="ops-kicker">Novo acesso</p>
-                            <h2>Adicionar usuário</h2>
-                        </div>
-                    </header>
+                <header class="usuarios-dashboard-head">
+                    <div>
+                        <p class="ops-kicker">Controle de acesso</p>
+                        <h2>Gerenciador de usuarios</h2>
+                        <p>Administre logins, classes e permissoes usadas na operacao.</p>
+                    </div>
+                </header>
 
-                    <form method="post" class="ajustes-form-grid">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="create_user">
+                <div class="usuarios-metrics" aria-label="Resumo de usuarios">
+                    <div class="usuarios-metric">
+                        <span>Total</span>
+                        <strong>{{ usuarios_metrics.total }}</strong>
+                    </div>
+                    <div class="usuarios-metric">
+                        <span>Ativos</span>
+                        <strong>{{ usuarios_metrics.active }}</strong>
+                    </div>
+                    <div class="usuarios-metric">
+                        <span>Inativos</span>
+                        <strong>{{ usuarios_metrics.inactive }}</strong>
+                    </div>
+                    <div class="usuarios-metric">
+                        <span>Superusuarios</span>
+                        <strong>{{ usuarios_metrics.superusers }}</strong>
+                    </div>
+                    <div class="usuarios-metric">
+                        <span>Classes</span>
+                        <strong>{{ usuarios_metrics.classes }}</strong>
+                    </div>
+                </div>
 
-                        <label class="field ajustes-field">
-                            <span>Login</span>
-                            <input type="text" name="username" autocomplete="username" {% if not can_manage_users %}disabled{% endif %}>
-                        </label>
-
-                        <label class="field ajustes-field">
-                            <span>Nome</span>
-                            <input type="text" name="first_name" autocomplete="name" {% if not can_manage_users %}disabled{% endif %}>
-                        </label>
-
-                        <label class="field ajustes-field">
-                            <span>E-mail</span>
-                            <input type="email" name="email" autocomplete="email" {% if not can_manage_users %}disabled{% endif %}>
-                        </label>
-
-                        <label class="field ajustes-field">
-                            <span>Senha inicial</span>
-                            <input type="password" name="password" autocomplete="new-password" {% if not can_manage_users %}disabled{% endif %}>
-                        </label>
-
-                        <fieldset class="field ajustes-field ajustes-field--wide usuarios-class-field">
-                            <legend>Classes</legend>
-                            <div class="usuarios-check-grid">
-                                {% for classe in usuarios_classes %}
-                                    <label class="ajustes-check">
-                                        <input type="checkbox" name="groups" value="{{ classe.id }}" {% if not can_manage_users %}disabled{% endif %}>
-                                        <span>{{ classe.name }}</span>
-                                    </label>
-                                {% endfor %}
+                <div class="usuarios-layout">
+                    <section class="ped-detail-card ajustes-card usuarios-panel usuarios-panel--primary">
+                        <header class="usuarios-panel-head">
+                            <div>
+                                <p class="ops-kicker">Acessos</p>
+                                <h2>Usuarios cadastrados</h2>
                             </div>
-                        </fieldset>
-
-                        <fieldset class="field ajustes-field ajustes-field--wide usuarios-class-field">
-                            <legend>Permissões</legend>
-                            <div class="usuarios-check-grid">
-                                <label class="ajustes-check">
-                                    <input type="checkbox" name="is_active" checked {% if not can_manage_users %}disabled{% endif %}>
-                                    <span>Ativo</span>
-                                </label>
-                                <label class="ajustes-check">
-                                    <input type="checkbox" name="is_staff" checked {% if not can_manage_users %}disabled{% endif %}>
-                                    <span>Acessa operação</span>
-                                </label>
-                                <label class="ajustes-check">
-                                    <input type="checkbox" name="is_superuser" {% if not can_manage_users %}disabled{% endif %}>
-                                    <span>Superusuário</span>
-                                </label>
+                            <div class="usuarios-panel-actions">
+                                <span class="usuarios-count">{{ usuarios_metrics.total }} no total</span>
+                                <button type="button" class="ped-btn ped-btn-primary" data-open-modal="usuario-create-modal" {% if not can_manage_users %}disabled{% endif %}>Novo usuario</button>
+                                <button type="button" class="ped-btn ped-btn-soft" data-open-modal="usuarios-classes-modal" {% if not can_manage_users %}disabled{% endif %}>Gerenciar classes</button>
                             </div>
-                        </fieldset>
+                        </header>
 
-                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
-                            <button type="submit" class="ped-btn ped-btn-primary" {% if not can_manage_users %}disabled{% endif %}>Criar usuário</button>
-                        </div>
-                    </form>
-                </article>
-
-                <article class="ped-detail-card ajustes-card ajustes-card--wide">
-                    <header class="ped-detail-card-head">
-                        <div>
-                            <p class="ops-kicker">Acessos</p>
-                            <h2>Usuários cadastrados</h2>
-                        </div>
-                    </header>
-
-                    <div class="usuarios-admin-list">
-                        {% for usuario in usuarios_admin_rows %}
-                            <form method="post" class="usuarios-admin-row">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="update_user">
-                                <input type="hidden" name="user_id" value="{{ usuario.id }}">
-
-                                <div class="usuarios-admin-main">
-                                    <label class="field">
-                                        <span>Login</span>
-                                        <input type="text" name="username" value="{{ usuario.username }}" {% if not can_manage_users %}disabled{% endif %}>
-                                    </label>
-                                    <label class="field">
-                                        <span>Nome</span>
-                                        <input type="text" name="first_name" value="{{ usuario.first_name }}" {% if not can_manage_users %}disabled{% endif %}>
-                                    </label>
-                                    <label class="field">
-                                        <span>E-mail</span>
-                                        <input type="email" name="email" value="{{ usuario.email }}" {% if not can_manage_users %}disabled{% endif %}>
-                                    </label>
-                                    <label class="field">
-                                        <span>Nova senha</span>
-                                        <input type="password" name="password" placeholder="Manter senha atual" autocomplete="new-password" {% if not can_manage_users %}disabled{% endif %}>
-                                    </label>
-                                </div>
-
-                                <div class="usuarios-admin-flags">
-                                    <label class="ajustes-check">
-                                        <input type="checkbox" name="is_active" {% if usuario.is_active %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
-                                        <span>Ativo</span>
-                                    </label>
-                                    <label class="ajustes-check">
-                                        <input type="checkbox" name="is_staff" {% if usuario.is_staff %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
-                                        <span>Operação</span>
-                                    </label>
-                                    <label class="ajustes-check">
-                                        <input type="checkbox" name="is_superuser" {% if usuario.is_superuser %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
-                                        <span>Superusuário</span>
-                                    </label>
-                                </div>
-
-                                <div class="usuarios-admin-classes">
+                        <div class="usuarios-toolbar" data-users-toolbar>
+                            <label class="usuarios-search">
+                                <span>Buscar usuario</span>
+                                <input type="search" data-users-search placeholder="Login, nome ou e-mail">
+                            </label>
+                            <label class="usuarios-filter">
+                                <span>Status</span>
+                                <select data-users-status>
+                                    <option value="all">Todos</option>
+                                    <option value="active">Ativos</option>
+                                    <option value="inactive">Inativos</option>
+                                    <option value="superuser">Superusuarios</option>
+                                </select>
+                            </label>
+                            <label class="usuarios-filter">
+                                <span>Classe</span>
+                                <select data-users-group>
+                                    <option value="all">Todas</option>
                                     {% for classe in usuarios_classes %}
-                                        <label class="ajustes-check">
-                                            <input type="checkbox" name="groups" value="{{ classe.id }}" {% if classe.id in usuario.group_ids %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
-                                            <span>{{ classe.name }}</span>
-                                        </label>
+                                        <option value="{{ classe.id }}">{{ classe.name }}</option>
                                     {% endfor %}
-                                </div>
-
-                                <div class="ajustes-actions">
-                                    <button type="submit" class="ped-btn ped-btn-soft" {% if not can_manage_users %}disabled{% endif %}>Salvar usuário</button>
-                                </div>
-                            </form>
-                        {% empty %}
-                            <p class="muted">Nenhum usuário cadastrado.</p>
-                        {% endfor %}
-                    </div>
-                </article>
-
-                <article class="ped-detail-card ajustes-card ajustes-card--wide">
-                    <header class="ped-detail-card-head">
-                        <div>
-                            <p class="ops-kicker">Classes</p>
-                            <h2>Gerenciar classes de usuário</h2>
+                                </select>
+                            </label>
                         </div>
-                    </header>
 
-                    <form method="post" class="ajustes-form-grid usuarios-class-create">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="create_group">
-                        <label class="field ajustes-field">
-                            <span>Nova classe</span>
-                            <input type="text" name="group_name" placeholder="Ex.: Atendente" {% if not can_manage_users %}disabled{% endif %}>
-                        </label>
-                        <div class="ajustes-actions ajustes-field">
-                            <button type="submit" class="ped-btn ped-btn-primary" {% if not can_manage_users %}disabled{% endif %}>Criar classe</button>
+                        <div class="usuarios-admin-list" data-users-list>
+                            {% for usuario in usuarios_admin_rows %}
+                                <article
+                                    class="usuarios-user-card {% if not usuario.is_active %}is-inactive{% endif %}"
+                                    data-user-card
+                                    data-search="{{ usuario.username }} {{ usuario.first_name }} {{ usuario.email }}"
+                                    data-status="{% if usuario.is_active %}active{% else %}inactive{% endif %}"
+                                    data-superuser="{% if usuario.is_superuser %}true{% else %}false{% endif %}"
+                                    data-groups="{{ usuario.group_ids_text }}"
+                                >
+                                    <div class="usuarios-user-summary">
+                                        <span class="usuarios-avatar">{{ usuario.display_name|first|upper }}</span>
+                                        <span class="usuarios-user-main">
+                                            <strong>{{ usuario.display_name }}</strong>
+                                            <small>{{ usuario.username }}{% if usuario.email %} - {{ usuario.email }}{% endif %}</small>
+                                        </span>
+                                        <span class="usuarios-badges">
+                                            <span class="usuarios-badge {% if usuario.is_active %}is-success{% else %}is-muted{% endif %}">
+                                                {% if usuario.is_active %}Ativo{% else %}Inativo{% endif %}
+                                            </span>
+                                            {% if usuario.is_staff %}
+                                                <span class="usuarios-badge">Operacao</span>
+                                            {% endif %}
+                                            {% if usuario.is_superuser %}
+                                                <span class="usuarios-badge is-danger">Superusuario</span>
+                                            {% endif %}
+                                        </span>
+                                        <button type="button" class="ped-btn ped-btn-soft usuarios-edit-trigger" data-open-modal="usuario-edit-modal-{{ usuario.id }}" {% if not can_manage_users %}disabled{% endif %}>Editar</button>
+                                    </div>
+                                    <div class="usuarios-user-meta">
+                                        <span>Criado em {{ usuario.date_joined|default:"data nao informada" }}</span>
+                                        {% if usuario.last_login %}<span>Ultimo login {{ usuario.last_login }}</span>{% endif %}
+                                    </div>
+                                </article>
+
+                                <dialog class="usuarios-modal" id="usuario-edit-modal-{{ usuario.id }}" aria-labelledby="usuario-edit-title-{{ usuario.id }}">
+                                    <div class="usuarios-modal-shell">
+                                        <header class="usuarios-modal-head">
+                                            <div>
+                                                <p class="ops-kicker">Editar acesso</p>
+                                                <h2 id="usuario-edit-title-{{ usuario.id }}">{{ usuario.display_name }}</h2>
+                                            </div>
+                                            <button type="button" class="usuarios-modal-close" data-close-modal aria-label="Fechar">&times;</button>
+                                        </header>
+
+                                        <form method="post" class="usuarios-edit-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_user">
+                                            <input type="hidden" name="user_id" value="{{ usuario.id }}">
+
+                                            {% if usuario.id == request.user.id %}
+                                                <div class="usuarios-self-note">
+                                                    Seu proprio acesso administrativo sera preservado ao salvar.
+                                                </div>
+                                            {% endif %}
+
+                                            <div class="usuarios-admin-main">
+                                                <label class="field">
+                                                    <span>Login</span>
+                                                    <input type="text" name="username" value="{{ usuario.username }}" {% if not can_manage_users %}disabled{% endif %}>
+                                                </label>
+                                                <label class="field">
+                                                    <span>Nome</span>
+                                                    <input type="text" name="first_name" value="{{ usuario.first_name }}" {% if not can_manage_users %}disabled{% endif %}>
+                                                </label>
+                                                <label class="field">
+                                                    <span>E-mail</span>
+                                                    <input type="email" name="email" value="{{ usuario.email }}" {% if not can_manage_users %}disabled{% endif %}>
+                                                </label>
+                                                <label class="field">
+                                                    <span>Nova senha</span>
+                                                    <input type="password" name="password" placeholder="Preencha apenas para trocar" autocomplete="new-password" {% if not can_manage_users %}disabled{% endif %}>
+                                                </label>
+                                            </div>
+
+                                            <div class="usuarios-edit-grid">
+                                                <fieldset class="usuarios-class-field">
+                                                    <legend>Permissoes</legend>
+                                                    <div class="usuarios-admin-flags">
+                                                        <label class="ajustes-check">
+                                                            <input type="checkbox" name="is_active" {% if usuario.is_active %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
+                                                            <span>Ativo</span>
+                                                        </label>
+                                                        <label class="ajustes-check">
+                                                            <input type="checkbox" name="is_staff" {% if usuario.is_staff %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
+                                                            <span>Acessa operacao</span>
+                                                        </label>
+                                                        <label class="ajustes-check ajustes-check--danger">
+                                                            <input type="checkbox" name="is_superuser" {% if usuario.is_superuser %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
+                                                            <span>Superusuario</span>
+                                                        </label>
+                                                    </div>
+                                                </fieldset>
+
+                                                <fieldset class="usuarios-class-field">
+                                                    <legend>Classes vinculadas</legend>
+                                                    <div class="usuarios-admin-classes">
+                                                        {% for classe in usuarios_classes %}
+                                                            <label class="ajustes-check">
+                                                                <input type="checkbox" name="groups" value="{{ classe.id }}" {% if classe.id in usuario.group_ids %}checked{% endif %} {% if not can_manage_users %}disabled{% endif %}>
+                                                                <span>{{ classe.name }}</span>
+                                                            </label>
+                                                        {% endfor %}
+                                                    </div>
+                                                </fieldset>
+                                            </div>
+
+                                            <footer class="usuarios-card-footer">
+                                                <button type="button" class="ped-btn ped-btn-soft" data-close-modal>Cancelar</button>
+                                                <button type="submit" class="ped-btn ped-btn-primary" {% if not can_manage_users %}disabled{% endif %}>Salvar alteracoes</button>
+                                            </footer>
+                                        </form>
+                                    </div>
+                                </dialog>
+                            {% empty %}
+                                <p class="muted">Nenhum usuario cadastrado.</p>
+                            {% endfor %}
+                            <p class="usuarios-empty-filter" data-users-empty hidden>Nenhum usuario encontrado com os filtros atuais.</p>
                         </div>
-                    </form>
+                    </section>
+                </div>
 
-                    <div class="usuarios-class-list">
-                        {% for classe in usuarios_classes %}
-                            <form method="post" class="usuarios-class-row">
-                                {% csrf_token %}
-                                <input type="hidden" name="group_id" value="{{ classe.id }}">
-                                <input type="text" name="group_name" value="{{ classe.name }}" aria-label="Nome da classe" {% if not can_manage_users %}disabled{% endif %}>
-                                <button type="submit" name="action" value="update_group" class="ped-btn ped-btn-soft" {% if not can_manage_users %}disabled{% endif %}>Salvar</button>
-                                <button type="submit" name="action" value="delete_group" class="ped-btn ped-btn-danger" {% if not can_manage_users %}disabled{% endif %}>Excluir</button>
-                            </form>
-                        {% endfor %}
+                <dialog class="usuarios-modal" id="usuario-create-modal" aria-labelledby="usuario-create-title">
+                    <div class="usuarios-modal-shell">
+                        <header class="usuarios-modal-head">
+                            <div>
+                                <p class="ops-kicker">Novo acesso</p>
+                                <h2 id="usuario-create-title">Adicionar usuario</h2>
+                            </div>
+                            <button type="button" class="usuarios-modal-close" data-close-modal aria-label="Fechar">&times;</button>
+                        </header>
+
+                        <form method="post" class="usuarios-create-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="create_user">
+
+                            <div class="usuarios-admin-main">
+                                <label class="field ajustes-field">
+                                    <span>Login</span>
+                                    <input type="text" name="username" autocomplete="username" {% if not can_manage_users %}disabled{% endif %}>
+                                </label>
+                                <label class="field ajustes-field">
+                                    <span>Senha inicial</span>
+                                    <input type="password" name="password" autocomplete="new-password" {% if not can_manage_users %}disabled{% endif %}>
+                                </label>
+                                <label class="field ajustes-field">
+                                    <span>Nome</span>
+                                    <input type="text" name="first_name" autocomplete="name" {% if not can_manage_users %}disabled{% endif %}>
+                                </label>
+                                <label class="field ajustes-field">
+                                    <span>E-mail</span>
+                                    <input type="email" name="email" autocomplete="email" {% if not can_manage_users %}disabled{% endif %}>
+                                </label>
+                            </div>
+
+                            <div class="usuarios-edit-grid">
+                                <fieldset class="usuarios-class-field">
+                                    <legend>Classes</legend>
+                                    <div class="usuarios-check-grid">
+                                        {% for classe in usuarios_classes %}
+                                            <label class="ajustes-check">
+                                                <input type="checkbox" name="groups" value="{{ classe.id }}" {% if not can_manage_users %}disabled{% endif %}>
+                                                <span>{{ classe.name }}</span>
+                                            </label>
+                                        {% empty %}
+                                            <p class="muted">Nenhuma classe criada.</p>
+                                        {% endfor %}
+                                    </div>
+                                </fieldset>
+
+                                <fieldset class="usuarios-class-field">
+                                    <legend>Permissoes</legend>
+                                    <div class="usuarios-check-grid">
+                                        <label class="ajustes-check">
+                                            <input type="checkbox" name="is_active" checked {% if not can_manage_users %}disabled{% endif %}>
+                                            <span>Ativo</span>
+                                        </label>
+                                        <label class="ajustes-check">
+                                            <input type="checkbox" name="is_staff" checked {% if not can_manage_users %}disabled{% endif %}>
+                                            <span>Acessa operacao</span>
+                                        </label>
+                                        <label class="ajustes-check ajustes-check--danger">
+                                            <input type="checkbox" name="is_superuser" {% if not can_manage_users %}disabled{% endif %}>
+                                            <span>Superusuario</span>
+                                        </label>
+                                    </div>
+                                </fieldset>
+                            </div>
+
+                            <footer class="usuarios-card-footer">
+                                <button type="button" class="ped-btn ped-btn-soft" data-close-modal>Cancelar</button>
+                                <button type="submit" class="ped-btn ped-btn-primary" {% if not can_manage_users %}disabled{% endif %}>Criar usuario</button>
+                            </footer>
+                        </form>
                     </div>
-                </article>
+                </dialog>
+
+                <dialog class="usuarios-modal" id="usuarios-classes-modal" aria-labelledby="usuarios-classes-title">
+                    <div class="usuarios-modal-shell">
+                        <header class="usuarios-modal-head">
+                            <div>
+                                <p class="ops-kicker">Classes</p>
+                                <h2 id="usuarios-classes-title">Gerenciar classes</h2>
+                            </div>
+                            <button type="button" class="usuarios-modal-close" data-close-modal aria-label="Fechar">&times;</button>
+                        </header>
+
+                        <p class="usuarios-panel-copy">Classes agrupam acessos por funcao. Para excluir uma classe em uso, remova antes dos usuarios vinculados.</p>
+
+                        <form method="post" class="usuarios-class-create">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="create_group">
+                            <label class="field ajustes-field">
+                                <span>Nova classe</span>
+                                <input type="text" name="group_name" placeholder="Ex.: Atendente" {% if not can_manage_users %}disabled{% endif %}>
+                            </label>
+                            <div class="ajustes-actions">
+                                <button type="submit" class="ped-btn ped-btn-primary" {% if not can_manage_users %}disabled{% endif %}>Criar classe</button>
+                            </div>
+                        </form>
+
+                        <div class="usuarios-class-list">
+                            {% for classe in usuarios_classes %}
+                                <form method="post" class="usuarios-class-row">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_id" value="{{ classe.id }}">
+                                    <label>
+                                        <span>{{ classe.user_count }} usuario{{ classe.user_count|pluralize }}</span>
+                                        <input type="text" name="group_name" value="{{ classe.name }}" aria-label="Nome da classe" {% if not can_manage_users %}disabled{% endif %}>
+                                    </label>
+                                    <div class="usuarios-class-actions">
+                                        <button type="submit" name="action" value="update_group" class="ped-btn ped-btn-soft" {% if not can_manage_users %}disabled{% endif %}>Salvar</button>
+                                        <button type="submit" name="action" value="delete_group" class="ped-btn ped-btn-danger" {% if not can_manage_users %}disabled{% endif %}>Excluir</button>
+                                    </div>
+                                </form>
+                            {% empty %}
+                                <p class="muted">Nenhuma classe criada.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </dialog>
             </section>
         {% else %}
             <section class="ajustes-grid">

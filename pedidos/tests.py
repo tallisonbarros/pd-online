@@ -239,7 +239,12 @@ class CozinhaAccessTests(TestCase):
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
         prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
-        ResumoOperacionalDia.objects.create(data=date(2026, 5, 20), marmitas_produzidas=8, consumo_interno=1)
+        ResumoOperacionalDia.objects.create(
+            data=date(2026, 5, 20),
+            marmitas_produzidas=8,
+            consumo_interno=1,
+            custo_insumos=Decimal("160.00"),
+        )
 
         previous = Pedido.objects.create(
             nome_cliente="Cliente Recorrente",
@@ -301,24 +306,31 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/?data=2026-05-20")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados">3</strong>')
+        self.assertContains(response, 'data-dashboard-card="Pedidos finalizados"')
+        self.assertContains(response, "\n                        3\n                        ")
         self.assertContains(response, 'data-dashboard-channel="balcao">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="site">1</strong>')
         self.assertContains(response, 'data-dashboard-channel="ifood">1</strong>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Recorrentes">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Pedidos finalizados:Marmitas">5</b>')
+        self.assertContains(response, 'data-dashboard-card-cost="Marmitas produzidas">R$ 20,00</span>')
+        self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Custo insumos">R$ 160,00</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Consumo interno">1</b>')
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.staff_user)
 
-        response = self.client.post("/controle/?data=2026-05-20", {"marmitas_produzidas": "87", "consumo_interno": "4"})
+        response = self.client.post(
+            "/controle/?data=2026-05-20",
+            {"marmitas_produzidas": "87", "consumo_interno": "4", "custo_insumos": "348.50"},
+        )
 
         self.assertEqual(response.status_code, 302)
         resumo = ResumoOperacionalDia.objects.get(data=date(2026, 5, 20))
         self.assertEqual(resumo.marmitas_produzidas, 87)
         self.assertEqual(resumo.consumo_interno, 4)
+        self.assertEqual(resumo.custo_insumos, Decimal("348.50"))
 
     def test_operation_metrics_count_plate_quantities_not_orders(self):
         self.client.force_login(self.staff_user)

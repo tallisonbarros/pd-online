@@ -110,6 +110,7 @@ class ResumoOperacionalDia(models.Model):
     data = models.DateField(unique=True)
     marmitas_produzidas = models.PositiveIntegerField(default=0)
     consumo_interno = models.PositiveIntegerField(default=0)
+    custo_insumos = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     observacao = models.TextField(blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)

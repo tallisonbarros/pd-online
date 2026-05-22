@@ -1019,19 +1019,23 @@ def _serialize_users_for_admin():
             "id": user.id,
             "username": user.username,
             "first_name": user.first_name,
+            "display_name": user.get_full_name() or user.username,
             "email": user.email,
             "is_active": user.is_active,
             "is_staff": user.is_staff,
             "is_superuser": user.is_superuser,
+            "last_login": timezone.localtime(user.last_login).strftime("%d/%m/%Y %H:%M") if user.last_login else "",
+            "date_joined": timezone.localtime(user.date_joined).strftime("%d/%m/%Y") if user.date_joined else "",
             "groups": list(user.groups.order_by("name")),
             "group_ids": {group.id for group in user.groups.all()},
+            "group_ids_text": " ".join(str(group.id) for group in user.groups.all()),
         }
         for user in users
     ]
 
 
 def _serialize_groups_for_admin():
-    return Group.objects.order_by("name")
+    return Group.objects.annotate(user_count=Count("user")).order_by("name")
 
 
 def _serialize_pedido_api_keys():
@@ -2457,12 +2461,14 @@ def cozinha(request):
         try:
             marmitas_produzidas = max(int(request.POST.get("marmitas_produzidas") or 0), 0)
             consumo_interno = max(int(request.POST.get("consumo_interno") or 0), 0)
+            custo_insumos = max(money_decimal(request.POST.get("custo_insumos")), Decimal("0.00"))
         except (TypeError, ValueError):
             return HttpResponseBadRequest("Quantidade de marmitas invalida.")
         resumo, _created = ResumoOperacionalDia.objects.get_or_create(data=data_selecionada)
         resumo.marmitas_produzidas = marmitas_produzidas
         resumo.consumo_interno = consumo_interno
-        resumo.save(update_fields=["marmitas_produzidas", "consumo_interno", "atualizado_em"])
+        resumo.custo_insumos = custo_insumos
+        resumo.save(update_fields=["marmitas_produzidas", "consumo_interno", "custo_insumos", "atualizado_em"])
         return redirect(f"{reverse('pedidos:cozinha')}?data={data_selecionada.isoformat()}")
 
     dashboard = get_dashboard_diaria(data_selecionada)
@@ -3625,6 +3631,16 @@ def ajustes_admin(request):
             "total_recalculado": subtotal_itens + ultimo_pedido.valor_frete,
         }
 
+    usuarios_admin_rows = _serialize_users_for_admin()
+    usuarios_classes = _serialize_groups_for_admin()
+    usuarios_metrics = {
+        "total": len(usuarios_admin_rows),
+        "active": sum(1 for usuario in usuarios_admin_rows if usuario["is_active"]),
+        "inactive": sum(1 for usuario in usuarios_admin_rows if not usuario["is_active"]),
+        "superusers": sum(1 for usuario in usuarios_admin_rows if usuario["is_superuser"]),
+        "classes": usuarios_classes.count(),
+    }
+
     return render(
         request,
         "pedidos/ajustes_admin.html",
@@ -3646,8 +3662,9 @@ def ajustes_admin(request):
             "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
             "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
-            "usuarios_admin_rows": _serialize_users_for_admin(),
-            "usuarios_classes": _serialize_groups_for_admin(),
+            "usuarios_admin_rows": usuarios_admin_rows,
+            "usuarios_classes": usuarios_classes,
+            "usuarios_metrics": usuarios_metrics,
             "can_manage_users": request.user.is_superuser,
             "pedido_api_keys": _serialize_pedido_api_keys(),
             "can_manage_api_keys": _user_can_manage_order_payment(request.user),

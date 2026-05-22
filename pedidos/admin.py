@@ -135,8 +135,8 @@ class PedidoAdmin(admin.ModelAdmin):
 
 @admin.register(ResumoOperacionalDia)
 class ResumoOperacionalDiaAdmin(admin.ModelAdmin):
-    list_display = ("data", "marmitas_produzidas", "consumo_interno", "atualizado_em")
-    list_editable = ("marmitas_produzidas", "consumo_interno")
+    list_display = ("data", "marmitas_produzidas", "consumo_interno", "custo_insumos", "atualizado_em")
+    list_editable = ("marmitas_produzidas", "consumo_interno", "custo_insumos")
     search_fields = ("data", "observacao")
     readonly_fields = ("criado_em", "atualizado_em")
     list_per_page = 31

@@ -604,6 +604,99 @@
         });
     }
 
+    function initUsersAdminFilters() {
+        const toolbar = document.querySelector("[data-users-toolbar]");
+        const list = document.querySelector("[data-users-list]");
+        if (!toolbar || !list) return;
+
+        const searchInput = toolbar.querySelector("[data-users-search]");
+        const statusSelect = toolbar.querySelector("[data-users-status]");
+        const groupSelect = toolbar.querySelector("[data-users-group]");
+        const emptyState = list.querySelector("[data-users-empty]");
+        const cards = Array.from(list.querySelectorAll("[data-user-card]"));
+
+        function normalize(value) {
+            return String(value || "").trim().toLowerCase();
+        }
+
+        function applyFilters() {
+            const query = normalize(searchInput?.value);
+            const status = normalize(statusSelect?.value || "all");
+            const group = normalize(groupSelect?.value || "all");
+            let visibleCount = 0;
+
+            cards.forEach((card) => {
+                const haystack = normalize(card.dataset.search);
+                const cardStatus = normalize(card.dataset.status);
+                const cardGroups = normalize(card.dataset.groups);
+                const isSuperuser = card.dataset.superuser === "true";
+                const matchesQuery = !query || haystack.includes(query);
+                const matchesStatus =
+                    status === "all" ||
+                    cardStatus === status ||
+                    (status === "superuser" && isSuperuser);
+                const matchesGroup = group === "all" || cardGroups.split(/\s+/).includes(group);
+                const shouldShow = matchesQuery && matchesStatus && matchesGroup;
+
+                card.hidden = !shouldShow;
+                if (shouldShow) visibleCount += 1;
+            });
+
+            if (emptyState) emptyState.hidden = visibleCount > 0;
+        }
+
+        [searchInput, statusSelect, groupSelect].forEach((control) => {
+            if (!control) return;
+            control.addEventListener("input", applyFilters);
+            control.addEventListener("change", applyFilters);
+        });
+        applyFilters();
+    }
+
+    function initUsersAdminModals() {
+        const openButtons = Array.from(document.querySelectorAll("[data-open-modal]"));
+        const dialogs = Array.from(document.querySelectorAll(".usuarios-modal"));
+        if (!openButtons.length || !dialogs.length) return;
+
+        function openDialog(dialog) {
+            if (!dialog) return;
+            if (typeof dialog.showModal === "function") {
+                dialog.showModal();
+            } else {
+                dialog.setAttribute("open", "");
+            }
+            const firstInput = dialog.querySelector("input:not([type='hidden']):not(:disabled), select:not(:disabled), button:not(:disabled)");
+            if (firstInput) firstInput.focus();
+        }
+
+        function closeDialog(dialog) {
+            if (!dialog) return;
+            if (typeof dialog.close === "function") {
+                dialog.close();
+            } else {
+                dialog.removeAttribute("open");
+            }
+        }
+
+        openButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const dialog = document.getElementById(button.dataset.openModal);
+                openDialog(dialog);
+            });
+        });
+
+        dialogs.forEach((dialog) => {
+            dialog.addEventListener("click", (event) => {
+                if (event.target === dialog) closeDialog(dialog);
+            });
+            dialog.querySelectorAll("[data-close-modal]").forEach((button) => {
+                button.addEventListener("click", () => closeDialog(dialog));
+            });
+        });
+    }
+
     initGoogleMapsTester();
+    initUsersAdminFilters();
+    initUsersAdminModals();
 })();
 

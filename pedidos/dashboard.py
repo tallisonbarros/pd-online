@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db.models import Count, Sum
 
@@ -61,6 +62,10 @@ def get_dashboard_diaria(data):
         or 0
     )
     marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas - operacional.consumo_interno
+    custo_unitario_marmita = Decimal("0.00")
+    if operacional.marmitas_produzidas:
+        custo_unitario_marmita = (operacional.custo_insumos / Decimal(operacional.marmitas_produzidas)).quantize(Decimal("0.01"))
+    custo_unitario_marmita_label = f"R$ {custo_unitario_marmita:.2f}".replace(".", ",")
 
     return {
         "data": data,
@@ -72,6 +77,9 @@ def get_dashboard_diaria(data):
         "marmitas_vendidas": marmitas_vendidas,
         "marmitas_produzidas": operacional.marmitas_produzidas,
         "consumo_interno": operacional.consumo_interno,
+        "custo_insumos": operacional.custo_insumos,
+        "custo_unitario_marmita": custo_unitario_marmita,
+        "custo_unitario_marmita_label": custo_unitario_marmita_label,
         "marmitas_excedentes": marmitas_excedentes,
         "operacional": operacional,
         "cards": [
@@ -86,7 +94,9 @@ def get_dashboard_diaria(data):
             {
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
+                "value_badge": custo_unitario_marmita_label,
                 "details": [
+                    {"label": "Custo insumos", "value": f"R$ {operacional.custo_insumos:.2f}".replace(".", ",")},
                     {"label": "Consumo interno", "value": operacional.consumo_interno},
                     {"label": "Excedente", "value": marmitas_excedentes},
                 ],

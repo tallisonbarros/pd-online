@@ -30,7 +30,12 @@
             {% for card in dashboard.cards %}
                 <article class="ops-kpi-card">
                     <p>{{ card.label }}</p>
-                    <strong data-dashboard-card="{{ card.label }}">{{ card.value }}</strong>
+                    <strong class="dashboard-kpi-value" data-dashboard-card="{{ card.label }}">
+                        {{ card.value }}
+                        {% if card.value_badge %}
+                            <span class="dashboard-kpi-cost" data-dashboard-card-cost="{{ card.label }}">{{ card.value_badge }}</span>
+                        {% endif %}
+                    </strong>
                     {% for detail in card.details %}
                         <span class="dashboard-card-detail">
                             {{ detail.label }} <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
@@ -67,6 +72,10 @@
                     <label class="field">
                         <span>Consumo interno do dia</span>
                         <input type="number" name="consumo_interno" min="0" step="1" value="{{ dashboard.consumo_interno }}">
+                    </label>
+                    <label class="field">
+                        <span>Custo insumos</span>
+                        <input type="number" name="custo_insumos" min="0" step="0.01" value="{{ dashboard.custo_insumos|stringformat:'.2f' }}">
                     </label>
                     <button type="submit" class="primary-button wide">Salvar producao</button>
                 </form>
