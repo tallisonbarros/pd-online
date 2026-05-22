@@ -197,11 +197,18 @@ class OrderHeatmapApiTests(TestCase):
 class CozinhaAccessTests(TestCase):
     def setUp(self):
         User = get_user_model()
+        self.gerente_group, _created = Group.objects.get_or_create(name="Gerente")
         self.staff_user = User.objects.create_user(
             username="cozinha_staff",
             password="12345678",
             is_staff=True,
         )
+        self.gerente_user = User.objects.create_user(
+            username="cozinha_gerente",
+            password="12345678",
+            is_staff=True,
+        )
+        self.gerente_user.groups.add(self.gerente_group)
 
     def test_dashboard_requires_staff_authentication(self):
         response = self.client.get("/controle/")
@@ -215,8 +222,16 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
-    def test_staff_can_access_dashboard(self):
+    def test_staff_without_gerente_class_cannot_access_dashboard(self):
         self.client.force_login(self.staff_user)
+
+        response = self.client.get("/controle/")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "classe Gerente", status_code=403)
+
+    def test_gerente_can_access_dashboard(self):
+        self.client.force_login(self.gerente_user)
 
         response = self.client.get("/controle/")
 
@@ -224,7 +239,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'aria-label="Navegar por dia"')
 
     def test_dashboard_header_uses_selected_day_context(self):
-        self.client.force_login(self.staff_user)
+        self.client.force_login(self.gerente_user)
         ontem = timezone.localdate() - timedelta(days=1)
         dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
 
@@ -235,7 +250,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, dias_semana[ontem.weekday()])
 
     def test_dashboard_counts_finished_daily_orders_by_channel_and_phone_recurrence(self):
-        self.client.force_login(self.staff_user)
+        self.client.force_login(self.gerente_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
         prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
@@ -319,7 +334,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'data-dashboard-card-detail="Marmitas produzidas:Excedente">2</b>')
 
     def test_dashboard_saves_manual_daily_production(self):
-        self.client.force_login(self.staff_user)
+        self.client.force_login(self.gerente_user)
 
         response = self.client.post(
             "/controle/?data=2026-05-20",

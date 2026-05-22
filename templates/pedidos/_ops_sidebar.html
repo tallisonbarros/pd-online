@@ -1,16 +1,18 @@
 {% load static %}
 <aside class="ops-sidebar">
-    <a class="ops-brand" href="{% url 'pedidos:cozinha' %}">
+    <a class="ops-brand" href="{% if ops_can_view_dashboard %}{% url 'pedidos:cozinha' %}{% else %}{% url 'pedidos:cozinha_operacao' %}{% endif %}">
         <img src="{% static 'img/prato-delivery-logo-icon-bege.png' %}" alt="Prato Delivery">
     </a>
 
     <nav class="ops-nav" aria-label="Navegacao da cozinha">
-        <a class="ops-nav-item {% if active == 'dashboard' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}">
-            <span class="ops-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"/></svg>
-            </span>
-            <span>Dashboard</span>
-        </a>
+        {% if ops_can_view_dashboard %}
+            <a class="ops-nav-item {% if active == 'dashboard' %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}">
+                <span class="ops-nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"/></svg>
+                </span>
+                <span>Dashboard</span>
+            </a>
+        {% endif %}
         <a class="ops-nav-item {% if active == 'metricas' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}">
             <span class="ops-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M4 19h16v2H4v-2zm2-8h3v6H6v-6zm5-6h3v12h-3V5zm5 4h3v8h-3V9z"/></svg>

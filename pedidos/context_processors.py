@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from .models import ConfiguracaoEntrega, Pedido
 
+GERENTE_GROUP_NAME = "Gerente"
+
 
 def _cart_operational_window(config, now=None):
     current = now or timezone.localtime()
@@ -56,6 +58,7 @@ def ops_sidebar_counts(request):
     if not getattr(user, "is_staff", False):
         return {}
 
+    can_view_dashboard = user.groups.filter(name=GERENTE_GROUP_NAME).exists()
     active_statuses = [
         Pedido.Status.NOVO,
         Pedido.Status.EM_PREPARO,
@@ -65,4 +68,5 @@ def ops_sidebar_counts(request):
     return {
         "ops_pedidos_badge": Pedido.objects.filter(status__in=active_statuses).count(),
         "ops_aprovacao_count": Pedido.objects.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+        "ops_can_view_dashboard": can_view_dashboard,
     }
