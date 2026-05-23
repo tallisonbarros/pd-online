@@ -1,3 +1,4 @@
+import csv
 import json
 import math
 import unicodedata
@@ -14,6 +15,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.core.cache import cache
+from django.core import signing
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import ExtractHour, TruncDate
@@ -29,6 +31,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
 from .dashboard import get_dashboard_diaria
 from .forms import AdicionalForm, BebidaForm, PratoForm
+from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders, money_decimal as legacy_money_decimal
 from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
 from .order_services import (
     create_order_items_from_payload,
@@ -3450,7 +3453,7 @@ def atualizar_entrega_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api", "lista_impressao"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api", "lista_impressao", "importacao"}:
         ajustes_aba = "geral"
 
     _ensure_default_user_groups()
@@ -3461,6 +3464,9 @@ def ajustes_admin(request):
     feedback = None
     feedback_kind = "success"
     preview = None
+    legacy_import_preview = None
+    legacy_import_payload = ""
+    legacy_import_default_fee = "10.00"
     google_maps_status = _google_maps_status()
 
     if request.GET.get("saved") == "1":
@@ -3482,6 +3488,8 @@ def ajustes_admin(request):
             "create_group": "usuarios",
             "update_group": "usuarios",
             "delete_group": "usuarios",
+            "preview_legacy_orders": "importacao",
+            "import_legacy_orders": "importacao",
         }
         ajustes_aba = action_tabs.get(action, ajustes_aba)
         origem = {
@@ -3571,6 +3579,49 @@ def ajustes_admin(request):
                 return redirect(f"{request.path}?saved=1&aba=usuarios")
             except (PermissionError, ValueError) as exc:
                 feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "preview_legacy_orders":
+            legacy_import_default_fee = f"{legacy_money_decimal(request.POST.get('default_delivery_fee') or '10.00'):.2f}"
+            upload = request.FILES.get("legacy_orders_file")
+            if not upload:
+                feedback = "Selecione o CSV limpo antes de revisar a importacao."
+                feedback_kind = "error"
+            elif upload.size > 2 * 1024 * 1024:
+                feedback = "O arquivo deve ter ate 2 MB."
+                feedback_kind = "error"
+            else:
+                try:
+                    content = upload.read().decode("utf-8-sig")
+                    default_fee = legacy_money_decimal(legacy_import_default_fee)
+                    legacy_import_preview = build_legacy_import_preview(content, default_fee)
+                    legacy_import_payload = signing.dumps(
+                        {"content": content, "default_delivery_fee": legacy_import_default_fee},
+                        compress=True,
+                    )
+                    feedback = "Revise a pre-importacao antes de aplicar."
+                    feedback_kind = "success"
+                except (UnicodeDecodeError, ValueError, csv.Error) as exc:
+                    feedback = f"Nao foi possivel ler o CSV: {exc}"
+                    feedback_kind = "error"
+
+        if action == "import_legacy_orders":
+            legacy_import_payload = _safe_text(request.POST.get("legacy_import_payload"))
+            try:
+                payload = signing.loads(legacy_import_payload, max_age=60 * 60)
+                content = payload["content"]
+                default_fee = legacy_money_decimal(payload.get("default_delivery_fee") or "10.00")
+                result = import_clean_legacy_orders(content, default_fee)
+                feedback = (
+                    "Importacao concluida. "
+                    f"Importados: {result.imported} | Pulados por duplicidade: {result.skipped} | Erros: {result.errors}"
+                )
+                feedback_kind = "success"
+            except signing.BadSignature:
+                feedback = "A pre-importacao expirou ou foi alterada. Envie o CSV novamente."
+                feedback_kind = "error"
+            except (ValueError, csv.Error) as exc:
+                feedback = f"Nao foi possivel importar o CSV: {exc}"
                 feedback_kind = "error"
 
         if action == "test_frete":
@@ -3678,6 +3729,9 @@ def ajustes_admin(request):
             "pedido_api_keys": _serialize_pedido_api_keys(),
             "can_manage_api_keys": _user_can_manage_order_payment(request.user),
             "lista_impressao_rows": _serialize_lista_impressao_admin(),
+            "legacy_import_preview": legacy_import_preview,
+            "legacy_import_payload": legacy_import_payload,
+            "legacy_import_default_fee": legacy_import_default_fee,
         },
     )
 

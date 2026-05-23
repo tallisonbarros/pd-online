@@ -10991,6 +10991,69 @@ fieldset.field {
     box-shadow: 0 24px 70px rgba(42, 26, 23, 0.24);
 }
 
+.legacy-import-modal {
+    width: min(1180px, calc(100vw - 28px));
+}
+
+.legacy-import-modal-shell {
+    max-height: min(88vh, 820px);
+}
+
+.legacy-import-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.legacy-import-table-wrap {
+    overflow: auto;
+    border: 1px solid #e4dbd5;
+    border-radius: 14px;
+    background: #fffdfa;
+}
+
+.legacy-import-table {
+    width: 100%;
+    min-width: 1060px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.legacy-import-table th,
+.legacy-import-table td {
+    border-bottom: 1px solid #eadfd8;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.legacy-import-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f6f0ed;
+    color: #7c675c;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.legacy-import-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.legacy-import-table tr.is-duplicate {
+    color: #7c675c;
+    background: #f8f4f1;
+}
+
+.legacy-import-table small {
+    display: block;
+    margin-top: 2px;
+    color: #9e4d12;
+    font-size: 11px;
+    font-weight: 800;
+}
+
 .usuarios-modal-head {
     display: flex;
     align-items: flex-start;
@@ -11198,7 +11261,8 @@ fieldset.field {
 
 @media (max-width: 1180px) {
     .ajustes-grid,
-    .ajustes-preview-grid {
+    .ajustes-preview-grid,
+    .legacy-import-summary {
         grid-template-columns: 1fr;
     }
 

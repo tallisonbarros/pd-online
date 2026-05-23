@@ -1,7 +1,9 @@
+import csv
 import json
 
 from decimal import Decimal
 from datetime import date, datetime, time, timedelta
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +16,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
+from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, normalize_phone, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
@@ -128,6 +131,113 @@ class FaixaFreteTests(TestCase):
         self.assertEqual(valor, Decimal("30.00"))
         self.assertEqual(faixa.tipo, FaixaFrete.Tipo.ACIMA)
         self.assertEqual(faixa.km_limite, Decimal("10.00"))
+
+
+class LegacyOrderImportTests(TestCase):
+    def _clean_csv(self):
+        fields = [
+            "legacy_id",
+            "legacy_order_number",
+            "customer_name",
+            "customer_key",
+            "created_at",
+            "estimated_delivery_at",
+            "delivered_at",
+            "status",
+            "fulfillment_type",
+            "fulfillment_source",
+            "payment_method",
+            "payment_method_missing",
+            "total_charged",
+            "items_subtotal",
+            "delivery_fee",
+            "coupon_code",
+            "coupon_discount_type",
+            "coupon_amount",
+            "coupon_discount_applied",
+            "calculated_total",
+            "financial_status",
+            "motoboy_requested",
+            "delivery_street",
+            "delivery_number",
+            "delivery_neighborhood",
+            "delivery_complement",
+            "delivery_address_formatted",
+            "item_count",
+            "parsed_item_count",
+            "items_json",
+            "status_timeline_json",
+            "kitchen_icon",
+            "notes",
+        ]
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=fields, delimiter=";", quotechar='"')
+        writer.writeheader()
+        writer.writerow(
+            {
+                "legacy_id": "order-2297",
+                "legacy_order_number": "2297",
+                "customer_name": "Cliente teste",
+                "customer_key": "kitchen-manual",
+                "created_at": "2026-04-30 12:00:00",
+                "estimated_delivery_at": "2026-04-30 12:45:00",
+                "delivered_at": "2026-04-30 13:10:00",
+                "status": "entregue",
+                "fulfillment_type": "entrega",
+                "fulfillment_source": "original",
+                "payment_method": "pix",
+                "payment_method_missing": "false",
+                "total_charged": "25.00",
+                "items_subtotal": "50.00",
+                "delivery_fee": "0.00",
+                "coupon_code": "CORTESIA01",
+                "coupon_discount_type": "value",
+                "coupon_amount": "25.00",
+                "coupon_discount_applied": "25.00",
+                "calculated_total": "25.00",
+                "financial_status": "ok",
+                "motoboy_requested": "",
+                "delivery_street": "Rua A",
+                "delivery_number": "10",
+                "delivery_neighborhood": "Centro",
+                "delivery_complement": "",
+                "delivery_address_formatted": "Rua A, 10, Centro",
+                "item_count": "2",
+                "parsed_item_count": "2",
+                "items_json": json.dumps(
+                    [
+                        {"quantity": 1, "name": "Prato 1", "type": "dish", "unit_price": "25.00", "line_total": "25.00", "notes": ""},
+                        {"quantity": 1, "name": "Prato 2", "type": "dish", "unit_price": "25.00", "line_total": "25.00", "notes": ""},
+                    ]
+                ),
+                "status_timeline_json": json.dumps({"em_producao": "2026-04-30 12:00:00", "entregue": "2026-04-30 13:10:00"}),
+                "kitchen_icon": "1.svg",
+                "notes": "coupon_inferred_from_total,original_total_authoritative",
+            }
+        )
+        return output.getvalue()
+
+    def test_preview_infers_default_delivery_fee_and_recalculates_import_total(self):
+        preview = build_legacy_import_preview(self._clean_csv(), Decimal("10.00"))
+
+        self.assertEqual(preview["summary"]["will_import"], 1)
+        self.assertEqual(preview["summary"]["delivery_fee_inferred"], 1)
+        self.assertEqual(preview["rows"][0]["frete"], Decimal("10.00"))
+        self.assertEqual(preview["rows"][0]["total_original"], Decimal("25.00"))
+        self.assertEqual(preview["rows"][0]["total_importado"], Decimal("35.00"))
+
+    def test_import_recalculates_total_with_inferred_delivery_fee(self):
+        result = import_clean_legacy_orders(self._clean_csv(), Decimal("10.00"))
+
+        pedido = Pedido.objects.get(numero=2297)
+        self.assertEqual(result.imported, 1)
+        self.assertEqual(pedido.total, Decimal("35.00"))
+        self.assertEqual(pedido.valor_frete, Decimal("10.00"))
+        self.assertEqual(pedido.total_sem_desconto, Decimal("60.00"))
+        self.assertEqual(pedido.cupom_codigo, "CORTESIA01")
+        self.assertEqual(pedido.cupom_desconto, Decimal("25.00"))
+        self.assertEqual(pedido.itens.count(), 2)
+        self.assertIn("total importado recalculado com frete", pedido.observacao_geral)
 
 
 class OrderHeatmapApiTests(TestCase):

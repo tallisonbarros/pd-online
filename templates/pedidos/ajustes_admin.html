@@ -25,6 +25,7 @@
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
             <a class="ajustes-tab {% if ajustes_aba == 'api' %}is-active{% endif %}" {% if ajustes_aba == 'api' %}aria-current="page"{% endif %} href="?aba=api">API</a>
             <a class="ajustes-tab {% if ajustes_aba == 'lista_impressao' %}is-active{% endif %}" {% if ajustes_aba == 'lista_impressao' %}aria-current="page"{% endif %} href="?aba=lista_impressao">Lista de rotulos</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'importacao' %}is-active{% endif %}" {% if ajustes_aba == 'importacao' %}aria-current="page"{% endif %} href="?aba=importacao">Importacao</a>
             <a class="ajustes-tab {% if ajustes_aba == 'usuarios' %}is-active{% endif %}" {% if ajustes_aba == 'usuarios' %}aria-current="page"{% endif %} href="?aba=usuarios">Usuários</a>
         </section>
 
@@ -967,6 +968,129 @@
                     </div>
                 </dialog>
             </section>
+        {% elif ajustes_aba == 'importacao' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Temporario</p>
+                            <h2>Importar historico antigo</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" enctype="multipart/form-data" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="preview_legacy_orders">
+
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>CSV limpo</span>
+                            <input type="file" name="legacy_orders_file" accept=".csv,text/csv" required>
+                            <small class="field-help">Use o arquivo limpo revisado antes de aplicar a importacao.</small>
+                        </label>
+
+                        <label class="field ajustes-field">
+                            <span>Frete padrao inferido</span>
+                            <input type="number" step="0.01" min="0" name="default_delivery_fee" value="{{ legacy_import_default_fee|default:'10.00' }}">
+                            <small class="field-help">Aplicado somente em pedidos de entrega sem frete no CSV.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Revisar antes de importar</button>
+                        </div>
+                    </form>
+
+                    <div class="ajustes-note">
+                        <p>Na importacao, o total final antigo e preservado como valor oficial. O frete fica registrado separadamente: original quando existir no CSV, inferido pelo valor padrao em entregas sem taxa, e zero em retiradas.</p>
+                    </div>
+                </article>
+            </section>
+
+            {% if legacy_import_preview %}
+                <dialog class="usuarios-modal legacy-import-modal" id="legacy-import-review-modal" data-auto-open>
+                    <div class="usuarios-modal-shell legacy-import-modal-shell">
+                        <header class="usuarios-modal-head">
+                            <div>
+                                <p class="ops-kicker">Revisao da importacao</p>
+                                <h2>{{ legacy_import_preview.summary.total_rows }} pedidos no arquivo</h2>
+                            </div>
+                            <button type="button" class="usuarios-modal-close" data-close-modal aria-label="Fechar">&times;</button>
+                        </header>
+
+                        <div class="ajustes-preview-grid legacy-import-summary">
+                            <div class="ajustes-preview-card">
+                                <span>Novos</span>
+                                <strong>{{ legacy_import_preview.summary.will_import }}</strong>
+                                <small>Pedidos que serao gravados.</small>
+                            </div>
+                            <div class="ajustes-preview-card">
+                                <span>Duplicados</span>
+                                <strong>{{ legacy_import_preview.summary.duplicates }}</strong>
+                                <small>Pedidos com numero ja existente serao pulados.</small>
+                            </div>
+                            <div class="ajustes-preview-card">
+                                <span>Fretes inferidos</span>
+                                <strong>{{ legacy_import_preview.summary.delivery_fee_inferred }}</strong>
+                                <small>Entregas sem taxa no CSV.</small>
+                            </div>
+                            <div class="ajustes-preview-card">
+                                <span>Cupons</span>
+                                <strong>{{ legacy_import_preview.summary.coupon_rows }}</strong>
+                                <small>Pedidos com cupom preservado ou inferido no CSV.</small>
+                            </div>
+                        </div>
+
+                        <div class="legacy-import-table-wrap">
+                            <table class="legacy-import-table">
+                                <thead>
+                                    <tr>
+                                        <th>Pedido</th>
+                                        <th>Cliente</th>
+                                        <th>Data</th>
+                                        <th>Tipo</th>
+                                        <th>Pagamento</th>
+                                        <th>Itens</th>
+                                        <th>Subtotal</th>
+                                        <th>Frete</th>
+                                        <th>Cupom</th>
+                                        <th>Total antigo</th>
+                                        <th>Total importado</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in legacy_import_preview.rows %}
+                                        <tr class="{% if row.status == 'duplicado' %}is-duplicate{% endif %}">
+                                            <td>#{{ row.numero }}</td>
+                                            <td>{{ row.cliente }}</td>
+                                            <td>{{ row.criado_em|date:"d/m/Y H:i" }}</td>
+                                            <td>{{ row.tipo_coleta }}</td>
+                                            <td>{{ row.pagamento }}</td>
+                                            <td>{{ row.itens }}</td>
+                                            <td>R$ {{ row.subtotal|floatformat:2 }}</td>
+                                            <td>
+                                                R$ {{ row.frete|floatformat:2 }}
+                                                {% if row.frete_source == 'inferred_default' %}<small>inferido</small>{% endif %}
+                                            </td>
+                                            <td>{% if row.cupom %}{{ row.cupom }}{% else %}-{% endif %}</td>
+                                            <td>R$ {{ row.total_original|floatformat:2 }}</td>
+                                            <td>R$ {{ row.total_importado|floatformat:2 }}</td>
+                                            <td>{{ row.status }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <form method="post" class="usuarios-card-footer">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="import_legacy_orders">
+                            <input type="hidden" name="legacy_import_payload" value="{{ legacy_import_payload }}">
+                            <button type="button" class="ped-btn ped-btn-soft" data-close-modal>Cancelar</button>
+                            <button type="submit" class="ped-btn ped-btn-primary" {% if not legacy_import_preview.summary.will_import %}disabled{% endif %}>Aplicar importacao</button>
+                        </form>
+                    </div>
+                </dialog>
+            {% endif %}
         {% else %}
             <section class="ajustes-grid">
                 <article class="ped-detail-card ajustes-card ajustes-card--wide">

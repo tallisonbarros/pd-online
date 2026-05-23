@@ -656,7 +656,7 @@
     function initUsersAdminModals() {
         const openButtons = Array.from(document.querySelectorAll("[data-open-modal]"));
         const dialogs = Array.from(document.querySelectorAll(".usuarios-modal"));
-        if (!openButtons.length || !dialogs.length) return;
+        if (!dialogs.length) return;
 
         function openDialog(dialog) {
             if (!dialog) return;
@@ -693,6 +693,8 @@
                 button.addEventListener("click", () => closeDialog(dialog));
             });
         });
+
+        dialogs.filter((dialog) => dialog.hasAttribute("data-auto-open")).forEach(openDialog);
     }
 
     initGoogleMapsTester();
