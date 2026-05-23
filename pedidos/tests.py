@@ -507,6 +507,55 @@ class CozinhaAccessTests(TestCase):
         self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Consumo interno"')
         self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Excedente"')
 
+    def test_dashboard_counts_legacy_imported_dish_snapshots_as_frozen_marmitas(self):
+        self.client.force_login(self.gerente_user)
+        selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
+        imported = Pedido.objects.create(
+            nome_cliente="Historico",
+            telefone="",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("50.00"),
+            observacao_geral="[IMPORTADO DO SISTEMA ANTIGO]\nID antigo: order-1",
+        )
+        normal_snapshot = Pedido.objects.create(
+            nome_cliente="Snapshot normal",
+            telefone="",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("50.00"),
+        )
+        Pedido.objects.filter(id__in=[imported.id, normal_snapshot.id]).update(criado_em=selected_day)
+        ItemPedido.objects.create(
+            pedido=imported,
+            nome_prato_snapshot="Frango Guisado",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=2,
+            observacao="Tipo legado: dish",
+        )
+        ItemPedido.objects.create(
+            pedido=imported,
+            nome_prato_snapshot="Coca-Cola Lata",
+            preco_snapshot=Decimal("6.00"),
+            quantidade=1,
+            observacao="Tipo legado: other",
+        )
+        ItemPedido.objects.create(
+            pedido=normal_snapshot,
+            nome_prato_snapshot="Frango Guisado",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=3,
+            observacao="Tipo legado: dish",
+        )
+
+        response = self.client.get("/controle/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-dashboard-card="Marmitas vendidas"')
+        self.assertContains(response, "\n                2\n")
+
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.gerente_user)
 

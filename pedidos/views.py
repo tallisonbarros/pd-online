@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Max, Sum
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
@@ -2705,6 +2705,51 @@ def pedidos_concluidos_admin(request):
     concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada)
     cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada)
     total_concluidos_geral = base.filter(status=Pedido.Status.FINALIZADO).count()
+    hoje = timezone.localdate()
+    nav_inicio = data_selecionada - timedelta(days=3)
+    nav_fim = data_selecionada + timedelta(days=3)
+    nav_counts = {}
+    nav_rows = (
+        base.filter(
+            status__in=[Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO],
+            criado_em__date__gte=nav_inicio,
+            criado_em__date__lte=nav_fim,
+        )
+        .annotate(dia=TruncDate("criado_em"))
+        .values("dia", "status")
+        .annotate(total=Count("id"))
+    )
+    for row in nav_rows:
+        nav_counts.setdefault(row["dia"], {})[row["status"]] = row["total"]
+
+    date_nav_days = []
+    for offset in range(7):
+        dia = nav_inicio + timedelta(days=offset)
+        counts = nav_counts.get(dia, {})
+        date_nav_days.append(
+            {
+                "date": dia,
+                "weekday": _weekday_label_pt(dia)[:3],
+                "is_selected": dia == data_selecionada,
+                "is_today": dia == hoje,
+                "concluidos": counts.get(Pedido.Status.FINALIZADO, 0),
+                "cancelados": counts.get(Pedido.Status.CANCELADO, 0),
+            }
+        )
+
+    delta_dias = (data_selecionada - hoje).days
+    if delta_dias == 0:
+        rotulo_data_relativa = "Hoje"
+    elif delta_dias == -1:
+        rotulo_data_relativa = "Ontem"
+    elif delta_dias == 1:
+        rotulo_data_relativa = "Amanha"
+    elif delta_dias < 0:
+        rotulo_data_relativa = f"Ha {abs(delta_dias)} dias"
+    else:
+        rotulo_data_relativa = f"Em {delta_dias} dias"
+
+    resumo_dia = concluidos.aggregate(total=Sum("total"), ultimo=Max("criado_em"))
     return render(
         request,
         "pedidos/pedidos_concluidos_admin.html",
@@ -2719,7 +2764,12 @@ def pedidos_concluidos_admin(request):
             "data_selecionada": data_selecionada,
             "data_anterior": data_selecionada - timedelta(days=1),
             "data_proxima": data_selecionada + timedelta(days=1),
-            "hoje": timezone.localdate(),
+            "data_nav_days": date_nav_days,
+            "rotulo_data_relativa": rotulo_data_relativa,
+            "dia_semana_selecionado": _weekday_label_pt(data_selecionada),
+            "total_concluidos_dia": resumo_dia.get("total") or Decimal("0.00"),
+            "ultimo_concluido_em": resumo_dia.get("ultimo"),
+            "hoje": hoje,
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
@@ -2904,12 +2954,17 @@ def _pedidos_concluidos_payload(data_selecionada=None):
     base = Pedido.objects.prefetch_related("itens")
     concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
     cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
+    resumo_dia = concluidos.aggregate(total=Sum("total"), ultimo=Max("criado_em"))
+    ultimo_concluido = resumo_dia.get("ultimo")
     return {
         "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos],
         "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados],
         "concluidos_count": concluidos.count(),
         "total_concluidos_geral": base.filter(status=Pedido.Status.FINALIZADO).count(),
         "cancelados_count": cancelados.count(),
+        "data_label": data_selecionada.strftime("%d/%m/%Y"),
+        "total_concluidos_dia": f"R$ {(resumo_dia.get('total') or Decimal('0.00')):.2f}".replace(".", ","),
+        "ultimo_concluido_label": _format_local_datetime(ultimo_concluido, "%H:%M") if ultimo_concluido else "-",
         **_pedidos_base_counts(base),
     }
 

@@ -8504,6 +8504,39 @@ fieldset.field {
         font-size: 1.8rem;
     }
 
+    .closed-date-panel {
+        margin-inline: -2px;
+        padding: 10px;
+        border-radius: 14px;
+    }
+
+    .closed-date-main {
+        grid-template-columns: 44px minmax(0, 1fr) 44px;
+        gap: 7px;
+    }
+
+    .closed-date-arrow,
+    .closed-date-today,
+    .closed-date-picker button,
+    .closed-date-picker input {
+        min-height: 44px;
+        border-radius: 12px;
+    }
+
+    .closed-date-current {
+        min-height: 64px;
+        padding: 8px 10px;
+        border-radius: 13px;
+    }
+
+    .closed-date-current strong {
+        font-size: 1.25rem;
+    }
+
+    .closed-date-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+
     .ops-kpis {
         grid-template-columns: 1fr;
     }
@@ -9174,6 +9207,172 @@ fieldset.field {
     border-color: #4e342e;
     color: #221311;
     box-shadow: 0 10px 22px rgba(34, 19, 17, 0.12);
+}
+.closed-date-panel {
+    position: sticky;
+    top: 66px;
+    z-index: 18;
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #eadfd9;
+    border-radius: 18px;
+    background: rgba(255, 253, 250, 0.96);
+    box-shadow: 0 18px 42px rgba(34, 19, 17, 0.08);
+    backdrop-filter: blur(12px);
+}
+.closed-date-main {
+    display: grid;
+    grid-template-columns: 54px minmax(220px, 1fr) 54px minmax(260px, auto) auto;
+    gap: 10px;
+    align-items: center;
+}
+.closed-date-arrow,
+.closed-date-today,
+.closed-date-picker button {
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d8c7bd;
+    border-radius: 14px;
+    background: #fffdfa;
+    color: #221311;
+    font: inherit;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+}
+.closed-date-arrow {
+    font-size: 1.2rem;
+}
+.closed-date-arrow:hover,
+.closed-date-arrow:focus-visible,
+.closed-date-today:hover,
+.closed-date-today:focus-visible,
+.closed-date-picker button:hover,
+.closed-date-picker button:focus-visible,
+.closed-day-pill:hover,
+.closed-day-pill:focus-visible {
+    border-color: #4e342e;
+    box-shadow: 0 10px 22px rgba(34, 19, 17, 0.12);
+    outline: none;
+}
+.closed-date-current {
+    min-height: 72px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    padding: 10px 16px;
+    border-radius: 16px;
+    background: #4e342e;
+    color: #fffdfa;
+    text-align: center;
+}
+.closed-date-current span,
+.closed-date-current small,
+.closed-date-picker label,
+.closed-date-summary span,
+.closed-day-pill span,
+.closed-day-pill small {
+    font-size: 0.72rem;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+.closed-date-current strong {
+    font-size: 1.55rem;
+    line-height: 1;
+}
+.closed-date-current small {
+    color: #eadfd9;
+}
+.closed-date-picker {
+    display: grid;
+    gap: 5px;
+}
+.closed-date-picker label {
+    color: #6f5a50;
+}
+.closed-date-picker div {
+    display: flex;
+    gap: 6px;
+}
+.closed-date-picker input {
+    min-height: 48px;
+    min-width: 158px;
+    border: 1px solid #d8c7bd;
+    border-radius: 14px;
+    padding: 0 12px;
+    background: #fffdfa;
+    color: #221311;
+    font: inherit;
+    font-weight: 800;
+}
+.closed-date-picker button,
+.closed-date-today {
+    padding: 0 16px;
+}
+.closed-day-strip {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(104px, 1fr));
+    gap: 8px;
+}
+.closed-day-pill {
+    min-height: 86px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid #eadfd9;
+    border-radius: 14px;
+    background: #fbf7f4;
+    color: #221311;
+    text-align: center;
+    text-decoration: none;
+}
+.closed-day-pill strong {
+    font-size: 1.45rem;
+    line-height: 1;
+}
+.closed-day-pill small {
+    color: #6f5a50;
+}
+.closed-day-pill small em {
+    display: block;
+    color: #b14b43;
+    font-style: normal;
+}
+.closed-day-pill.is-selected {
+    border-color: #4e342e;
+    background: #221311;
+    color: #fffdfa;
+}
+.closed-day-pill.is-selected small,
+.closed-day-pill.is-selected small em {
+    color: #eadfd9;
+}
+.closed-day-pill.is-today:not(.is-selected) {
+    border-color: #4e342e;
+}
+.closed-date-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    gap: 8px;
+}
+.closed-date-summary div {
+    display: grid;
+    gap: 3px;
+    padding: 12px;
+    border: 1px solid #eadfd9;
+    border-radius: 14px;
+    background: #fffdfa;
+}
+.closed-date-summary span {
+    color: #6f5a50;
+}
+.closed-date-summary strong {
+    color: #221311;
+    font-size: 1.08rem;
 }
 .ped-live-list {
     display: grid;
@@ -10408,6 +10607,37 @@ fieldset.field {
     .ped-route-nav .ped-nav-actions {
         margin-left: 0;
     }
+    .closed-date-panel {
+        position: static;
+    }
+    .closed-date-main {
+        grid-template-columns: 48px minmax(170px, 1fr) 48px;
+    }
+    .closed-date-picker,
+    .closed-date-today {
+        grid-column: 1 / -1;
+    }
+    .closed-date-picker div {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .closed-date-picker input {
+        width: 100%;
+        min-width: 0;
+    }
+    .closed-day-strip {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scroll-snap-type: x proximity;
+    }
+    .closed-day-pill {
+        min-width: 112px;
+        scroll-snap-align: start;
+    }
+    .closed-date-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .ped-card-top { grid-template-columns: 1fr; align-items: start; }
     .ped-item-line--top,
     .ped-item-list--top li { white-space: normal; }
@@ -10422,6 +10652,36 @@ fieldset.field {
     .ped-detail-grid { grid-template-columns: 1fr; }
     .ped-detail-hero { flex-direction: column; }
     .ped-detail-hero-actions { justify-items: start; }
+}
+
+@media (max-width: 640px) {
+    .closed-date-panel {
+        margin-inline: -2px;
+        padding: 10px;
+        border-radius: 14px;
+    }
+    .closed-date-main {
+        grid-template-columns: 44px minmax(0, 1fr) 44px;
+        gap: 7px;
+    }
+    .closed-date-arrow,
+    .closed-date-today,
+    .closed-date-picker button,
+    .closed-date-picker input {
+        min-height: 44px;
+        border-radius: 12px;
+    }
+    .closed-date-current {
+        min-height: 64px;
+        padding: 8px 10px;
+        border-radius: 13px;
+    }
+    .closed-date-current strong {
+        font-size: 1.25rem;
+    }
+    .closed-date-summary {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 @media (max-width: 720px) {

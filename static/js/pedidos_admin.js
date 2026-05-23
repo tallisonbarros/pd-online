@@ -454,9 +454,10 @@
         if (!listNode) return;
         const concluidos = Array.isArray(payload.pedidos_concluidos) ? payload.pedidos_concluidos : [];
         const cancelados = Array.isArray(payload.pedidos_cancelados) ? payload.pedidos_cancelados : [];
+        const dateLabel = payload.data_label || root.dataset.selectedDateLabel || "";
         const doneIcon = "M7 11l3 3 7-7 1.4 1.4L10 16.8 5.6 12.4 7 11z";
         const cancelIcon = "M7.4 6L12 10.6 16.6 6 18 7.4 13.4 12 18 16.6 16.6 18 12 13.4 7.4 18 6 16.6 10.6 12 6 7.4 7.4 6z";
-        const concludedMarkup = concluidos.length
+        let concludedMarkup = concluidos.length
             ? concluidos.map((pedido) => buildClosedCard(pedido, doneIcon)).join("")
             : `
                 <div class="empty-state">
@@ -464,6 +465,14 @@
                     <p>Pedidos entregues aparecerão aqui.</p>
                 </div>
             `;
+        if (!concluidos.length) {
+            concludedMarkup = `
+                <div class="empty-state empty-state--closed-date">
+                    <h2 class="closed-empty-title">Nenhum pedido concluido${dateLabel ? ` em ${escapeHtml(dateLabel)}` : ""}</h2>
+                    <p class="closed-empty-copy">Use as setas, a faixa de dias ou o calendario para consultar outro periodo.</p>
+                </div>
+            `;
+        }
         const canceledMarkup = cancelados.map((pedido) => buildClosedCard(pedido, cancelIcon)).join("");
 
         listNode.innerHTML = `
@@ -483,6 +492,14 @@
                 <strong data-closed-total>${escapeHtml(payload.total_concluidos_geral || 0)}</strong>
             </footer>
         `;
+        const concludedNode = root.querySelector("[data-closed-day-concluded]");
+        const canceledNode = root.querySelector("[data-closed-day-canceled]");
+        const totalNode = root.querySelector("[data-closed-day-total]");
+        const lastNode = root.querySelector("[data-closed-day-last]");
+        if (concludedNode) concludedNode.textContent = payload.concluidos_count || 0;
+        if (canceledNode) canceledNode.textContent = payload.cancelados_count || 0;
+        if (totalNode) totalNode.textContent = payload.total_concluidos_dia || "R$ 0,00";
+        if (lastNode) lastNode.textContent = payload.ultimo_concluido_label || "-";
     }
 
     function renderOrders(payload) {

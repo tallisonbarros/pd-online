@@ -1,7 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 
 from .models import Pedido, ResumoOperacionalDia
 from .order_services import normalize_phone
@@ -61,7 +61,16 @@ def get_dashboard_diaria(data):
     pedidos_recorrentes = _recurring_order_count(pedidos_do_dia, data)
     marmitas_vendidas = int(
         _finished_orders_for_day(data)
-        .filter(itens__prato__isnull=False)
+        .filter(
+            Q(itens__prato__isnull=False)
+            | Q(
+                observacao_geral__startswith="[IMPORTADO DO SISTEMA ANTIGO]",
+                itens__prato__isnull=True,
+                itens__bebida__isnull=True,
+                itens__adicional__isnull=True,
+                itens__observacao__icontains="Tipo legado: dish",
+            )
+        )
         .aggregate(total=Sum("itens__quantidade"))
         .get("total")
         or 0

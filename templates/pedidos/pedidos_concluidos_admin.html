@@ -11,16 +11,73 @@
         class="ops-main pedidos-admin-page"
         data-page="pedidos-closed-admin"
         data-api-url="{% url 'pedidos:api_pedidos_concluidos_admin' %}?data={{ data_selecionada|date:'Y-m-d' }}"
+        data-selected-date-label="{{ data_selecionada|date:'d/m/Y' }}"
         data-status-url-template="{% url 'pedidos:atualizar_status_pedido' 0 %}"
     >
         <div class="pedidos-workspace pedidos-workspace--dated">
             {% include "pedidos/_pedidos_nav.html" with pedidos_nav_active="concluidos" concluidos_count=concluidos_count %}
 
-            <nav class="ops-period-switch dashboard-date-nav" aria-label="Navegar por dia">
-                <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior" title="Dia anterior">←</a>
-                <a class="ops-period-btn {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
-                <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia" title="Proximo dia">→</a>
-            </nav>
+            <section class="closed-date-panel" aria-label="Navegacao por dia dos pedidos concluidos">
+                <div class="closed-date-main">
+                    <a class="closed-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior" title="Dia anterior">&larr;</a>
+
+                    <div class="closed-date-current" aria-live="polite">
+                        <span>{{ rotulo_data_relativa }}</span>
+                        <strong>{{ data_selecionada|date:"d/m/Y" }}</strong>
+                        <small>{{ dia_semana_selecionado }}</small>
+                    </div>
+
+                    <a class="closed-date-arrow" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia" title="Proximo dia">&rarr;</a>
+
+                    <form class="closed-date-picker" method="get" action="{% url 'pedidos:pedidos_concluidos_admin' %}">
+                        <label for="closed-date-input">Escolher data</label>
+                        <div>
+                            <input id="closed-date-input" type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}">
+                            <button type="submit">Ir</button>
+                        </div>
+                    </form>
+
+                    {% if data_selecionada != hoje %}
+                        <a class="closed-date-today" href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+                    {% endif %}
+                </div>
+
+                <div class="closed-day-strip" aria-label="Dias proximos">
+                    {% for dia in data_nav_days %}
+                        <a
+                            class="closed-day-pill {% if dia.is_selected %}is-selected{% endif %} {% if dia.is_today %}is-today{% endif %}"
+                            href="{% url 'pedidos:pedidos_concluidos_admin' %}?data={{ dia.date|date:'Y-m-d' }}"
+                            {% if dia.is_selected %}aria-current="date"{% endif %}
+                        >
+                            <span>{{ dia.weekday }}</span>
+                            <strong>{{ dia.date|date:"d" }}</strong>
+                            <small>
+                                <b>{{ dia.concluidos }}</b> concl.
+                                {% if dia.cancelados %}<em>{{ dia.cancelados }} canc.</em>{% endif %}
+                            </small>
+                        </a>
+                    {% endfor %}
+                </div>
+
+                <div class="closed-date-summary" aria-label="Resumo do dia selecionado">
+                    <div>
+                        <span>Concluidos</span>
+                        <strong data-closed-day-concluded>{{ concluidos_count }}</strong>
+                    </div>
+                    <div>
+                        <span>Cancelados</span>
+                        <strong data-closed-day-canceled>{{ cancelados_count }}</strong>
+                    </div>
+                    <div>
+                        <span>Total do dia</span>
+                        <strong data-closed-day-total>R$ {{ total_concluidos_dia|floatformat:2 }}</strong>
+                    </div>
+                    <div>
+                        <span>Ultimo pedido</span>
+                        <strong data-closed-day-last>{% if ultimo_concluido_em %}{{ ultimo_concluido_em|date:"H:i" }}{% else %}-{% endif %}</strong>
+                    </div>
+                </div>
+            </section>
 
             <section id="pedidos-concluidos-lista" class="ped-live-list pedidos-content-panel" data-orders-list>
                 {% for pedido in pedidos_concluidos %}
@@ -72,9 +129,9 @@
                 </div>
             </article>
                 {% empty %}
-                    <div class="empty-state">
-                        <h2>Nenhum pedido concluído</h2>
-                        <p>Pedidos entregues aparecerão aqui.</p>
+                    <div class="empty-state empty-state--closed-date">
+                        <h2 class="closed-empty-title">Nenhum pedido concluido em {{ data_selecionada|date:"d/m/Y" }}</h2>
+                        <p class="closed-empty-copy">Use as setas, a faixa de dias ou o calendario para consultar outro periodo.</p>
                     </div>
                 {% endfor %}
 
