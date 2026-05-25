@@ -65,7 +65,7 @@
                                         {% endif %}
                                     </strong>
                                 </div>
-                                <div class="ped-chip-box">
+                                <div class="ped-chip-box {% if not pedido.pagamento_recebido %}ped-chip-box--unpaid{% endif %}">
                                     <span>Valor total</span>
                                     <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
                                 </div>
@@ -89,6 +89,16 @@
                             <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="entregador" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
                                 Copiar endereço
                             </button>
+                            <form method="post" action="{% url 'pedidos:alternar_pagamento_recebido_pedido' pedido.id %}" data-payment-received-form>
+                                {% csrf_token %}
+                                <button class="ped-btn ped-btn-toggle ped-btn-payment {% if pedido.pagamento_recebido %}is-active{% endif %}" type="submit" aria-pressed="{% if pedido.pagamento_recebido %}true{% else %}false{% endif %}" title="{% if pedido.pagamento_recebido %}Pago{% if pedido.pagamento_recebido_em %} as {{ pedido.pagamento_recebido_em|date:'H:i' }}{% endif %}{% else %}Marcar pagamento recebido{% endif %}">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M9 12.8 5.8 9.6 4.4 11l4.6 4.6L19.6 5l-1.4-1.4L9 12.8Z"/>
+                                    </svg>
+                                    <span>{% if pedido.pagamento_recebido %}Pago{% else %}Nao pago{% endif %}</span>
+                                    {% if pedido.pagamento_recebido_em %}<small>{{ pedido.pagamento_recebido_em|date:"H:i" }}</small>{% endif %}
+                                </button>
+                            </form>
                             <form method="post" action="{% url 'pedidos:alternar_entregador_pedido' pedido.id %}" data-entregador-form>
                                 {% csrf_token %}
                                 <button class="ped-btn ped-btn-toggle {% if pedido.entregador_solicitado %}is-active{% endif %}" type="submit">

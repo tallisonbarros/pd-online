@@ -144,6 +144,7 @@ class Pedido(models.Model):
         AGUARDANDO_APROVACAO = "aguardando_aprovacao", "Aguardando aprovação"
         NOVO = "novo", "Novo"
         EM_PREPARO = "em_preparo", "Em preparo"
+        PAGAMENTO_RECEBIDO = "pagamento_recebido", "Pagamento recebido"
         AGUARDANDO_ENTREGADOR = "aguardando_entregador", "Aguardando entregador"
         SAIU_ENTREGA = "saiu_entrega", "Saiu para entrega"
         FINALIZADO = "finalizado", "Finalizado"
@@ -187,6 +188,7 @@ class Pedido(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
     producao_iniciada_em = models.DateTimeField(blank=True, null=True)
+    pagamento_recebido_em = models.DateTimeField(blank=True, null=True)
     entregador_solicitado = models.BooleanField(default=False)
 
     class Meta:
@@ -224,6 +226,8 @@ class Pedido(models.Model):
 
     @property
     def status_label_contextual(self):
+        if self.status == self.Status.PAGAMENTO_RECEBIDO:
+            return "Pagamento recebido"
         if self.status == self.Status.AGUARDANDO_ENTREGADOR:
             return "Aguardando coleta"
         if self.status == self.Status.SAIU_ENTREGA and self.is_retirada:
@@ -248,6 +252,20 @@ class Pedido(models.Model):
             {"status": self.Status.SAIU_ENTREGA, "number": "4", "label": "Saiu para entrega"},
             {"status": self.Status.FINALIZADO, "number": "5", "label": "Entregue"},
         ]
+
+    @property
+    def pagamento_recebido(self):
+        return bool(self.pagamento_recebido_em) or self.status == self.Status.PAGAMENTO_RECEBIDO
+
+    @property
+    def pagamento_na_entrega(self):
+        return self.forma_pagamento in {self.FormaPagamento.CARTAO, self.FormaPagamento.DINHEIRO}
+
+    @property
+    def pagamento_copia_status(self):
+        if self.pagamento_recebido or not self.pagamento_na_entrega:
+            return "PAGO"
+        return "COBRAR DO CLIENTE"
 
     @property
     def item_type_counts(self):

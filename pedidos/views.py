@@ -272,6 +272,9 @@ def montar_mensagem_whatsapp(pedido):
     if pedido.observacao_geral:
         linhas.extend(["", f"*Observação geral:* {pedido.observacao_geral}"])
     linhas.extend(["", f"*Pagamento:* {pedido.get_forma_pagamento_display()}"])
+    linhas.append(f"*{pedido.pagamento_copia_status}*")
+    if pedido.pagamento_recebido_em:
+        linhas.append(f"*Pago em:* {_format_local_datetime(pedido.pagamento_recebido_em, '%d/%m %H:%M')}")
     if pedido.forma_pagamento == Pedido.FormaPagamento.PIX:
         pix_chave = _safe_text(getattr(ConfiguracaoEntrega.get_solo(), "pix_chave", ""))
         if pix_chave:
@@ -291,6 +294,10 @@ def montar_mensagem_entregador(pedido):
         f"Pedido #{pedido.numero} - {pedido.nome_cliente}",
         f"Endereço: {pedido.endereco}",
     ]
+    linhas.append(f"Pagamento: {pedido.get_forma_pagamento_display()}")
+    linhas.append(f"*{pedido.pagamento_copia_status}*")
+    if pedido.pagamento_recebido_em:
+        linhas.append(f"Pago em: {_format_local_datetime(pedido.pagamento_recebido_em, '%d/%m %H:%M')}")
     if pedido.lote_quadra:
         linhas.append(f"Lote/Quadra: {pedido.lote_quadra}")
     if pedido.complemento:
@@ -1743,6 +1750,7 @@ def _pedido_public_payload(pedido, include_items=False):
         Pedido.Status.AGUARDANDO_APROVACAO: 2,
         Pedido.Status.NOVO: 3,
         Pedido.Status.EM_PREPARO: 3,
+        Pedido.Status.PAGAMENTO_RECEBIDO: 3,
         Pedido.Status.AGUARDANDO_ENTREGADOR: 3,
         Pedido.Status.SAIU_ENTREGA: 4,
         Pedido.Status.FINALIZADO: 4,
@@ -2356,6 +2364,11 @@ def _build_access_metrics_context(period):
     envio_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.ENTREGA).count()
     retirada_orders_total = pedidos_metricas.filter(tipo_coleta=Pedido.TipoColeta.RETIRADA).count()
     total_pedidos_metricas = pedidos_metricas.count()
+    pedidos_por_canal_raw = pedidos_metricas.values("canal").annotate(total=Count("id"))
+    pedidos_por_canal = {row["canal"]: row["total"] for row in pedidos_por_canal_raw}
+    pedidos_balcao_total = pedidos_por_canal.get(Pedido.Canal.BALCAO, 0)
+    pedidos_site_total = pedidos_por_canal.get(Pedido.Canal.SITE, 0)
+    pedidos_ifood_total = pedidos_por_canal.get(Pedido.Canal.IFOOD, 0)
     envio_orders_share = _rate_label(envio_orders_total, total_pedidos_metricas)
     retirada_orders_share = _rate_label(retirada_orders_total, total_pedidos_metricas)
     active_since = timezone.now() - timedelta(seconds=90)
@@ -2373,6 +2386,9 @@ def _build_access_metrics_context(period):
         "total_retirada": event_counts.get(AccessEvent.EventType.PICKUP_SUBMIT, 0),
         "total_checkout": event_counts.get(AccessEvent.EventType.CHECKOUT_VIEW, 0),
         "total_pedidos_metricas": total_pedidos_metricas,
+        "pedidos_balcao_total": pedidos_balcao_total,
+        "pedidos_site_total": pedidos_site_total,
+        "pedidos_ifood_total": pedidos_ifood_total,
         "envio_orders_total": envio_orders_total,
         "retirada_orders_total": retirada_orders_total,
         "envio_orders_share": envio_orders_share,
@@ -2406,6 +2422,9 @@ def _access_metrics_json(context):
             "total_retirada": context["total_retirada"],
             "total_checkout": context["total_checkout"],
             "total_pedidos_metricas": context["total_pedidos_metricas"],
+            "pedidos_balcao_total": context["pedidos_balcao_total"],
+            "pedidos_site_total": context["pedidos_site_total"],
+            "pedidos_ifood_total": context["pedidos_ifood_total"],
             "envio_orders_total": context["envio_orders_total"],
             "retirada_orders_total": context["retirada_orders_total"],
             "envio_orders_share": context["envio_orders_share"],
@@ -2894,6 +2913,8 @@ def _pedido_admin_summary(pedido):
         "item_lines": _pedido_item_lines(pedido),
         "status": pedido.status,
         "status_label": pedido.status_label_contextual,
+        "pagamento_recebido": pedido.pagamento_recebido,
+        "pagamento_recebido_em": _format_local_datetime(pedido.pagamento_recebido_em, "%H:%M") if pedido.pagamento_recebido_em else "",
         "tipo_coleta": pedido.tipo_coleta,
         "stage_labels": pedido.stage_labels,
         "icone_url": pedido.icone_pedido_url,
@@ -3109,6 +3130,8 @@ def _pedido_modal_payload(pedido):
             "observacao_geral": pedido.observacao_geral,
             "status": pedido.status,
             "status_label": pedido.status_label_contextual,
+            "pagamento_recebido": pedido.pagamento_recebido,
+            "pagamento_recebido_em": _format_local_datetime(pedido.pagamento_recebido_em, "%H:%M") if pedido.pagamento_recebido_em else "",
             "endereco": pedido.endereco,
             "google_maps_route_url": pedido.google_maps_route_url,
             "valor_frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
@@ -4146,7 +4169,11 @@ def atualizar_status_pedido(request, pedido_id):
     if status not in dict(Pedido.Status.choices):
         return HttpResponseBadRequest("Status invalido.")
     pedido.status = status
-    pedido.save(update_fields=["status"])
+    update_fields = ["status"]
+    if status == Pedido.Status.PAGAMENTO_RECEBIDO and not pedido.pagamento_recebido_em:
+        pedido.pagamento_recebido_em = timezone.now()
+        update_fields.append("pagamento_recebido_em")
+    pedido.save(update_fields=update_fields)
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "status": pedido.status_label_contextual})
     return redirect("pedidos:cozinha_pedidos")
@@ -4160,6 +4187,29 @@ def alternar_entregador_pedido(request, pedido_id):
     pedido.save(update_fields=["entregador_solicitado"])
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "entregador_solicitado": pedido.entregador_solicitado})
+    return redirect("pedidos:cozinha_pedidos")
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def alternar_pagamento_recebido_pedido(request, pedido_id):
+    pedido = get_object_or_404(Pedido, id=pedido_id)
+    value = _safe_text(request.POST.get("pagamento_recebido")).lower()
+    if value in {"sim", "true", "1"}:
+        should_mark_paid = True
+    elif value in {"nao", "false", "0"}:
+        should_mark_paid = False
+    else:
+        should_mark_paid = not pedido.pagamento_recebido
+    pedido.pagamento_recebido_em = timezone.now() if should_mark_paid else None
+    pedido.save(update_fields=["pagamento_recebido_em"])
+    payload = {
+        "ok": True,
+        "pagamento_recebido": pedido.pagamento_recebido,
+        "pagamento_recebido_em": _format_local_datetime(pedido.pagamento_recebido_em, "%H:%M") if pedido.pagamento_recebido_em else "",
+    }
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse(payload)
     return redirect("pedidos:cozinha_pedidos")
 
 

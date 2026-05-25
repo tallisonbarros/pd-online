@@ -645,7 +645,7 @@ class AccessMetricsTests(TestCase):
             is_staff=True,
         )
 
-    def _create_metric_order(self, tipo_coleta):
+    def _create_metric_order(self, tipo_coleta, canal=Pedido.Canal.BALCAO):
         return Pedido.objects.create(
             nome_cliente="Cliente Metricas",
             telefone="64999999999",
@@ -657,6 +657,8 @@ class AccessMetricsTests(TestCase):
             endereco="Rua Metricas, 10 - Centro, Rio Verde - GO",
             tipo_coleta=tipo_coleta,
             forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=canal,
+            ifood=canal == Pedido.Canal.IFOOD,
             status=Pedido.Status.NOVO,
             total=Decimal("39.90"),
         )
@@ -711,8 +713,9 @@ class AccessMetricsTests(TestCase):
         ]
         AccessEvent.objects.bulk_create(events)
         AccessEvent.objects.update(created_at=today)
-        self._create_metric_order(Pedido.TipoColeta.ENTREGA)
-        self._create_metric_order(Pedido.TipoColeta.RETIRADA)
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA, Pedido.Canal.BALCAO)
+        self._create_metric_order(Pedido.TipoColeta.RETIRADA, Pedido.Canal.SITE)
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA, Pedido.Canal.IFOOD)
 
         response = self.client.get("/controle/metricas/?period=7d")
 
@@ -723,10 +726,13 @@ class AccessMetricsTests(TestCase):
         self.assertContains(response, "Caixa")
         self.assertContains(response, "Visitantes que chegaram ao carrinho")
         self.assertContains(response, 'data-metric-value="retirada_orders_total">1</strong>')
-        self.assertContains(response, 'data-metric-value="envio_orders_total">1</strong>')
-        self.assertContains(response, 'data-metric-value="total_pedidos_metricas">2</strong>')
-        self.assertContains(response, 'data-metric-value="envio_orders_share">50%</b>')
-        self.assertContains(response, 'data-metric-value="retirada_orders_share">50%</b>')
+        self.assertContains(response, 'data-metric-value="envio_orders_total">2</strong>')
+        self.assertContains(response, 'data-metric-value="total_pedidos_metricas">3</strong>')
+        self.assertContains(response, 'data-metric-value="pedidos_balcao_total">1</b>')
+        self.assertContains(response, 'data-metric-value="pedidos_site_total">1</b>')
+        self.assertContains(response, 'data-metric-value="pedidos_ifood_total">1</b>')
+        self.assertContains(response, 'data-metric-value="envio_orders_share">67%</b>')
+        self.assertContains(response, 'data-metric-value="retirada_orders_share">33%</b>')
         self.assertContains(response, "ops-kpi-card--fulfillment")
         self.assertContains(response, "Acessos unicos no periodo")
         self.assertContains(response, "Pedidos reais no periodo")
@@ -756,8 +762,9 @@ class AccessMetricsTests(TestCase):
         ]
         AccessEvent.objects.bulk_create(events)
         AccessEvent.objects.update(created_at=timezone.now())
-        self._create_metric_order(Pedido.TipoColeta.ENTREGA)
-        self._create_metric_order(Pedido.TipoColeta.RETIRADA)
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA, Pedido.Canal.BALCAO)
+        self._create_metric_order(Pedido.TipoColeta.RETIRADA, Pedido.Canal.SITE)
+        self._create_metric_order(Pedido.TipoColeta.ENTREGA, Pedido.Canal.IFOOD)
 
         response = self.client.get("/controle/api/metricas/?period=7d")
 
@@ -767,11 +774,14 @@ class AccessMetricsTests(TestCase):
         self.assertEqual(payload["kpis"]["total_cardapio"], 1)
         self.assertEqual(payload["kpis"]["total_carrinho"], 1)
         self.assertEqual(payload["kpis"]["total_retirada"], 1)
-        self.assertEqual(payload["kpis"]["total_pedidos_metricas"], 2)
-        self.assertEqual(payload["kpis"]["envio_orders_total"], 1)
+        self.assertEqual(payload["kpis"]["total_pedidos_metricas"], 3)
+        self.assertEqual(payload["kpis"]["pedidos_balcao_total"], 1)
+        self.assertEqual(payload["kpis"]["pedidos_site_total"], 1)
+        self.assertEqual(payload["kpis"]["pedidos_ifood_total"], 1)
+        self.assertEqual(payload["kpis"]["envio_orders_total"], 2)
         self.assertEqual(payload["kpis"]["retirada_orders_total"], 1)
-        self.assertEqual(payload["kpis"]["envio_orders_share"], "50%")
-        self.assertEqual(payload["kpis"]["retirada_orders_share"], "50%")
+        self.assertEqual(payload["kpis"]["envio_orders_share"], "67%")
+        self.assertEqual(payload["kpis"]["retirada_orders_share"], "33%")
         self.assertNotIn("add_to_cart_total", payload["kpis"])
         self.assertEqual(payload["funnel_steps"][2]["label"], "Retirada")
         self.assertEqual(payload["funnel_steps"][3]["label"], "Caixa")
@@ -2368,6 +2378,8 @@ class PedidoDetalheAdminTests(TestCase):
 
         page_response = self.client.get("/controle/pedidos/")
         self.assertContains(page_response, "Entregador solicitado")
+        self.assertContains(page_response, "Nao pago")
+        self.assertContains(page_response, f"/controle/pedido/{pedido.id}/pagamento-recebido/")
         self.assertContains(page_response, "Copiar pedido")
         self.assertContains(page_response, "Copiar endereço")
         self.assertContains(page_response, f"/controle/api/pedido/{pedido.id}/copias/")
@@ -2382,8 +2394,23 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertTrue(pedido.entregador_solicitado)
         payload = self.client.get("/controle/api/pedidos-admin/").json()
         self.assertTrue(payload["pedidos"][0]["entregador_solicitado"])
+        self.assertFalse(payload["pedidos"][0]["pagamento_recebido"])
         self.assertEqual(payload["pedidos"][0]["copy_url"], f"/controle/api/pedido/{pedido.id}/copias/")
         self.assertEqual(payload["pedidos"][0]["icone_url"], pedido.icone_pedido_url)
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento-recebido/",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertTrue(pedido.pagamento_recebido)
+        self.assertIsNotNone(pedido.pagamento_recebido_em)
+        self.assertTrue(response.json()["pagamento_recebido"])
+        payload = self.client.get("/controle/api/pedidos-admin/").json()
+        self.assertTrue(payload["pedidos"][0]["pagamento_recebido"])
+        self.assertRegex(payload["pedidos"][0]["pagamento_recebido_em"], r"^\d{2}:\d{2}$")
 
     def test_kitchen_card_displays_discreet_item_type_counts(self):
         self.client.force_login(self.staff_user)
@@ -2456,8 +2483,36 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn("*Cliente:* Cliente Ativo", payload["cliente"])
         self.assertIn(f"Pedido #{pedido.numero} - Cliente Ativo", payload["entregador"])
         self.assertIn("Endereço: Rua Teste, 100 - Centro, Rio Verde - GO", payload["entregador"])
+        self.assertIn("Pagamento: Online Pix", payload["entregador"])
+        self.assertIn("*PAGO*", payload["entregador"])
+        self.assertIn("*Pagamento:* Online Pix", payload["cliente"])
+        self.assertIn("*PAGO*", payload["cliente"])
         self.assertIn("Complemento: Casa 2", payload["entregador"])
         self.assertNotIn("Telefone", payload["entregador"])
+
+    def test_order_copy_contextualizes_delivery_payment_collection(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Cobranca",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
+        self.assertIn("*Pagamento:* Dinheiro", payload["cliente"])
+        self.assertIn("*COBRAR DO CLIENTE*", payload["cliente"])
+        self.assertIn("Pagamento: Dinheiro", payload["entregador"])
+        self.assertIn("*COBRAR DO CLIENTE*", payload["entregador"])
+
+        self.client.post(f"/controle/pedido/{pedido.id}/pagamento-recebido/")
+        payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
+        self.assertIn("*PAGO*", payload["cliente"])
+        self.assertIn("*PAGO*", payload["entregador"])
+        self.assertIn("*Pago em:*", payload["cliente"])
+        self.assertIn("Pago em:", payload["entregador"])
 
     def test_order_detail_modal_has_discreet_label_print_queue_button(self):
         self.client.force_login(self.staff_user)

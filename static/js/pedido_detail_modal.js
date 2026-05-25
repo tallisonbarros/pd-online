@@ -54,6 +54,7 @@
         const url = card.dataset.orderDetailUrl;
         if (!url) return;
         currentDetailUrl = url;
+        suggestedCustomerPhones.clear();
         lastFocus = document.activeElement;
         if (content) content.innerHTML = "";
         if (loading) loading.classList.remove("hidden");
@@ -83,6 +84,7 @@
         const url = button.dataset.newOrderUrl;
         if (!url) return;
         currentDetailUrl = "";
+        suggestedCustomerPhones.clear();
         lastFocus = document.activeElement;
         if (content) content.innerHTML = "";
         if (loading) loading.classList.remove("hidden");
@@ -349,10 +351,10 @@
         if (!isDraftOrder() || !currentAddressAllowsSuggestion()) return;
         const normalized = normalizePhone(phone);
         if (!normalized || suggestedCustomerPhones.has(normalized)) return;
-        suggestedCustomerPhones.add(normalized);
 
         const url = detailMeta()?.dataset.customerAddressUrl;
         if (!url) return;
+        suggestedCustomerPhones.add(normalized);
         const response = await fetch(`${url}?telefone=${encodeURIComponent(phone)}`, {
             headers: { "X-Requested-With": "XMLHttpRequest" },
             credentials: "same-origin",

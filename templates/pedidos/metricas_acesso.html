@@ -56,6 +56,20 @@
             <article class="ops-kpi-card">
                 <p>Pedidos criados</p>
                 <strong data-metric-value="total_pedidos_metricas">{{ total_pedidos_metricas }}</strong>
+                <div class="metrics-channel-tags" aria-label="Pedidos criados por canal">
+                    <span class="metrics-channel-tag">
+                        <b data-metric-value="pedidos_ifood_total">{{ pedidos_ifood_total }}</b>
+                        iFood
+                    </span>
+                    <span class="metrics-channel-tag">
+                        <b data-metric-value="pedidos_balcao_total">{{ pedidos_balcao_total }}</b>
+                        Balcao
+                    </span>
+                    <span class="metrics-channel-tag">
+                        <b data-metric-value="pedidos_site_total">{{ pedidos_site_total }}</b>
+                        Site
+                    </span>
+                </div>
                 <span>Pedidos reais no periodo</span>
             </article>
             <article class="ops-kpi-card ops-kpi-card--fulfillment ops-kpi-card--delivery">

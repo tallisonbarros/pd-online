@@ -72,6 +72,7 @@ urlpatterns = [
     path("controle/pedido/<int:pedido_id>/excluir/", views.excluir_pedido_admin, name="excluir_pedido_admin"),
     path("controle/pedido/<int:pedido_id>/status/", views.atualizar_status_pedido, name="atualizar_status_pedido"),
     path("controle/pedido/<int:pedido_id>/entregador/", views.alternar_entregador_pedido, name="alternar_entregador_pedido"),
+    path("controle/pedido/<int:pedido_id>/pagamento-recebido/", views.alternar_pagamento_recebido_pedido, name="alternar_pagamento_recebido_pedido"),
     path("controle/pedido/<int:pedido_id>/pagamento/", views.atualizar_pagamento_pedido, name="atualizar_pagamento_pedido"),
     path("controle/pedido/<int:pedido_id>/cupom/", views.atualizar_cupom_pedido, name="atualizar_cupom_pedido"),
     path("controle/pedido/<int:pedido_id>/itens/", views.atualizar_itens_pedido, name="atualizar_itens_pedido"),

@@ -102,6 +102,10 @@
         return buildStatusUrl(pedidoId).replace("/status/", "/entregador/");
     }
 
+    function buildPaymentReceivedUrl(pedidoId) {
+        return buildStatusUrl(pedidoId).replace("/status/", "/pagamento-recebido/");
+    }
+
     function buildCopyUrl(pedido) {
         return pedido.copy_url || buildStatusUrl(pedido.id).replace("/controle/pedido/", "/controle/api/pedido/").replace("/status/", "/copias/");
     }
@@ -116,6 +120,7 @@
         if (status === "finalizado") return "saiu_entrega";
         if (status === "saiu_entrega") return "aguardando_entregador";
         if (status === "aguardando_entregador") return "em_preparo";
+        if (status === "pagamento_recebido") return "em_preparo";
         if (status === "em_preparo") return "novo";
         return "novo";
     }
@@ -123,6 +128,7 @@
     function nextStatus(pedido) {
         const status = pedido.status;
         if (status === "novo") return "em_preparo";
+        if (status === "pagamento_recebido") return "aguardando_entregador";
         if (status === "em_preparo") return "aguardando_entregador";
         if (isPickupOrder(pedido) && status === "aguardando_entregador") return "finalizado";
         if (status === "aguardando_entregador") return "saiu_entrega";
@@ -155,6 +161,30 @@
         return `
             <form method="post" action="${escapeHtml(buildEntregadorUrl(pedido.id))}" data-entregador-form>
                 <button class="ped-btn ped-btn-toggle${active}" type="submit">Entregador solicitado</button>
+            </form>
+        `;
+    }
+
+    function buildPaymentReceivedForm(pedido) {
+        const isPaid = Boolean(pedido.pagamento_recebido);
+        const active = isPaid ? " is-active" : "";
+        const title = isPaid
+            ? `Pago${pedido.pagamento_recebido_em ? ` as ${pedido.pagamento_recebido_em}` : ""}`
+            : "Marcar pagamento recebido";
+        return `
+            <form method="post" action="${escapeHtml(buildPaymentReceivedUrl(pedido.id))}" data-payment-received-form>
+                <button
+                    class="ped-btn ped-btn-toggle ped-btn-payment${active}"
+                    type="submit"
+                    aria-pressed="${isPaid ? "true" : "false"}"
+                    title="${escapeHtml(title)}"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M9 12.8 5.8 9.6 4.4 11l4.6 4.6L19.6 5l-1.4-1.4L9 12.8Z"/>
+                    </svg>
+                    <span>${isPaid ? "Pago" : "Nao pago"}</span>
+                    ${pedido.pagamento_recebido_em ? `<small>${escapeHtml(pedido.pagamento_recebido_em)}</small>` : ""}
+                </button>
             </form>
         `;
     }
@@ -227,7 +257,7 @@
                                 <span>Tempo em produção</span>
                                 <strong>${escapeHtml(pedido.tempo_producao)}</strong>
                             </div>
-                            <div class="ped-chip-box">
+                            <div class="ped-chip-box ${pedido.pagamento_recebido ? "" : "ped-chip-box--unpaid"}">
                                 <span>Valor total</span>
                                 <strong>${escapeHtml(pedido.total)}</strong>
                             </div>
@@ -245,6 +275,7 @@
                     <div class="ped-actions-left">
                         ${buildCopyButton(pedido, "cliente", "Copiar pedido")}
                         ${buildCopyButton(pedido, "entregador", "Copiar endereço")}
+                        ${buildPaymentReceivedForm(pedido)}
                         ${buildEntregadorForm(pedido)}
                     </div>
                     <div class="ped-actions-right">
@@ -691,7 +722,7 @@
     }
 
     root.addEventListener("submit", (event) => {
-        const form = event.target.closest("[data-status-form], [data-entregador-form]");
+        const form = event.target.closest("[data-status-form], [data-entregador-form], [data-payment-received-form]");
         if (!form) return;
         event.preventDefault();
         updateStatus(form);
