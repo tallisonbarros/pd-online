@@ -1966,13 +1966,31 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_staff_can_load_editor_catalog(self):
         self.client.force_login(self.staff_user)
-        Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), preco_ifood=Decimal("32.00"), ativo=True)
+        today_key = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"][timezone.localtime().weekday()]
+        tomorrow_key = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"][(timezone.localtime().weekday() + 1) % 7]
+        Prato.objects.create(
+            nome="Carreteiro",
+            preco=Decimal("25.00"),
+            preco_ifood=Decimal("32.00"),
+            variacoes="Frango\nFraldinha",
+            dias_disponiveis=today_key,
+            ativo=True,
+        )
+        Prato.objects.create(
+            nome="Prato de outro dia",
+            preco=Decimal("25.00"),
+            dias_disponiveis=tomorrow_key,
+            ativo=True,
+        )
 
         response = self.client.get("/controle/api/catalogo-editor/")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"][0]["nome"], "Carreteiro")
         self.assertEqual(response.json()["items"][0]["preco_ifood"], "32.00")
+        self.assertEqual(response.json()["items"][0]["variacoes"], ["Frango", "Fraldinha"])
+        self.assertNotIn("Prato de outro dia", [item["nome"] for item in response.json()["items"]])
+        self.assertEqual(response.json()["pratos_context"]["weekday_key"], today_key)
 
     def test_new_order_modal_uses_detail_modal_context(self):
         self.client.force_login(self.staff_user)
@@ -1987,6 +2005,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-new-order-finalize-form")
         self.assertContains(response, "data-items-editor")
+        self.assertContains(response, "data-editor-shortcuts")
         self.assertContains(response, "/controle/api/catalogo-editor/")
         pedido = Pedido.objects.get()
         self.assertEqual(pedido.status, Pedido.Status.RASCUNHO)

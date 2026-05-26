@@ -4,12 +4,22 @@ import unicodedata
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
 
 
 DUPLA_VARIACOES_DESCONTO = Decimal("5.10")
 DUPLA_VARIACOES_PRATOS = ("estrogonofe", "picadinho")
 DUPLA_VARIACOES_OPCOES = ("frango", "fraldinha")
+WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
+WEEKDAY_LABELS = {
+    "seg": "SEGUNDA",
+    "ter": "TERCA",
+    "qua": "QUARTA",
+    "qui": "QUINTA",
+    "sex": "SEXTA",
+    "sab": "SABADO",
+    "dom": "DOMINGO",
+}
 
 
 def safe_text(value):
@@ -31,6 +41,43 @@ def money_decimal(value):
 
 def normalize_coupon_code(value):
     return safe_text(value).upper()
+
+
+def prato_dias_disponiveis(prato):
+    if not safe_text(getattr(prato, "dias_disponiveis", "")):
+        return set(WEEKDAYS)
+    return {dia.strip().lower() for dia in prato.dias_disponiveis.split(",") if dia.strip()}
+
+
+def prato_disponivel_no_dia(prato, weekday_key):
+    return weekday_key in prato_dias_disponiveis(prato)
+
+
+def resolve_pratos_disponiveis_context(config=None, now=None):
+    config = config or ConfiguracaoEntrega.get_solo()
+    current = now or timezone.localtime()
+    fechamento = getattr(config, "horario_fechamento", None)
+    start_offset = 1 if fechamento and current.time() >= fechamento else 0
+    active_pratos = list(Prato.objects.filter(ativo=True))
+
+    for offset in range(start_offset, start_offset + 7):
+        weekday_key = WEEKDAYS[(current.weekday() + offset) % 7]
+        pratos = [prato for prato in active_pratos if prato_disponivel_no_dia(prato, weekday_key)]
+        if pratos:
+            return {
+                "pratos": pratos,
+                "weekday_key": weekday_key,
+                "label": "Pratos do dia" if offset == 0 else f"Pratos de {WEEKDAY_LABELS[weekday_key]}",
+                "day_offset": offset,
+            }
+
+    weekday_key = WEEKDAYS[(current.weekday() + start_offset) % 7]
+    return {
+        "pratos": [],
+        "weekday_key": weekday_key,
+        "label": "Pratos do dia" if start_offset == 0 else f"Pratos de {WEEKDAY_LABELS[weekday_key]}",
+        "day_offset": start_offset,
+    }
 
 
 def catalog_price(item, canal=None, use_ifood=False):
@@ -426,7 +473,15 @@ def serialize_editor_catalog():
             ],
         }
 
-    pratos = [item_payload("prato", prato) for prato in Prato.objects.filter(ativo=True)]
+    pratos_context = resolve_pratos_disponiveis_context()
+    pratos = [item_payload("prato", prato) for prato in pratos_context["pratos"]]
     bebidas = [item_payload("bebida", bebida) for bebida in Bebida.objects.filter(ativo=True)]
     adicionais = [item_payload("adicional", adicional) for adicional in Adicional.objects.filter(ativo=True)]
-    return {"items": pratos + bebidas + adicionais}
+    return {
+        "items": pratos + bebidas + adicionais,
+        "pratos_context": {
+            "weekday_key": pratos_context["weekday_key"],
+            "label": pratos_context["label"],
+            "day_offset": pratos_context["day_offset"],
+        },
+    }

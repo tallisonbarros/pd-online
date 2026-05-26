@@ -10139,6 +10139,69 @@ fieldset.field {
     color: #221311;
     font-size: 18px;
 }
+.ped-editor-shortcuts {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.ped-editor-shortcuts[hidden] {
+    display: none;
+}
+.ped-editor-shortcuts-title {
+    color: #7b675d;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+.ped-editor-shortcuts-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ped-editor-shortcut-group {
+    display: contents;
+}
+.ped-editor-shortcut {
+    border: 1px solid rgba(255, 106, 0, 0.24);
+    border-radius: 999px;
+    background: #fff7ef;
+    color: #221311;
+    min-height: 34px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.ped-editor-shortcut::before {
+    content: "+";
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: #ff6a00;
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+}
+.ped-editor-shortcut:hover,
+.ped-editor-shortcut:focus-visible {
+    border-color: rgba(255, 106, 0, 0.56);
+    background: #fff1e4;
+    transform: translateY(-1px);
+}
+.ped-editor-shortcut span {
+    color: inherit;
+    font-size: 0.86rem;
+}
+.ped-editor-shortcut small {
+    color: #8a6a5b;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
 .ped-items-editor-footer {
     position: sticky;
     bottom: -22px;

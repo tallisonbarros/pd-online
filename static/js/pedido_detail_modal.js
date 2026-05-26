@@ -610,6 +610,7 @@
             return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(price)}" data-price-ifood="${escapeHtml(item.preco_ifood)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(price).replace(".", ",")}</option>`;
         }).join("");
         select.dataset.loaded = "true";
+        renderEditorShortcuts(form, payload.items || [], canal, payload.pratos_context || {});
         updateVariationSelect(form);
     }
 
@@ -773,6 +774,58 @@
 
     function selectedCatalogOption(form) {
         return form.querySelector("[data-editor-catalog]")?.selectedOptions?.[0] || null;
+    }
+
+    function addEditorItemFromOption(form, option, variationOverride = "") {
+        if (!option) return false;
+        const [tipo, itemId] = option.value.split(":");
+        const qty = 1;
+        const variation = variationOverride || "";
+        const row = document.createElement("div");
+        row.className = "ped-item-editor-row";
+        row.dataset.editorRow = "true";
+        row.dataset.tipo = tipo;
+        row.dataset.itemId = itemId;
+        row.dataset.variacao = variation;
+        row.dataset.quantidade = String(qty);
+        row.dataset.observacao = "";
+        row.dataset.preco = option.dataset.price || "0";
+        row.innerHTML = `<span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span><button type="button" data-editor-remove-item>Remover</button>`;
+        form.querySelector("[data-editor-items]")?.appendChild(row);
+        return true;
+    }
+
+    function renderEditorShortcuts(form, items, canal, context = {}) {
+        const node = form.querySelector("[data-editor-shortcuts]");
+        if (!node) return;
+        const pratos = items.filter((item) => item.tipo === "prato");
+        if (!pratos.length) {
+            node.hidden = true;
+            node.innerHTML = "";
+            return;
+        }
+        node.hidden = false;
+        node.innerHTML = `
+            <span class="ped-editor-shortcuts-title">${escapeHtml(context.label || "Pratos do dia")}</span>
+            <div class="ped-editor-shortcuts-grid">
+                ${pratos.map((item) => {
+                    const variations = Array.isArray(item.variacoes) ? item.variacoes : [];
+                    const price = item[`preco_${canal}`] || item.preco || "";
+                    const buttons = variations.length ? variations.map((variation) => `
+                        <button class="ped-editor-shortcut" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="${escapeHtml(variation)}">
+                            <span>${escapeHtml(variation)}</span>
+                            <small>${escapeHtml(item.nome)}</small>
+                        </button>
+                    `).join("") : `
+                        <button class="ped-editor-shortcut" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="">
+                            <span>${escapeHtml(item.nome)}</span>
+                            ${price ? `<small>R$ ${escapeHtml(price).replace(".", ",")}</small>` : ""}
+                        </button>
+                    `;
+                    return `<div class="ped-editor-shortcut-group">${buttons}</div>`;
+                }).join("")}
+            </div>
+        `;
     }
 
     function updateVariationSelect(form) {
@@ -1051,6 +1104,17 @@
         if (addButton) {
             const form = addButton.closest("[data-items-editor]");
             addEditorItem(form);
+            submitAjaxForm(form, () => {
+                form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
+            }, { syncEditor: false }).catch(() => {});
+            return;
+        }
+        const shortcutButton = event.target.closest("[data-editor-shortcut-item]");
+        if (shortcutButton) {
+            const form = shortcutButton.closest("[data-items-editor]");
+            const itemValue = shortcutButton.dataset.editorShortcutItem || "";
+            const option = Array.from(form?.querySelectorAll("[data-editor-catalog] option") || []).find((candidate) => candidate.value === itemValue);
+            if (!form || !addEditorItemFromOption(form, option, shortcutButton.dataset.editorShortcutVariation || "")) return;
             submitAjaxForm(form, () => {
                 form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
             }, { syncEditor: false }).catch(() => {});
