@@ -66,11 +66,12 @@ RIO_VERDE_CENTER = {"lat": -17.7923, "lon": -50.9192}
 RIO_VERDE_BBOX = "-51.0500,-17.9500,-50.7500,-17.6500"  # minLon,minLat,maxLon,maxLat
 OSRM_ROUTE_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
 ATENDENTE_GROUP_NAME = "Atendente"
+DIRETOR_GROUP_NAME = "Diretor"
+GERENTE_GROUP_NAME = "Gerente"
 
 
 def healthz(request):
     return HttpResponse("ok", content_type="text/plain")
-GERENTE_GROUP_NAME = "Gerente"
 
 RIO_VERDE_BAIRROS_OFICIAIS = [
     "Anhanguera", "Area Rural de Rio Verde", "Cesar Bastos", "Ceu Azul", "Cidade Empresarial Nova Alianca",
@@ -236,6 +237,12 @@ def user_is_gerente(user):
     if not getattr(user, "is_authenticated", False):
         return False
     return user.groups.filter(name=GERENTE_GROUP_NAME).exists()
+
+
+def user_is_diretor(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.groups.filter(name=DIRETOR_GROUP_NAME).exists()
 
 
 def montar_mensagem_whatsapp(pedido):
@@ -1093,6 +1100,7 @@ def _serialize_faixas_for_form(faixas=None, extra_rows=2):
 
 def _ensure_default_user_groups():
     Group.objects.get_or_create(name=ATENDENTE_GROUP_NAME)
+    Group.objects.get_or_create(name=DIRETOR_GROUP_NAME)
     Group.objects.get_or_create(name=GERENTE_GROUP_NAME)
 
 
@@ -2626,7 +2634,7 @@ def _dashboard_nav_context(data_selecionada, hoje):
 
 @staff_member_required(login_url="/admin/login/")
 def cozinha(request):
-    if not user_is_gerente(request.user):
+    if not user_is_diretor(request.user):
         return redirect("pedidos:cozinha_operacao")
 
     hoje = timezone.localdate()

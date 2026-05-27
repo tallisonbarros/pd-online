@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from .models import ConfiguracaoEntrega, Pedido
 
-GERENTE_GROUP_NAME = "Gerente"
+DIRETOR_GROUP_NAME = "Diretor"
 
 
 def _cart_operational_window(config, now=None):
@@ -58,7 +58,7 @@ def ops_sidebar_counts(request):
     if not getattr(user, "is_staff", False):
         return {}
 
-    can_view_dashboard = user.groups.filter(name=GERENTE_GROUP_NAME).exists()
+    can_view_dashboard = user.groups.filter(name=DIRETOR_GROUP_NAME).exists()
     active_statuses = [
         Pedido.Status.NOVO,
         Pedido.Status.EM_PREPARO,

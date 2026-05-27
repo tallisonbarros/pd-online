@@ -12,7 +12,9 @@
     let lastFocus = null;
     let currentDetailUrl = "";
     let latestDetailPayload = null;
+    let itemSaveChain = Promise.resolve();
     const pendingInlineSaves = new Set();
+    const pendingItemSaves = new Set();
     const suggestedCustomerPhones = new Set();
 
     function setOpen(isOpen) {
@@ -1006,13 +1008,24 @@
         }
     }
 
-    async function flushInlineEdits() {
+    function trackItemAutosave(form, beforeSubmit) {
+        const savePromise = itemSaveChain.catch(() => {}).then(() => submitAjaxForm(form, beforeSubmit, { syncEditor: false }));
+        itemSaveChain = savePromise;
+        pendingItemSaves.add(savePromise);
+        savePromise.catch(() => {}).finally(() => pendingItemSaves.delete(savePromise));
+        return savePromise;
+    }
+
+    async function flushPendingEdits() {
         const activeInlineForm = document.activeElement?.closest("[data-inline-edit-form]");
         if (activeInlineForm) {
             await submitInlineForm(activeInlineForm);
         }
         if (pendingInlineSaves.size) {
             await Promise.allSettled(Array.from(pendingInlineSaves));
+        }
+        if (pendingItemSaves.size) {
+            await Promise.all(Array.from(pendingItemSaves));
         }
     }
 
@@ -1104,9 +1117,9 @@
         if (addButton) {
             const form = addButton.closest("[data-items-editor]");
             addEditorItem(form);
-            submitAjaxForm(form, () => {
+            trackItemAutosave(form, () => {
                 form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
-            }, { syncEditor: false }).catch(() => {});
+            });
             return;
         }
         const shortcutButton = event.target.closest("[data-editor-shortcut-item]");
@@ -1115,9 +1128,9 @@
             const itemValue = shortcutButton.dataset.editorShortcutItem || "";
             const option = Array.from(form?.querySelectorAll("[data-editor-catalog] option") || []).find((candidate) => candidate.value === itemValue);
             if (!form || !addEditorItemFromOption(form, option, shortcutButton.dataset.editorShortcutVariation || "")) return;
-            submitAjaxForm(form, () => {
+            trackItemAutosave(form, () => {
                 form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
-            }, { syncEditor: false }).catch(() => {});
+            });
             return;
         }
         const removeButton = event.target.closest("[data-editor-remove-item]");
@@ -1129,9 +1142,9 @@
                 return;
             }
             removeButton.closest("[data-editor-row]")?.remove();
-            submitAjaxForm(form, () => {
+            trackItemAutosave(form, () => {
                 form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
-            }, { syncEditor: false }).catch(() => {});
+            });
         }
     });
 
@@ -1179,7 +1192,7 @@
         const newOrderFinalizeForm = event.target.closest("[data-new-order-finalize-form]");
         if (newOrderFinalizeForm) {
             event.preventDefault();
-            await flushInlineEdits();
+            await flushPendingEdits();
             submitAjaxForm(newOrderFinalizeForm);
             return;
         }

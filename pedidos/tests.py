@@ -307,9 +307,15 @@ class OrderHeatmapApiTests(TestCase):
 class CozinhaAccessTests(TestCase):
     def setUp(self):
         User = get_user_model()
+        self.diretor_group, _created = Group.objects.get_or_create(name="Diretor")
         self.gerente_group, _created = Group.objects.get_or_create(name="Gerente")
         self.staff_user = User.objects.create_user(
             username="cozinha_staff",
+            password="12345678",
+            is_staff=True,
+        )
+        self.diretor_user = User.objects.create_user(
+            username="cozinha_diretor",
             password="12345678",
             is_staff=True,
         )
@@ -318,6 +324,7 @@ class CozinhaAccessTests(TestCase):
             password="12345678",
             is_staff=True,
         )
+        self.diretor_user.groups.add(self.diretor_group)
         self.gerente_user.groups.add(self.gerente_group)
 
     def test_dashboard_requires_staff_authentication(self):
@@ -338,7 +345,7 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
-    def test_staff_without_gerente_class_enters_operational_control(self):
+    def test_staff_without_diretor_class_enters_operational_control(self):
         self.client.force_login(self.staff_user)
 
         response = self.client.get("/controle/", follow=True)
@@ -347,8 +354,17 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'data-page="cozinha-operacao"')
         self.assertNotContains(response, ">Dashboard<")
 
-    def test_gerente_can_access_dashboard(self):
+    def test_gerente_without_diretor_class_enters_operational_control(self):
         self.client.force_login(self.gerente_user)
+
+        response = self.client.get("/controle/", follow=True)
+
+        self.assertRedirects(response, "/controle/operacao/")
+        self.assertContains(response, 'data-page="cozinha-operacao"')
+        self.assertNotContains(response, ">Dashboard<")
+
+    def test_diretor_can_access_dashboard(self):
+        self.client.force_login(self.diretor_user)
 
         response = self.client.get("/controle/")
 
@@ -356,7 +372,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'aria-label="Navegar por dia"')
 
     def test_dashboard_logout_returns_to_login_page(self):
-        self.client.force_login(self.gerente_user)
+        self.client.force_login(self.diretor_user)
 
         page_response = self.client.get("/controle/")
         self.assertContains(page_response, 'name="next" value="/admin/login/"')
@@ -367,7 +383,7 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.url, "/admin/login/")
 
     def test_dashboard_header_uses_selected_day_context(self):
-        self.client.force_login(self.gerente_user)
+        self.client.force_login(self.diretor_user)
         ontem = timezone.localdate() - timedelta(days=1)
         dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
 
@@ -379,7 +395,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, dias_semana[ontem.weekday()])
 
     def test_dashboard_counts_finished_daily_orders_by_channel_and_phone_recurrence(self):
-        self.client.force_login(self.gerente_user)
+        self.client.force_login(self.diretor_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         previous_day = timezone.make_aware(datetime(2026, 5, 19, 12, 0))
         prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
@@ -509,7 +525,7 @@ class CozinhaAccessTests(TestCase):
         self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Excedente"')
 
     def test_dashboard_counts_legacy_imported_dish_snapshots_as_frozen_marmitas(self):
-        self.client.force_login(self.gerente_user)
+        self.client.force_login(self.diretor_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
         imported = Pedido.objects.create(
             nome_cliente="Historico",
@@ -558,7 +574,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, "\n                2\n")
 
     def test_dashboard_saves_manual_daily_production(self):
-        self.client.force_login(self.gerente_user)
+        self.client.force_login(self.diretor_user)
 
         response = self.client.post(
             "/controle/?data=2026-05-20",
