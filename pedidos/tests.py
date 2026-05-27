@@ -374,7 +374,8 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get(f"/controle/?data={ontem.isoformat()}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'aria-current="date">{ontem:%d}</span>')
+        self.assertContains(response, f'aria-current="date" data-dashboard-date-trigger aria-label="Escolher data">{ontem:%d}</button>')
+        self.assertContains(response, f'value="{ontem.isoformat()}" aria-label="Escolher data" data-dashboard-date-input')
         self.assertContains(response, dias_semana[ontem.weekday()])
 
     def test_dashboard_counts_finished_daily_orders_by_channel_and_phone_recurrence(self):
@@ -2437,6 +2438,34 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get("/controle/api/pedidos-admin/").json()
         self.assertTrue(payload["pedidos"][0]["pagamento_recebido"])
         self.assertRegex(payload["pedidos"][0]["pagamento_recebido_em"], r"^\d{2}:\d{2}$")
+
+    def test_active_order_marks_recurring_customer(self):
+        self.client.force_login(self.staff_user)
+        Pedido.objects.create(
+            nome_cliente="Cliente Antigo",
+            telefone="(64) 99999-9999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        page_response = self.client.get("/controle/pedidos/")
+        payload = self.client.get("/controle/api/pedidos-admin/").json()
+
+        self.assertContains(page_response, "ped-recurring-tag")
+        self.assertContains(page_response, "Cliente recorrente")
+        self.assertTrue(payload["pedidos"][0]["cliente_recorrente"])
+        self.assertEqual(payload["pedidos"][0]["cliente_recorrente_label"], "Cliente recorrente")
+        self.assertEqual(payload["pedidos"][0]["id"], pedido.id)
 
     def test_pickup_order_card_hides_driver_request_action(self):
         self.client.force_login(self.staff_user)

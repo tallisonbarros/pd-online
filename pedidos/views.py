@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.urls import reverse
@@ -46,6 +46,8 @@ from .order_services import (
     sync_customer_from_order,
     validar_cupom,
 )
+
+RECURRENT_CUSTOMER_EXCLUDED_STATUSES = [Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO]
 
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]
 ORDER_HISTORY_COOKIE = "prato_delivery_orders"
@@ -2541,6 +2543,87 @@ def api_metricas_acesso(request):
     return JsonResponse(_access_metrics_json(context))
 
 
+def _dashboard_nav_context(data_selecionada, hoje):
+    week_labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
+    inicio = data_selecionada - timedelta(days=3)
+    fim = data_selecionada + timedelta(days=3)
+    dates = [inicio + timedelta(days=index) for index in range(7)]
+
+    pedidos_por_dia = {
+        row["day"]: int(row["total"] or 0)
+        for row in (
+            Pedido.objects.filter(status=Pedido.Status.FINALIZADO, criado_em__date__gte=inicio, criado_em__date__lte=fim)
+            .annotate(day=TruncDate("criado_em"))
+            .values("day")
+            .annotate(total=Count("id"))
+        )
+    }
+    marmitas_por_dia = {
+        row["day"]: int(row["total"] or 0)
+        for row in (
+            ItemPedido.objects.filter(
+                pedido__status=Pedido.Status.FINALIZADO,
+                pedido__criado_em__date__gte=inicio,
+                pedido__criado_em__date__lte=fim,
+            )
+            .filter(
+                Q(prato__isnull=False)
+                | Q(
+                    pedido__observacao_geral__startswith="[IMPORTADO DO SISTEMA ANTIGO]",
+                    prato__isnull=True,
+                    bebida__isnull=True,
+                    adicional__isnull=True,
+                    observacao__icontains="Tipo legado: dish",
+                )
+            )
+            .annotate(day=TruncDate("pedido__criado_em"))
+            .values("day")
+            .annotate(total=Sum("quantidade"))
+        )
+    }
+
+    nav_days = []
+    for day in dates:
+        delta = (day - hoje).days
+        if delta == 0:
+            relative_label = "Hoje"
+        elif delta == -1:
+            relative_label = "Ontem"
+        elif delta == 1:
+            relative_label = "Amanha"
+        else:
+            relative_label = week_labels[day.weekday()]
+        nav_days.append(
+            {
+                "date": day,
+                "weekday": week_labels[day.weekday()],
+                "relative_label": relative_label,
+                "pedidos": pedidos_por_dia.get(day, 0),
+                "marmitas": marmitas_por_dia.get(day, 0),
+                "is_selected": day == data_selecionada,
+                "is_today": day == hoje,
+                "has_data": bool(pedidos_por_dia.get(day, 0) or marmitas_por_dia.get(day, 0)),
+            }
+        )
+
+    def day_summary(day):
+        delta = (day - hoje).days
+        return {
+            "date": day,
+            "relative_label": "Hoje" if delta == 0 else "Ontem" if delta == -1 else "Amanha" if delta == 1 else week_labels[day.weekday()],
+            "pedidos": pedidos_por_dia.get(day, 0),
+            "marmitas": marmitas_por_dia.get(day, 0),
+        }
+
+    return {
+        "days": nav_days,
+        "previous_day": day_summary(data_selecionada - timedelta(days=1)),
+        "next_day": day_summary(data_selecionada + timedelta(days=1)),
+        "previous_week": data_selecionada - timedelta(days=7),
+        "next_week": data_selecionada + timedelta(days=7),
+    }
+
+
 @staff_member_required(login_url="/admin/login/")
 def cozinha(request):
     if not user_is_gerente(request.user):
@@ -2583,6 +2666,7 @@ def cozinha(request):
             "data_selecionada": data_selecionada,
             "dia_semana_dashboard": dias_semana[data_selecionada.weekday()],
             "rotulo_data_dashboard": rotulo_data_dashboard,
+            "dashboard_nav": _dashboard_nav_context(data_selecionada, hoje),
             "hoje": hoje,
             "pedidos_novos": pedidos_novos,
         },
@@ -2753,9 +2837,9 @@ def api_cozinha_operacao(request):
 @staff_member_required(login_url="/admin/login/")
 def pedidos_admin(request):
     base = Pedido.objects.prefetch_related("itens")
-    pedidos_ativos = base.exclude(
+    pedidos_ativos = _marcar_clientes_recorrentes(base.exclude(
         status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
-    ).order_by("-criado_em", "-id")[:20]
+    ).order_by("-criado_em", "-id")[:20])
     return render(
         request,
         "pedidos/pedidos_admin.html",
@@ -2973,6 +3057,55 @@ def _pedido_item_lines(pedido):
     return lines or ["Sem itens"]
 
 
+def _marcar_clientes_recorrentes(pedidos):
+    pedidos = list(pedidos)
+    if not pedidos:
+        return pedidos
+
+    pedido_ids = [pedido.id for pedido in pedidos]
+    max_criado_em = max(pedido.criado_em for pedido in pedidos if pedido.criado_em)
+    cliente_ids = {pedido.cliente_id for pedido in pedidos if pedido.cliente_id}
+    telefones = {normalize_phone(pedido.telefone) for pedido in pedidos}
+    telefones.discard("")
+
+    clientes_recorrentes = {}
+    if cliente_ids:
+        clientes_anteriores = (
+            Pedido.objects.exclude(status__in=RECURRENT_CUSTOMER_EXCLUDED_STATUSES)
+            .exclude(id__in=pedido_ids)
+            .filter(cliente_id__in=cliente_ids, criado_em__lt=max_criado_em)
+            .values_list("cliente_id", "criado_em")
+        )
+        for cliente_id, criado_em in clientes_anteriores:
+            if cliente_id not in clientes_recorrentes or criado_em < clientes_recorrentes[cliente_id]:
+                clientes_recorrentes[cliente_id] = criado_em
+
+    telefones_recorrentes = {}
+    if telefones:
+        pedidos_anteriores = (
+            Pedido.objects.exclude(status__in=RECURRENT_CUSTOMER_EXCLUDED_STATUSES)
+            .exclude(id__in=pedido_ids)
+            .filter(criado_em__lt=max_criado_em)
+            .values_list("telefone", "criado_em")
+        )
+        for telefone, criado_em in pedidos_anteriores:
+            telefone_normalizado = normalize_phone(telefone)
+            if telefone_normalizado in telefones:
+                if telefone_normalizado not in telefones_recorrentes or criado_em < telefones_recorrentes[telefone_normalizado]:
+                    telefones_recorrentes[telefone_normalizado] = criado_em
+
+    for pedido in pedidos:
+        telefone_normalizado = normalize_phone(pedido.telefone)
+        cliente_recorrente_em = clientes_recorrentes.get(pedido.cliente_id)
+        telefone_recorrente_em = telefones_recorrentes.get(telefone_normalizado)
+        pedido.cliente_recorrente = bool(
+            (cliente_recorrente_em and cliente_recorrente_em < pedido.criado_em)
+            or (telefone_recorrente_em and telefone_recorrente_em < pedido.criado_em)
+        )
+        pedido.cliente_recorrente_label = "Cliente recorrente"
+    return pedidos
+
+
 def _pedido_admin_summary(pedido):
     return {
         "id": pedido.id,
@@ -2981,6 +3114,8 @@ def _pedido_admin_summary(pedido):
         "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
         "canal": pedido.canal,
         "canal_label": pedido.get_canal_display(),
+        "cliente_recorrente": bool(getattr(pedido, "cliente_recorrente", False)),
+        "cliente_recorrente_label": getattr(pedido, "cliente_recorrente_label", "Cliente recorrente"),
         "item_line": _pedido_primeiro_item_line(pedido),
         "item_lines": _pedido_item_lines(pedido),
         "status": pedido.status,
@@ -3012,9 +3147,9 @@ def _pedidos_base_counts(base):
 
 def _pedidos_admin_payload():
     base = Pedido.objects.prefetch_related("itens")
-    pedidos = base.exclude(
+    pedidos = _marcar_clientes_recorrentes(base.exclude(
         status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
-    ).order_by("-criado_em", "-id")[:20]
+    ).order_by("-criado_em", "-id")[:20])
     return {
         "pedidos": [_pedido_admin_summary(pedido) for pedido in pedidos],
         **_pedidos_base_counts(base),

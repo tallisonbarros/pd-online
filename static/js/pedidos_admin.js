@@ -244,6 +244,12 @@
         return `<span class="ped-channel-tag ped-channel-tag--${escapeHtml(channel)}">${escapeHtml(label)}</span>`;
     }
 
+    function buildRecurringTag(pedido) {
+        if (!pedido.cliente_recorrente) return "";
+        const label = pedido.cliente_recorrente_label || "Cliente recorrente";
+        return `<span class="ped-recurring-tag">${escapeHtml(label)}</span>`;
+    }
+
     function buildItemList(pedido) {
         const lines = Array.isArray(pedido.item_lines) && pedido.item_lines.length ? pedido.item_lines : [pedido.item_line || "Sem itens"];
         return `
@@ -289,7 +295,7 @@
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
-                            <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span></p>
+                            <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
                         </div>
                     </div>
 

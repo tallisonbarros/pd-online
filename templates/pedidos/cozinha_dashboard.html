@@ -10,13 +10,42 @@
     <main class="ops-main">
         <header class="ops-session dashboard-day-header">
             <div class="dashboard-day-overview">
-                <p class="dashboard-weekday">{{ dia_semana_dashboard }}</p>
-                <nav class="ops-period-switch dashboard-date-nav dashboard-date-nav--header" aria-label="Navegar por dia">
-                    <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior" title="Dia anterior">&larr;</a>
-                    <span class="ops-period-btn dashboard-date-current {% if data_selecionada == hoje %}is-active{% endif %}" aria-current="date">{{ data_selecionada|date:"d" }}</span>
-                    <a class="ops-period-btn dashboard-date-arrow" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia" title="Proximo dia">&rarr;</a>
+                <nav class="dashboard-day-rail" aria-label="Navegar por dia">
+                    <a class="dashboard-side-day" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_anterior|date:'Y-m-d' }}" aria-label="Dia anterior">
+                        <span aria-hidden="true">&larr;</span>
+                        <small>{{ dashboard_nav.previous_day.relative_label }} · {{ dashboard_nav.previous_day.date|date:"d/m" }}</small>
+                        <strong>{{ dashboard_nav.previous_day.pedidos }} ped · {{ dashboard_nav.previous_day.marmitas }} marm</strong>
+                    </a>
+                    <div class="dashboard-date-center">
+                        <p class="dashboard-weekday">{{ dia_semana_dashboard }}</p>
+                        <form class="dashboard-date-current-form" method="get">
+                            <button class="dashboard-date-current {% if data_selecionada == hoje %}is-active{% endif %}" type="button" aria-current="date" data-dashboard-date-trigger aria-label="Escolher data">{{ data_selecionada|date:"d" }}</button>
+                            <input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}" aria-label="Escolher data" data-dashboard-date-input>
+                        </form>
+                        <h1>{{ data_selecionada|date:"F Y" }}</h1>
+                        <p class="dashboard-date-summary">{{ dashboard.total_pedidos }} pedidos · {{ dashboard.marmitas_vendidas }} marmitas</p>
+                    </div>
+                    <a class="dashboard-side-day" href="{% url 'pedidos:cozinha' %}?data={{ dashboard.data_proxima|date:'Y-m-d' }}" aria-label="Proximo dia">
+                        <span aria-hidden="true">&rarr;</span>
+                        <small>{{ dashboard_nav.next_day.relative_label }} · {{ dashboard_nav.next_day.date|date:"d/m" }}</small>
+                        <strong>{{ dashboard_nav.next_day.pedidos }} ped · {{ dashboard_nav.next_day.marmitas }} marm</strong>
+                    </a>
                 </nav>
-                <h1>{{ data_selecionada|date:"F Y" }}</h1>
+                <div class="dashboard-date-tools" aria-label="Atalhos de data">
+                    <a class="dashboard-date-tool" href="{% url 'pedidos:cozinha' %}?data={{ dashboard_nav.previous_week|date:'Y-m-d' }}">-7 dias</a>
+                    <a class="dashboard-date-tool {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:cozinha' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+                    <a class="dashboard-date-tool" href="{% url 'pedidos:cozinha' %}?data={{ dashboard_nav.next_week|date:'Y-m-d' }}">+7 dias</a>
+                </div>
+                <nav class="dashboard-week-strip" aria-label="Resumo de dias proximos">
+                    {% for dia in dashboard_nav.days %}
+                        <a class="dashboard-week-day {% if dia.is_selected %}is-selected{% endif %} {% if dia.is_today %}is-today{% endif %} {% if not dia.has_data %}is-empty{% endif %}" href="{% url 'pedidos:cozinha' %}?data={{ dia.date|date:'Y-m-d' }}" {% if dia.is_selected %}aria-current="date"{% endif %}>
+                            <span>{{ dia.weekday }}</span>
+                            <strong>{{ dia.date|date:"d" }}</strong>
+                            <small>{{ dia.pedidos }} ped</small>
+                            <small>{{ dia.marmitas }} marm</small>
+                        </a>
+                    {% endfor %}
+                </nav>
             </div>
             <div class="ops-session-actions">
                 <button type="button" class="ops-logout dashboard-production-trigger" data-open-management-modal="#dashboard-production-modal">Producao</button>
@@ -99,5 +128,22 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+    <script>
+        document.querySelectorAll("[data-dashboard-date-trigger]").forEach((trigger) => {
+            const form = trigger.closest("form");
+            const input = form?.querySelector("[data-dashboard-date-input]");
+            if (!form || !input) return;
+            trigger.addEventListener("click", () => {
+                if (typeof input.showPicker === "function") {
+                    input.showPicker();
+                } else {
+                    input.click();
+                }
+            });
+            input.addEventListener("change", () => {
+                if (input.value) form.submit();
+            });
+        });
+    </script>
 {% endblock %}
