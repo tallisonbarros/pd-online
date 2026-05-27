@@ -41,7 +41,10 @@
                             </div>
                             <div>
                                 <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
-                                <p class="ped-time">{{ pedido.criado_em|date:"d/m, H:i" }}</p>
+                                <p class="ped-time">
+                                    <span class="ped-channel-tag ped-channel-tag--{{ pedido.canal }}">{{ pedido.get_canal_display }}</span>
+                                    <span>{{ pedido.criado_em|date:"d/m, H:i" }}</span>
+                                </p>
                             </div>
                         </div>
 
@@ -83,11 +86,14 @@
 
                     <div class="ped-actions">
                         <div class="ped-actions-left">
-                            <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="cliente" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
-                                Copiar pedido
+                            <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="confirmacao" data-guide-action="confirmacao" data-order-id="{{ pedido.id }}" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
+                                Copiar confirmação
                             </button>
-                            <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="entregador" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
+                            <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="entregador" data-guide-action="endereco" data-order-id="{{ pedido.id }}" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
                                 Copiar endereço
+                            </button>
+                            <button class="ped-btn ped-btn-soft ped-btn-copy" type="button" data-copy-kind="cliente" data-guide-action="cliente" data-order-id="{{ pedido.id }}" data-copy-url="{% url 'pedidos:api_pedido_copias' pedido.id %}">
+                                Copiar pedido
                             </button>
                             <form method="post" action="{% url 'pedidos:alternar_pagamento_recebido_pedido' pedido.id %}" data-payment-received-form>
                                 {% csrf_token %}
@@ -99,12 +105,14 @@
                                     {% if pedido.pagamento_recebido_em %}<small>{{ pedido.pagamento_recebido_em|date:"H:i" }}</small>{% endif %}
                                 </button>
                             </form>
-                            <form method="post" action="{% url 'pedidos:alternar_entregador_pedido' pedido.id %}" data-entregador-form>
-                                {% csrf_token %}
-                                <button class="ped-btn ped-btn-toggle {% if pedido.entregador_solicitado %}is-active{% endif %}" type="submit">
-                                    Entregador solicitado
-                                </button>
-                            </form>
+                            {% if pedido.tipo_coleta == "entrega" %}
+                                <form method="post" action="{% url 'pedidos:alternar_entregador_pedido' pedido.id %}" data-entregador-form>
+                                    {% csrf_token %}
+                                    <button class="ped-btn ped-btn-toggle {% if pedido.entregador_solicitado %}is-active{% endif %}" type="submit">
+                                        Entregador solicitado
+                                    </button>
+                                </form>
+                            {% endif %}
                         </div>
                         <div class="ped-actions-right">
                             <form method="post" action="{% url 'pedidos:atualizar_status_pedido' pedido.id %}">

@@ -81,7 +81,7 @@ No admin voce consegue:
 - cadastrar e ativar pratos
 - revisar pedidos
 - ajustar status operacionais
-- configurar faixas de frete
+- configurar faixas de entrega
 
 ## Deploy
 

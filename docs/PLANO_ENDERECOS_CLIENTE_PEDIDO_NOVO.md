@@ -109,7 +109,7 @@ Reaproveitar o endpoint existente:
 POST /controle/pedido/<id>/entrega/
 ```
 
-Esse endpoint ja atualiza endereco e recalcula frete quando ha coordenadas. A selecao do endereco salvo pode postar para ele com os campos do endereco escolhido.
+Esse endpoint ja atualiza endereco e recalcula entrega quando ha coordenadas. A selecao do endereco salvo pode postar para ele com os campos do endereco escolhido.
 
 ## Frontend
 
@@ -233,7 +233,7 @@ Adicionar testes em `pedidos/tests.py`:
 6. Confirmar que modal de enderecos aparece.
 7. Selecionar endereco.
 8. Confirmar que o pedido muda para entrega e preenche o endereco.
-9. Confirmar que frete/distancia recalculam quando ha coordenadas.
+9. Confirmar que entrega/distancia recalculam quando ha coordenadas.
 10. Confirmar que `Ignorar` nao muda o endereco do pedido.
 
 ## Complexidade
@@ -252,6 +252,6 @@ Estimativa:
 ## Riscos e cuidados
 
 - Pedidos em rascunho hoje nao vinculam cliente automaticamente em `sync_customer_from_order`; por isso a busca deve ser direta por telefone normalizado.
-- Enderecos sem coordenadas podem nao recalcular frete automaticamente; o fluxo deve permitir ajuste manual pelo editor de endereco.
+- Enderecos sem coordenadas podem nao recalcular entrega automaticamente; o fluxo deve permitir ajuste manual pelo editor de endereco.
 - Se houver muitos enderecos, limitar a lista inicial, por exemplo os 5 mais recentes.
 - Evitar abrir a sugestao repetidamente ao editar o mesmo telefone.

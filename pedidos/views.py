@@ -273,13 +273,11 @@ def montar_mensagem_whatsapp(pedido):
         linhas.extend(["", f"*Observação geral:* {pedido.observacao_geral}"])
     linhas.extend(["", f"*Pagamento:* {pedido.get_forma_pagamento_display()}"])
     linhas.append(f"*{pedido.pagamento_copia_status}*")
-    if pedido.pagamento_recebido_em:
-        linhas.append(f"*Pago em:* {_format_local_datetime(pedido.pagamento_recebido_em, '%d/%m %H:%M')}")
     if pedido.forma_pagamento == Pedido.FormaPagamento.PIX:
         pix_chave = _safe_text(getattr(ConfiguracaoEntrega.get_solo(), "pix_chave", ""))
         if pix_chave:
             linhas.append(f"*Chave Pix:* {pix_chave}")
-    linhas.extend(["", f"*Frete:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
+    linhas.extend(["", f"*Entrega:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
     if pedido.promocao_desconto and pedido.promocao_desconto > 0:
         descricao = pedido.promocao_descricao or "Promoção especial"
         linhas.append(f"*{descricao}:* - R$ {pedido.promocao_desconto:.2f}".replace(".", ","))
@@ -295,9 +293,12 @@ def montar_mensagem_entregador(pedido):
         f"Endereço: {pedido.endereco}",
     ]
     linhas.append(f"Pagamento: {pedido.get_forma_pagamento_display()}")
-    linhas.append(f"*{pedido.pagamento_copia_status}*")
-    if pedido.pagamento_recebido_em:
-        linhas.append(f"Pago em: {_format_local_datetime(pedido.pagamento_recebido_em, '%d/%m %H:%M')}")
+    status_pagamento = (
+        f"COBRAR DO CLIENTE: {_money_line_value(pedido.total)}"
+        if pedido.pagamento_na_entrega and not pedido.pagamento_recebido
+        else pedido.pagamento_copia_status
+    )
+    linhas.append(f"*{status_pagamento}*")
     if pedido.lote_quadra:
         linhas.append(f"Lote/Quadra: {pedido.lote_quadra}")
     if pedido.complemento:
@@ -306,6 +307,75 @@ def montar_mensagem_entregador(pedido):
         linhas.append(f"Referência: {pedido.ponto_referencia}")
     if pedido.google_maps_route_url:
         linhas.append(f"Rota: {pedido.google_maps_route_url}")
+        if pedido.canal in {Pedido.Canal.BALCAO, Pedido.Canal.IFOOD}:
+            linhas.append("Rota aproximada, confira o endereco escrito.")
+    return "\n".join(linhas)
+
+
+def _pedido_confirmacao_entrega_line(pedido):
+    if pedido.tipo_coleta == Pedido.TipoColeta.RETIRADA:
+        return "Retirada no local"
+    partes = [f"Endereco: {pedido.endereco}"]
+    if pedido.lote_quadra:
+        partes.append(f"Lote/Quadra: {pedido.lote_quadra}")
+    if pedido.complemento:
+        partes.append(f"Complemento: {pedido.complemento}")
+    if pedido.ponto_referencia:
+        partes.append(f"Referencia: {pedido.ponto_referencia}")
+    return "\n".join(partes)
+
+
+def _money_line_value(value):
+    return f"R$ {value:.2f}".replace(".", ",")
+
+
+def montar_mensagem_confirmacao_pedido(pedido):
+    nome_cliente = _safe_text(pedido.nome_cliente)
+    saudacao = f"Oi, {nome_cliente}!" if nome_cliente.casefold() not in {"", "cliente"} else "Oi!"
+    if pedido.canal == Pedido.Canal.BALCAO:
+        itens = list(pedido.itens.all())
+        linhas = [
+            f"Pedido #{pedido.numero} confirmado.",
+            "",
+            "Itens:",
+        ]
+        for item in itens:
+            nome_item = item.nome_prato_snapshot
+            if item.variacao_nome_snapshot:
+                nome_item = f"{nome_item} - {item.variacao_nome_snapshot}"
+            item_line = f"- {item.quantidade}x {nome_item} | {_money_line_value(item.preco_snapshot)} un."
+            if item.quantidade > 1:
+                item_line = f"{item_line} | {_money_line_value(item.subtotal)}"
+            linhas.append(item_line)
+            if item.observacao:
+                linhas.append(f"  Obs: {item.observacao}")
+        if not itens:
+            linhas.append("- Sem itens")
+        linhas.extend(
+            [
+                "",
+                _pedido_confirmacao_entrega_line(pedido),
+                "",
+                f"Entrega: {_money_line_value(pedido.valor_frete)}",
+                f"Pagamento: {pedido.get_forma_pagamento_display()}",
+                f"Total: {_money_line_value(pedido.total)}",
+                "",
+                "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.",
+            ]
+        )
+        return "\n".join(linhas)
+
+    linhas = [
+        saudacao,
+        f"Recebemos seu pedido #{pedido.numero}.",
+        "",
+        _pedido_confirmacao_entrega_line(pedido),
+        "",
+        f"Pagamento: {pedido.get_forma_pagamento_display()}",
+        f"Total: {_money_line_value(pedido.total)}",
+        "",
+        "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.",
+    ]
     return "\n".join(linhas)
 
 
@@ -2909,6 +2979,8 @@ def _pedido_admin_summary(pedido):
         "numero": pedido.numero,
         "cliente": pedido.nome_cliente,
         "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
+        "canal": pedido.canal,
+        "canal_label": pedido.get_canal_display(),
         "item_line": _pedido_primeiro_item_line(pedido),
         "item_lines": _pedido_item_lines(pedido),
         "status": pedido.status,
@@ -3005,6 +3077,7 @@ def api_pedido_copias(request, pedido_id):
         {
             "cliente": montar_mensagem_whatsapp(pedido),
             "entregador": montar_mensagem_entregador(pedido),
+            "confirmacao": montar_mensagem_confirmacao_pedido(pedido),
         }
     )
 

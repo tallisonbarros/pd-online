@@ -19,7 +19,7 @@
 
         <section class="ajustes-tabs" aria-label="Guias de ajustes">
             <a class="ajustes-tab {% if ajustes_aba == 'geral' %}is-active{% endif %}" {% if ajustes_aba == 'geral' %}aria-current="page"{% endif %} href="?aba=geral">Geral</a>
-            <a class="ajustes-tab {% if ajustes_aba == 'frete' %}is-active{% endif %}" {% if ajustes_aba == 'frete' %}aria-current="page"{% endif %} href="?aba=frete">Frete</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'frete' %}is-active{% endif %}" {% if ajustes_aba == 'frete' %}aria-current="page"{% endif %} href="?aba=frete">Entrega</a>
             <a class="ajustes-tab {% if ajustes_aba == 'google' %}is-active{% endif %}" {% if ajustes_aba == 'google' %}aria-current="page"{% endif %} href="?aba=google">Google Maps</a>
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
@@ -110,7 +110,7 @@
                 </div>
 
                 <div class="ajustes-note">
-                    <p>A Origem Oficial salva aqui e usada em todo cálculo de frete, distância e rota.</p>
+                    <p>A Origem Oficial salva aqui e usada em todo cálculo de entrega, distância e rota.</p>
                 </div>
             </section>
 
@@ -182,7 +182,7 @@
                         </div>
 
                         <div class="ajustes-preview-card">
-                            <span>Frete calculado</span>
+                            <span>Entrega calculada</span>
                             <strong>R$ {{ preview.frete_valor|floatformat:2 }}</strong>
                             <small>{{ preview.faixa_label }}</small>
                         </div>
@@ -286,15 +286,15 @@
                         <dd>{{ ultimo_pedido_auditoria.pedido.distancia_km|floatformat:2 }} km</dd>
                     </div>
                     <div>
-                        <dt>Frete salvo</dt>
+                        <dt>Entrega salva</dt>
                         <dd>R$ {{ ultimo_pedido_auditoria.pedido.valor_frete|floatformat:2 }}</dd>
                     </div>
                     <div>
-                        <dt>Frete esperado hoje</dt>
+                        <dt>Entrega esperada hoje</dt>
                         <dd>{{ ultimo_pedido_auditoria.faixa_label }}</dd>
                     </div>
                     <div>
-                        <dt>Diferenca do frete</dt>
+                        <dt>Diferenca da entrega</dt>
                         <dd>R$ {{ ultimo_pedido_auditoria.diferenca_frete|floatformat:2 }}</dd>
                     </div>
                     <div>
@@ -420,7 +420,7 @@
                     </ol>
 
                     <div class="ajustes-note">
-                        <p>Depois da chave ativa, o checkout passa a usar Google Maps como fonte principal da rua, bairro e reverse geocode. O frete continua sendo calculado no backend pelas coordenadas confirmadas no mapa.</p>
+                        <p>Depois da chave ativa, o checkout passa a usar Google Maps como fonte principal da rua, bairro e reverse geocode. A entrega continua sendo calculada no backend pelas coordenadas confirmadas no mapa.</p>
                     </div>
                 </article>
 
@@ -989,9 +989,9 @@
                         </label>
 
                         <label class="field ajustes-field">
-                            <span>Frete padrao inferido</span>
+                            <span>Entrega padrao inferida</span>
                             <input type="number" step="0.01" min="0" name="default_delivery_fee" value="{{ legacy_import_default_fee|default:'10.00' }}">
-                            <small class="field-help">Aplicado somente em pedidos de entrega sem frete no CSV.</small>
+                            <small class="field-help">Aplicado somente em pedidos de entrega sem taxa no CSV.</small>
                         </label>
 
                         <div class="ajustes-actions ajustes-field ajustes-field--wide">
@@ -1000,7 +1000,7 @@
                     </form>
 
                     <div class="ajustes-note">
-                        <p>Na importacao, o total final antigo e preservado como valor oficial. O frete fica registrado separadamente: original quando existir no CSV, inferido pelo valor padrao em entregas sem taxa, e zero em retiradas.</p>
+                        <p>Na importacao, o total final antigo e preservado como valor oficial. A entrega fica registrada separadamente: original quando existir no CSV, inferida pelo valor padrao em entregas sem taxa, e zero em retiradas.</p>
                     </div>
                 </article>
             </section>
@@ -1028,7 +1028,7 @@
                                 <small>Pedidos com numero ja existente serao pulados.</small>
                             </div>
                             <div class="ajustes-preview-card">
-                                <span>Fretes inferidos</span>
+                                <span>Entregas inferidas</span>
                                 <strong>{{ legacy_import_preview.summary.delivery_fee_inferred }}</strong>
                                 <small>Entregas sem taxa no CSV.</small>
                             </div>
@@ -1050,7 +1050,7 @@
                                         <th>Pagamento</th>
                                         <th>Itens</th>
                                         <th>Subtotal</th>
-                                        <th>Frete</th>
+                                        <th>Entrega</th>
                                         <th>Cupom</th>
                                         <th>Total antigo</th>
                                         <th>Total importado</th>

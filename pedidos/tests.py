@@ -237,7 +237,7 @@ class LegacyOrderImportTests(TestCase):
         self.assertEqual(pedido.cupom_codigo, "CORTESIA01")
         self.assertEqual(pedido.cupom_desconto, Decimal("25.00"))
         self.assertEqual(pedido.itens.count(), 2)
-        self.assertIn("total importado recalculado com frete", pedido.observacao_geral)
+        self.assertIn("total importado recalculado com entrega", pedido.observacao_geral)
 
 
 class OrderHeatmapApiTests(TestCase):
@@ -1342,7 +1342,7 @@ class PedidoDetalheAdminTests(TestCase):
         response = self.client.get(f"/controle/pedidos/{pedido.id}/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Frete salvo")
+        self.assertContains(response, "Entrega salva")
         self.assertContains(response, "Distância calculada")
         self.assertEqual(response.context["pedido"], pedido)
         self.assertEqual(response.context["frete_esperado"], Decimal("10.00"))
@@ -2398,10 +2398,15 @@ class PedidoDetalheAdminTests(TestCase):
         page_response = self.client.get("/controle/pedidos/")
         self.assertContains(page_response, "Entregador solicitado")
         self.assertContains(page_response, "Nao pago")
+        self.assertContains(page_response, "ped-channel-tag--balcao")
+        self.assertContains(page_response, "Balcao")
         self.assertContains(page_response, f"/controle/pedido/{pedido.id}/pagamento-recebido/")
         self.assertContains(page_response, "Copiar pedido")
+        self.assertContains(page_response, "Copiar confirmação")
         self.assertContains(page_response, "Copiar endereço")
         self.assertContains(page_response, f"/controle/api/pedido/{pedido.id}/copias/")
+        page_content = page_response.content.decode()
+        self.assertLess(page_content.index("Copiar endereço"), page_content.index("Copiar pedido"))
 
         response = self.client.post(
             f"/controle/pedido/{pedido.id}/entregador/",
@@ -2414,6 +2419,8 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get("/controle/api/pedidos-admin/").json()
         self.assertTrue(payload["pedidos"][0]["entregador_solicitado"])
         self.assertFalse(payload["pedidos"][0]["pagamento_recebido"])
+        self.assertEqual(payload["pedidos"][0]["canal"], Pedido.Canal.BALCAO)
+        self.assertEqual(payload["pedidos"][0]["canal_label"], "Balcao")
         self.assertEqual(payload["pedidos"][0]["copy_url"], f"/controle/api/pedido/{pedido.id}/copias/")
         self.assertEqual(payload["pedidos"][0]["icone_url"], pedido.icone_pedido_url)
 
@@ -2430,6 +2437,24 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get("/controle/api/pedidos-admin/").json()
         self.assertTrue(payload["pedidos"][0]["pagamento_recebido"])
         self.assertRegex(payload["pedidos"][0]["pagamento_recebido_em"], r"^\d{2}:\d{2}$")
+
+    def test_pickup_order_card_hides_driver_request_action(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Retirada",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        page_response = self.client.get("/controle/pedidos/")
+
+        self.assertEqual(page_response.status_code, 200)
+        self.assertContains(page_response, f"#{pedido.numero}")
+        self.assertNotContains(page_response, "Entregador solicitado")
 
     def test_kitchen_card_displays_discreet_item_type_counts(self):
         self.client.force_login(self.staff_user)
@@ -2490,6 +2515,9 @@ class PedidoDetalheAdminTests(TestCase):
             complemento="Casa 2",
             ponto_referencia="Portao azul",
             forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.SITE,
+            latitude=Decimal("-17.7900000"),
+            longitude=Decimal("-50.9200000"),
             status=Pedido.Status.EM_PREPARO,
             total=Decimal("35.00"),
         )
@@ -2503,11 +2531,86 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn(f"Pedido #{pedido.numero} - Cliente Ativo", payload["entregador"])
         self.assertIn("Endereço: Rua Teste, 100 - Centro, Rio Verde - GO", payload["entregador"])
         self.assertIn("Pagamento: Online Pix", payload["entregador"])
-        self.assertIn("*PAGO*", payload["entregador"])
+        self.assertIn("*AGUARDANDO PAGAMENTO*", payload["entregador"])
+        self.assertIn("Rota:", payload["entregador"])
+        self.assertNotIn("Rota aproximada, confira o endereco escrito.", payload["entregador"])
         self.assertIn("*Pagamento:* Online Pix", payload["cliente"])
-        self.assertIn("*PAGO*", payload["cliente"])
+        self.assertIn("*AGUARDANDO PAGAMENTO*", payload["cliente"])
+        self.assertIn(f"Recebemos seu pedido #{pedido.numero}.", payload["confirmacao"])
+        self.assertIn("Oi, Cliente Ativo!", payload["confirmacao"])
+        self.assertIn("Endereco: Rua Teste, 100 - Centro, Rio Verde - GO", payload["confirmacao"])
+        self.assertIn("Complemento: Casa 2", payload["confirmacao"])
+        self.assertIn("Referencia: Portao azul", payload["confirmacao"])
+        self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
+        self.assertIn("Total: R$ 35,00", payload["confirmacao"])
+        self.assertNotIn("Itens:", payload["confirmacao"])
+        self.assertNotIn("pagamento foi confirmado", payload["confirmacao"])
         self.assertIn("Complemento: Casa 2", payload["entregador"])
         self.assertNotIn("Telefone", payload["entregador"])
+
+    def test_order_confirmation_copy_omits_generic_customer_name(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.SITE,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("50.00"),
+        )
+
+        payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
+
+        self.assertIn("Oi!", payload["confirmacao"])
+        self.assertNotIn("Oi, Cliente!", payload["confirmacao"])
+        self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
+        self.assertIn("Total: R$ 50,00", payload["confirmacao"])
+        self.assertNotIn("pagamento foi confirmado", payload["confirmacao"])
+
+    def test_order_confirmation_copy_for_counter_confirms_full_order(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.BALCAO,
+            status=Pedido.Status.EM_PREPARO,
+            valor_frete=Decimal("5.00"),
+            total=Decimal("50.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Frango Guisado",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=2,
+            subtotal=Decimal("50.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Suco",
+            preco_snapshot=Decimal("8.00"),
+            quantidade=1,
+            subtotal=Decimal("8.00"),
+        )
+
+        payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
+
+        self.assertNotIn("Oi!", payload["confirmacao"])
+        self.assertNotIn("Oi, Cliente!", payload["confirmacao"])
+        self.assertIn(f"Pedido #{pedido.numero} confirmado.", payload["confirmacao"])
+        self.assertIn("Itens:", payload["confirmacao"])
+        self.assertIn("- 2x Frango Guisado | R$ 25,00 un. | R$ 50,00", payload["confirmacao"])
+        self.assertIn("- 1x Suco | R$ 8,00 un.", payload["confirmacao"])
+        self.assertNotIn("- 1x Suco | R$ 8,00 un. | R$ 8,00", payload["confirmacao"])
+        self.assertIn("Retirada no local", payload["confirmacao"])
+        self.assertIn("Entrega: R$ 5,00", payload["confirmacao"])
+        self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
+        self.assertIn("Total: R$ 50,00", payload["confirmacao"])
+        self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.", payload["confirmacao"])
 
     def test_order_copy_contextualizes_delivery_payment_collection(self):
         self.client.force_login(self.staff_user)
@@ -2522,16 +2625,35 @@ class PedidoDetalheAdminTests(TestCase):
 
         payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
         self.assertIn("*Pagamento:* Dinheiro", payload["cliente"])
-        self.assertIn("*COBRAR DO CLIENTE*", payload["cliente"])
+        self.assertIn("*PAGAMENTO NA ENTREGA*", payload["cliente"])
         self.assertIn("Pagamento: Dinheiro", payload["entregador"])
-        self.assertIn("*COBRAR DO CLIENTE*", payload["entregador"])
+        self.assertIn("*COBRAR DO CLIENTE: R$ 35,00*", payload["entregador"])
 
         self.client.post(f"/controle/pedido/{pedido.id}/pagamento-recebido/")
         payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
         self.assertIn("*PAGO*", payload["cliente"])
         self.assertIn("*PAGO*", payload["entregador"])
-        self.assertIn("*Pago em:*", payload["cliente"])
-        self.assertIn("Pago em:", payload["entregador"])
+        self.assertNotIn("*Pago em:*", payload["cliente"])
+        self.assertNotIn("Pago em:", payload["entregador"])
+
+    def test_delivery_copy_warns_approximate_route_for_manual_channels(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Manual",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.BALCAO,
+            latitude=Decimal("-17.7900000"),
+            longitude=Decimal("-50.9200000"),
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
+
+        self.assertIn("Rota:", payload["entregador"])
+        self.assertIn("Rota aproximada, confira o endereco escrito.", payload["entregador"])
 
     def test_order_detail_modal_has_discreet_label_print_queue_button(self):
         self.client.force_login(self.staff_user)
@@ -2951,7 +3073,7 @@ class AjustesAdminTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Frete calculado")
+        self.assertContains(response, "Entrega calculada")
         preview = response.context["preview"]
         self.assertEqual(preview["distance_km"], 5.87)
         self.assertEqual(preview["frete_valor"], Decimal("21.00"))

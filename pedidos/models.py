@@ -263,9 +263,11 @@ class Pedido(models.Model):
 
     @property
     def pagamento_copia_status(self):
-        if self.pagamento_recebido or not self.pagamento_na_entrega:
+        if self.pagamento_recebido:
             return "PAGO"
-        return "COBRAR DO CLIENTE"
+        if not self.pagamento_na_entrega:
+            return "AGUARDANDO PAGAMENTO"
+        return "PAGAMENTO NA ENTREGA"
 
     @property
     def item_type_counts(self):
@@ -533,8 +535,8 @@ class FaixaFrete(models.Model):
 
     class Meta:
         ordering = ["ordem", "km_limite", "id"]
-        verbose_name = "Faixa de frete"
-        verbose_name_plural = "Faixas de frete"
+        verbose_name = "Faixa de entrega"
+        verbose_name_plural = "Faixas de entrega"
 
     def __str__(self):
         prefixo = "Até" if self.tipo == self.Tipo.ATE else "Acima de"

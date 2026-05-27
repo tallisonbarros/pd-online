@@ -220,8 +220,8 @@ def _legacy_observation(row, valor_frete, frete_source):
         f"Pagamento antigo: {row['payment_method_raw'] or 'desconhecido'}",
         f"Subtotal antigo dos itens: R$ {row['items_subtotal']:.2f}",
         f"Total final antigo: R$ {row['total_charged']:.2f}",
-        f"Frete importado: R$ {valor_frete:.2f} ({frete_source})",
-        "Total antigo usado para inferir desconto; total importado recalculado com frete no modelo atual.",
+        f"Entrega importada: R$ {valor_frete:.2f} ({frete_source})",
+        "Total antigo usado para inferir desconto; total importado recalculado com entrega no modelo atual.",
     ]
     if row["coupon_code"]:
         notes.append(f"Cupom antigo: {row['coupon_code']} (-R$ {row['coupon_discount']:.2f})")

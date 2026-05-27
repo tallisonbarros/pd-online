@@ -979,7 +979,7 @@
         if (
             inlineForm.dataset.field === "tipo_coleta"
             && inlineValue === "retirada"
-            && !(await confirmModal("Alterar este pedido para retirada? O frete sera zerado e o endereco virara Retirada no local."))
+            && !(await confirmModal("Alterar este pedido para retirada? A entrega sera zerada e o endereco virara Retirada no local."))
         ) {
             return;
         }

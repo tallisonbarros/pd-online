@@ -9609,7 +9609,42 @@ fieldset.field {
 .ped-icon svg { fill: #221311; }
 .ped-client h2 { margin: 2px 0 0; color: #302621; font-size: 33px; line-height: 1.1; }
 .ped-client h2 span { color: #302621; }
-.ped-time { margin: 4px 0 0; color: #7c675c; font-size: 13px; }
+.ped-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 0;
+    color: #7c675c;
+    font-size: 13px;
+}
+.ped-channel-tag {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 16px;
+    padding-left: 8px;
+    color: #3f2923;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+}
+.ped-channel-tag::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 1px;
+    bottom: 1px;
+    width: 4px;
+    border-radius: 999px;
+    background: #4e342e;
+}
+.ped-channel-tag--site { color: #00545d; }
+.ped-channel-tag--site::before { background: #006d77; }
+.ped-channel-tag--ifood { color: #8f1c14; }
+.ped-channel-tag--ifood::before { background: #b42318; }
+.ped-channel-tag--balcao { color: #3f2923; }
+.ped-channel-tag--balcao::before { background: #4e342e; }
 .ped-item-line { margin: 8px 0 0; color: #5f4b42; font-size: 16px; }
 .ped-item-line--top {
     min-width: 0;
@@ -9711,6 +9746,8 @@ fieldset.field {
     white-space: nowrap;
 }
 .ped-actions-left .ped-btn {
+    position: relative;
+    overflow: hidden;
     min-height: 32px;
     border-radius: 11px;
     padding: 5px 9px;
@@ -9719,6 +9756,32 @@ fieldset.field {
     font-size: 12px;
     font-weight: 800;
     box-shadow: none;
+}
+.ped-actions-left .ped-btn.is-next-action {
+    border-color: #d6b46b;
+    color: #513a17;
+    box-shadow: inset 0 0 0 1px rgba(214, 180, 107, 0.34), 0 5px 12px rgba(91, 65, 22, 0.10);
+}
+.ped-actions-left .ped-btn.is-next-action::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    z-index: 0;
+    background: linear-gradient(120deg, rgba(255, 226, 143, 0.48), rgba(255, 250, 228, 0.16));
+    pointer-events: none;
+}
+.ped-actions-left .ped-btn.is-next-action::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    z-index: 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.46);
+    pointer-events: none;
+}
+.ped-actions-left .ped-btn.is-next-action > * {
+    position: relative;
+    z-index: 1;
 }
 .ped-actions-left .ped-btn-toggle.is-active {
     border-color: #b8d8c4;
@@ -9746,9 +9809,67 @@ fieldset.field {
 }
 
 .ped-actions-left .ped-btn-payment:not(.is-active) {
+    position: relative;
+    overflow: hidden;
     border-color: #e0c5c0;
     background: #fff8f6;
     color: #8a3d34;
+}
+.ped-actions-left .ped-btn-payment:not(.is-active)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        110deg,
+        transparent 0%,
+        transparent 34%,
+        rgba(255, 236, 176, 0.22) 42%,
+        rgba(255, 190, 74, 0.72) 49%,
+        rgba(255, 96, 80, 0.42) 55%,
+        transparent 66%,
+        transparent 100%
+    );
+    opacity: 0;
+    transform: translateX(-130%);
+    animation: unpaid-light-pass 18s ease-in-out infinite;
+    pointer-events: none;
+}
+.ped-actions-left .ped-btn-payment:not(.is-active)::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255, 178, 64, 0.88);
+    box-shadow: 0 0 0 1px rgba(255, 226, 143, 0.24), 0 0 14px rgba(255, 113, 80, 0.28);
+    opacity: 0;
+    animation: unpaid-border-glow 18s ease-in-out infinite;
+    pointer-events: none;
+}
+.ped-actions-left .ped-btn-payment:not(.is-active) > * {
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes unpaid-light-pass {
+    0% { opacity: 0; transform: translateX(-130%); }
+    2% { opacity: 1; }
+    8% { opacity: 1; transform: translateX(130%); }
+    10%, 100% { opacity: 0; transform: translateX(130%); }
+}
+
+@keyframes unpaid-border-glow {
+    0%, 10% { opacity: 1; }
+    14%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ped-actions-left .ped-btn-payment:not(.is-active)::before,
+    .ped-actions-left .ped-btn-payment:not(.is-active)::after {
+        animation: none;
+    }
 }
 
 .ped-chip-box--unpaid {

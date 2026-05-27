@@ -114,6 +114,39 @@
         return pedido.tipo_coleta === "retirada";
     }
 
+    function actionGuideKey(pedidoId, action) {
+        return `prato:pedido:${pedidoId}:action:${action}`;
+    }
+
+    function isActionDone(pedido, action) {
+        try {
+            return window.localStorage?.getItem(actionGuideKey(pedido.id, action)) === "1";
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function markActionDone(pedidoId, action) {
+        if (!pedidoId || !action) return;
+        try {
+            window.localStorage?.setItem(actionGuideKey(pedidoId, action), "1");
+        } catch (error) {
+            // Ignore storage failures; the guide is only a local visual hint.
+        }
+    }
+
+    function nextGuidedAction(pedido) {
+        if (!isActionDone(pedido, "confirmacao")) return "confirmacao";
+        if (isPickupOrder(pedido)) return "";
+        if (!pedido.entregador_solicitado) return "entregador";
+        if (!isActionDone(pedido, "endereco")) return "endereco";
+        return "";
+    }
+
+    function actionGuideClass(pedido, action) {
+        return nextGuidedAction(pedido) === action ? " is-next-action" : "";
+    }
+
     function previousStatus(pedido) {
         const status = pedido.status;
         if (isPickupOrder(pedido) && status === "finalizado") return "aguardando_entregador";
@@ -157,10 +190,12 @@
     }
 
     function buildEntregadorForm(pedido) {
+        if (isPickupOrder(pedido)) return "";
         const active = pedido.entregador_solicitado ? " is-active" : "";
+        const guide = actionGuideClass(pedido, "entregador");
         return `
             <form method="post" action="${escapeHtml(buildEntregadorUrl(pedido.id))}" data-entregador-form>
-                <button class="ped-btn ped-btn-toggle${active}" type="submit">Entregador solicitado</button>
+                <button class="ped-btn ped-btn-toggle${active}${guide}" type="submit">Entregador solicitado</button>
             </form>
         `;
     }
@@ -189,15 +224,24 @@
         `;
     }
 
-    function buildCopyButton(pedido, kind, label) {
+    function buildCopyButton(pedido, kind, label, guideAction) {
+        const guide = actionGuideClass(pedido, guideAction || kind);
         return `
             <button
-                class="ped-btn ped-btn-soft ped-btn-copy"
+                class="ped-btn ped-btn-soft ped-btn-copy${guide}"
                 type="button"
                 data-copy-kind="${escapeHtml(kind)}"
+                data-order-id="${escapeHtml(pedido.id)}"
+                data-guide-action="${escapeHtml(guideAction || kind)}"
                 data-copy-url="${escapeHtml(buildCopyUrl(pedido))}"
             >${escapeHtml(label)}</button>
         `;
+    }
+
+    function buildChannelTag(pedido) {
+        const channel = pedido.canal || "";
+        const label = pedido.canal_label || channel || "Canal";
+        return `<span class="ped-channel-tag ped-channel-tag--${escapeHtml(channel)}">${escapeHtml(label)}</span>`;
     }
 
     function buildItemList(pedido) {
@@ -245,7 +289,7 @@
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
-                            <p class="ped-time">${escapeHtml(pedido.criado_em)}</p>
+                            <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span></p>
                         </div>
                     </div>
 
@@ -273,8 +317,9 @@
 
                 <div class="ped-actions">
                     <div class="ped-actions-left">
+                        ${buildCopyButton(pedido, "confirmacao", "Copiar confirmação")}
+                        ${buildCopyButton(pedido, "entregador", "Copiar endereço", "endereco")}
                         ${buildCopyButton(pedido, "cliente", "Copiar pedido")}
-                        ${buildCopyButton(pedido, "entregador", "Copiar endereço")}
                         ${buildPaymentReceivedForm(pedido)}
                         ${buildEntregadorForm(pedido)}
                     </div>
@@ -633,6 +678,8 @@
                 fallbackCopy(text);
             }
             button.textContent = "Copiado";
+            markActionDone(button.dataset.orderId, button.dataset.guideAction);
+            await syncOrders();
             window.setTimeout(() => {
                 button.textContent = originalText;
             }, 1300);
@@ -696,7 +743,7 @@
                 cidade: "Rio Verde",
                 estado: "GO",
             });
-            setDeliveryLookupResult("<p>Calculando frete...</p>");
+            setDeliveryLookupResult("<p>Calculando entrega...</p>");
             const response = await fetch(`${deliveryEtaUrl}?${params.toString()}`, {
                 method: "GET",
                 headers: { Accept: "application/json" },
@@ -705,8 +752,8 @@
             const payload = await response.json();
             if (!response.ok || !payload.ok) {
                 const error = payload.error === "origin_not_configured"
-                    ? "Configure a origem de entrega em Ajustes > Frete."
-                    : "Nao foi possivel consultar o frete.";
+                    ? "Configure a origem de entrega em Ajustes > Entrega."
+                    : "Nao foi possivel consultar a entrega.";
                 throw new Error(error);
             }
             setDeliveryLookupResult(`
