@@ -324,7 +324,7 @@ textarea {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 156px;
+    height: calc(172px + env(safe-area-inset-bottom, 0px));
     z-index: 39;
     opacity: 0;
     pointer-events: none;
@@ -350,7 +350,7 @@ textarea {
 .cart-dock {
     position: fixed;
     left: 50%;
-    bottom: 18px;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%) translateY(22px);
     width: min(calc(100% - 28px), 360px);
     display: flex;
@@ -440,7 +440,7 @@ textarea {
 .whatsapp-float {
     position: fixed;
     right: 22px;
-    bottom: 24px;
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
     z-index: 42;
     min-height: 58px;
     display: inline-flex;
@@ -515,7 +515,7 @@ textarea {
 .orders-float {
     position: fixed;
     right: 204px;
-    bottom: 24px;
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
     z-index: 41;
     min-width: 72px;
     min-height: 54px;
@@ -554,11 +554,11 @@ textarea {
 }
 
 .whatsapp-float.is-cart-visible {
-    bottom: 94px;
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
 }
 
 .orders-float.is-cart-visible {
-    bottom: 94px;
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
 }
 
 @keyframes whatsappFloatEntrance {
@@ -681,7 +681,7 @@ textarea {
 }
 
 [data-page="checkout"] {
-    padding-bottom: 150px;
+    padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px));
 }
 
 .header-actions {
@@ -2394,17 +2394,17 @@ body.modal-open {
 }
 
 [data-page="carrinho"] {
-    padding-bottom: 128px;
+    padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
 }
 
 [data-page="carrinho"] .checkout-page-footer {
-    bottom: 12px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 [data-page="carrinho"] .checkout-fixed-actions {
     position: fixed;
     left: 50%;
-    bottom: 18px;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
     z-index: 25;
     width: min(calc(100% - 28px), 390px);
     transform: translateX(-50%);
@@ -2418,7 +2418,7 @@ body.modal-open {
 }
 
 [data-page="checkout"] {
-    padding-bottom: 150px;
+    padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px));
 }
 
 .checkout-nav-links {
@@ -2548,7 +2548,7 @@ body.modal-open {
 }
 
 [data-page="checkout"] .checkout-page-footer {
-    bottom: 10px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     width: min(calc(100% - 28px), 390px);
     grid-template-columns: 1fr;
     gap: 8px;
@@ -7583,11 +7583,11 @@ fieldset.field {
     }
 
     [data-page="carrinho"] {
-        padding-bottom: 128px;
+        padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
     }
 
     [data-page="carrinho"] .checkout-fixed-actions {
-        bottom: 18px;
+        bottom: calc(28px + env(safe-area-inset-bottom, 0px));
         width: min(calc(100% - 24px), 390px);
     }
 
@@ -7719,7 +7719,7 @@ fieldset.field {
 
     [data-page="checkout"] {
         padding-top: 4px;
-        padding-bottom: 150px;
+        padding-bottom: calc(170px + env(safe-area-inset-bottom, 0px));
     }
 
     [data-page="checkout"] .context-header,
@@ -7788,7 +7788,7 @@ fieldset.field {
 
     .cart-dock {
         width: min(380px, calc(100% - 44px));
-        bottom: 24px;
+        bottom: calc(30px + env(safe-area-inset-bottom, 0px));
     }
 
     .menu-intro {
@@ -12654,7 +12654,7 @@ fieldset.field {
 
     .whatsapp-float {
         right: 16px;
-        bottom: 18px;
+        bottom: calc(28px + env(safe-area-inset-bottom, 0px));
         width: 58px;
         min-height: 58px;
         justify-content: center;
@@ -12671,19 +12671,19 @@ fieldset.field {
     }
 
     .whatsapp-float.is-cart-visible {
-        bottom: 100px;
+        bottom: calc(116px + env(safe-area-inset-bottom, 0px));
     }
 
     .orders-float {
         right: 84px;
-        bottom: 18px;
+        bottom: calc(28px + env(safe-area-inset-bottom, 0px));
         min-width: 64px;
         min-height: 54px;
         padding: 8px 10px;
     }
 
     .orders-float.is-cart-visible {
-        bottom: 100px;
+        bottom: calc(116px + env(safe-area-inset-bottom, 0px));
     }
 
     .metrics-funnel-step {
