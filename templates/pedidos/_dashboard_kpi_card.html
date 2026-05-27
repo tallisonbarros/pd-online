@@ -1,3 +1,101 @@
+{% if card.label == "Marmitas vendidas" %}
+<article class="ops-kpi-card dashboard-sales-card{% if card.variant %} ops-kpi-card--{{ card.variant }}{% endif %}{% if card.is_wide %} is-wide{% endif %}">
+    <header class="dashboard-sales-head">
+        <div>
+            <p class="dashboard-sales-kicker">Marmitas do dia</p>
+            <span>vendas, sa&iacute;das e produ&ccedil;&atilde;o</span>
+        </div>
+    </header>
+
+    <section class="dashboard-sales-hero" aria-label="Marmitas vendidas">
+        <strong class="dashboard-sales-value dashboard-kpi-value" data-dashboard-card="{{ card.label }}">{{ card.value }}</strong>
+        <span>marmitas vendidas</span>
+    </section>
+
+    <section class="dashboard-sales-section dashboard-sales-section--meals" aria-label="Resumo das marmitas">
+        <div class="dashboard-sales-section-title">
+            <span>Marmitas</span>
+            <small>sa&iacute;das e produ&ccedil;&atilde;o</small>
+        </div>
+        <div class="dashboard-sales-meal-list">
+            <span class="dashboard-sales-row dashboard-sales-row--produced dashboard-card-detail">
+                <span>Produzidas</span>
+                <b data-dashboard-card="Marmitas produzidas">{{ dashboard.marmitas_produzidas }}</b>
+            </span>
+            {% for detail in card.details %}
+                {% if detail.label == "Saidas" %}
+                    <span class="dashboard-sales-row dashboard-sales-row--out dashboard-card-detail{% if detail.muted %} is-muted{% endif %}">
+                        <span>Sa&iacute;das</span>
+                        <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                    </span>
+                {% endif %}
+            {% endfor %}
+            <span class="dashboard-sales-row dashboard-sales-row--nested dashboard-card-detail">
+                <span>Vendidas</span>
+                <b data-dashboard-card="{{ card.label }}">{{ card.value }}</b>
+            </span>
+            {% for detail in card.details %}
+                {% if detail.label == "Cortesias" or detail.label == "Promocao" %}
+                    <span class="dashboard-sales-row dashboard-sales-row--nested dashboard-card-detail{% if detail.muted %} is-muted{% endif %}">
+                        <span>{% if detail.label == "Promocao" %}Promo&ccedil;&atilde;o{% else %}{{ detail.label }}{% endif %}</span>
+                        <b data-dashboard-card-detail="{{ card.label }}:{{ detail.label }}">{{ detail.value }}</b>
+                    </span>
+                {% endif %}
+            {% endfor %}
+            <span class="dashboard-sales-row dashboard-sales-row--closing dashboard-card-detail">
+                <span>Consumo interno</span>
+                <b data-dashboard-card-detail="Marmitas produzidas:Consumo interno">{{ dashboard.consumo_interno }}</b>
+            </span>
+            <span class="dashboard-sales-row dashboard-card-detail">
+                <span>Excedente</span>
+                <b data-dashboard-card-detail="Marmitas produzidas:Excedente">{{ dashboard.marmitas_excedentes }}</b>
+            </span>
+        </div>
+    </section>
+</article>
+{% elif card.label == "Marmitas produzidas" %}
+<article class="ops-kpi-card dashboard-orders-card">
+    <header class="dashboard-sales-head">
+        <div>
+            <p class="dashboard-sales-kicker">Pedidos do dia</p>
+            <span>totais, recorrentes e canais</span>
+        </div>
+    </header>
+
+    <section class="dashboard-orders-hero" aria-label="Pedidos finalizados">
+        <strong>{{ dashboard.total_pedidos }}</strong>
+        <span>pedidos finalizados</span>
+    </section>
+
+    <section class="dashboard-sales-section dashboard-sales-section--orders" aria-label="Resumo de pedidos">
+        <div class="dashboard-sales-order-grid">
+            <span class="dashboard-sales-order-pill">
+                <small>Pedidos totais</small>
+                <b data-dashboard-card-detail="Marmitas vendidas:Pedidos">{{ dashboard.total_pedidos }}</b>
+            </span>
+            <span class="dashboard-sales-order-pill">
+                <small>Pedidos recorrentes</small>
+                <b data-dashboard-card-detail="Marmitas vendidas:Recorrentes">{{ dashboard.pedidos_recorrentes }}</b>
+            </span>
+        </div>
+    </section>
+
+    <section class="dashboard-sales-section dashboard-sales-section--channels" aria-label="Pedidos por canal">
+        <div class="dashboard-sales-section-title">
+            <span>Pedidos por canal</span>
+            <small>origem dos pedidos</small>
+        </div>
+        <div class="dashboard-sales-channel-grid dashboard-channel-grid dashboard-channel-grid--kpi">
+            {% for canal in dashboard.canais %}
+                <div class="dashboard-sales-channel dashboard-channel-mini-card{% if canal.is_primary %} is-primary{% endif %}" data-dashboard-channel-card="{{ canal.key }}">
+                    <span>{{ canal.label }}</span>
+                    <strong data-dashboard-channel="{{ canal.key }}">{{ canal.total }}</strong>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+</article>
+{% else %}
 <article class="ops-kpi-card{% if card.variant %} ops-kpi-card--{{ card.variant }}{% endif %}{% if card.is_wide %} is-wide{% endif %}">
     {% if card.secondary_label %}
         <div class="dashboard-kpi-split">
@@ -75,3 +173,4 @@
         </div>
     {% endif %}
 </article>
+{% endif %}
