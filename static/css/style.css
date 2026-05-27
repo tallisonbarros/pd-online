@@ -10707,11 +10707,50 @@ fieldset.field {
     font-size: 13px;
     font-weight: 800;
 }
+.ped-item-editor-row.is-courtesy {
+    border-color: #f0b35a;
+    background: #fff8eb;
+}
 .ped-item-editor-row button {
     border: 0;
     background: transparent;
     color: #d43d3d;
     font-weight: 900;
+}
+.ped-item-editor-row .ped-item-classification-toggle {
+    border: 1px solid #e6d7ce;
+    border-radius: 999px;
+    background: #fff;
+    color: #5d4038;
+    padding: 5px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.ped-item-editor-row .ped-item-classification-toggle[aria-pressed="true"] {
+    border-color: #f0a63a;
+    background: #f0a63a;
+    color: #2a1a17;
+}
+.ped-item-classification {
+    display: inline-flex;
+    width: fit-content;
+    border-radius: 999px;
+    padding: 2px 7px;
+    background: #f3eee9;
+    color: #5d4038;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.ped-item-classification.is-cortesia {
+    background: #fff0cf;
+    color: #8a4b00;
+}
+.ped-item-classification.is-promocao {
+    background: #e7f0ff;
+    color: #2450a4;
 }
 .ped-modal-items {
     display: grid;

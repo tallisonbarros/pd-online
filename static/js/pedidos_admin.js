@@ -433,7 +433,7 @@
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
-                            <p class="ped-time">${escapeHtml(pedido.criado_em)}</p>
+                            <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
                             <p class="ped-item-line">${escapeHtml(pedido.status_label)}</p>
                         </div>
                     </div>

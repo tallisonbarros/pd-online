@@ -273,6 +273,8 @@ def montar_mensagem_whatsapp(pedido):
         nome_item = item.nome_prato_snapshot
         if item.variacao_nome_snapshot:
             nome_item = f"{nome_item} - {item.variacao_nome_snapshot}"
+        if item.classificacao_saida != ItemPedido.ClassificacaoSaida.VENDIDA:
+            nome_item = f"{nome_item} ({item.get_classificacao_saida_display()})"
         linhas.append(
             f"- {item.quantidade}x {nome_item} | R$ {item.subtotal:.2f}".replace(".", ",")
         )
@@ -338,6 +340,12 @@ def _money_line_value(value):
     return f"R$ {value:.2f}".replace(".", ",")
 
 
+def _pedido_confirmacao_status_final(pedido):
+    if pedido.tipo_coleta == Pedido.TipoColeta.RETIRADA:
+        return "Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada."
+    return "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega."
+
+
 def montar_mensagem_confirmacao_pedido(pedido):
     nome_cliente = _safe_text(pedido.nome_cliente)
     saudacao = f"Oi, {nome_cliente}!" if nome_cliente.casefold() not in {"", "cliente"} else "Oi!"
@@ -352,6 +360,8 @@ def montar_mensagem_confirmacao_pedido(pedido):
             nome_item = item.nome_prato_snapshot
             if item.variacao_nome_snapshot:
                 nome_item = f"{nome_item} - {item.variacao_nome_snapshot}"
+            if item.classificacao_saida != ItemPedido.ClassificacaoSaida.VENDIDA:
+                nome_item = f"{nome_item} ({item.get_classificacao_saida_display()})"
             item_line = f"- {item.quantidade}x {nome_item} | {_money_line_value(item.preco_snapshot)} un."
             if item.quantidade > 1:
                 item_line = f"{item_line} | {_money_line_value(item.subtotal)}"
@@ -369,7 +379,7 @@ def montar_mensagem_confirmacao_pedido(pedido):
                 f"Pagamento: {pedido.get_forma_pagamento_display()}",
                 f"Total: {_money_line_value(pedido.total)}",
                 "",
-                "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.",
+                _pedido_confirmacao_status_final(pedido),
             ]
         )
         return "\n".join(linhas)
@@ -383,7 +393,7 @@ def montar_mensagem_confirmacao_pedido(pedido):
         f"Pagamento: {pedido.get_forma_pagamento_display()}",
         f"Total: {_money_line_value(pedido.total)}",
         "",
-        "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.",
+        _pedido_confirmacao_status_final(pedido),
     ]
     return "\n".join(linhas)
 
@@ -1862,6 +1872,8 @@ def _pedido_public_payload(pedido, include_items=False):
                 "variacao": item.variacao_nome_snapshot,
                 "quantidade": item.quantidade,
                 "observacao": item.observacao,
+                "classificacao_saida": item.classificacao_saida,
+                "classificacao_saida_label": item.get_classificacao_saida_display(),
                 "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),
             }
             for item in pedido.itens.all()
@@ -2584,6 +2596,7 @@ def _dashboard_nav_context(data_selecionada, hoje):
                     observacao__icontains="Tipo legado: dish",
                 )
             )
+            .filter(classificacao_saida=ItemPedido.ClassificacaoSaida.VENDIDA)
             .annotate(day=TruncDate("pedido__criado_em"))
             .values("day")
             .annotate(total=Sum("quantidade"))
@@ -3369,6 +3382,8 @@ def _pedido_modal_payload(pedido):
                 "variacao": item.variacao_nome_snapshot,
                 "quantidade": item.quantidade,
                 "observacao": item.observacao,
+                "classificacao_saida": item.classificacao_saida,
+                "classificacao_saida_label": item.get_classificacao_saida_display(),
                 "subtotal": f"R$ {item.subtotal:.2f}".replace(".", ","),
             }
             for item in pedido.itens.all()
@@ -3473,6 +3488,7 @@ def _clone_order_as_draft(pedido):
             preco_snapshot=item.preco_snapshot,
             quantidade=item.quantidade,
             observacao=item.observacao,
+            classificacao_saida=item.classificacao_saida,
         )
     recalculate_order_totals(clone, cupom_codigo=clone.cupom_codigo)
     return clone

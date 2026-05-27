@@ -19,6 +19,8 @@ def serialize_item_pedido_api(item):
         "preco_snapshot": _decimal_payload(item.preco_snapshot),
         "quantidade": item.quantidade,
         "observacao": item.observacao,
+        "classificacao_saida": item.classificacao_saida,
+        "classificacao_saida_label": item.get_classificacao_saida_display(),
         "subtotal": _decimal_payload(item.subtotal),
     }
 

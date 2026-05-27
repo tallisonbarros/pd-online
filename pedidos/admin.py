@@ -52,6 +52,7 @@ class ItemPedidoInline(admin.TabularInline):
         "preco_snapshot",
         "quantidade",
         "observacao",
+        "classificacao_saida",
         "subtotal",
     )
     can_delete = False
@@ -144,7 +145,7 @@ class ResumoOperacionalDiaAdmin(admin.ModelAdmin):
 
 @admin.register(ItemPedido)
 class ItemPedidoAdmin(admin.ModelAdmin):
-    list_display = ("pedido", "nome_prato_snapshot", "variacao_nome_snapshot", "quantidade", "subtotal")
+    list_display = ("pedido", "nome_prato_snapshot", "variacao_nome_snapshot", "quantidade", "classificacao_saida", "subtotal")
     list_select_related = ("pedido", "prato", "bebida", "adicional")
     search_fields = ("nome_prato_snapshot", "variacao_nome_snapshot", "pedido__nome_cliente", "pedido__numero")
 

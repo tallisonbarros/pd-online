@@ -325,6 +325,11 @@ class Pedido(models.Model):
 
 
 class ItemPedido(models.Model):
+    class ClassificacaoSaida(models.TextChoices):
+        VENDIDA = "vendida", "Vendida"
+        CORTESIA = "cortesia", "Cortesia"
+        PROMOCAO = "promocao", "Promoção"
+
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="itens")
     prato = models.ForeignKey(Prato, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
     bebida = models.ForeignKey(Bebida, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
@@ -334,6 +339,11 @@ class ItemPedido(models.Model):
     preco_snapshot = models.DecimalField(max_digits=8, decimal_places=2)
     quantidade = models.PositiveIntegerField(default=1)
     observacao = models.CharField(max_length=255, blank=True)
+    classificacao_saida = models.CharField(
+        max_length=20,
+        choices=ClassificacaoSaida.choices,
+        default=ClassificacaoSaida.VENDIDA,
+    )
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
 
     class Meta:
@@ -344,7 +354,10 @@ class ItemPedido(models.Model):
         return f"{self.quantidade}x {self.nome_prato_snapshot}"
 
     def save(self, *args, **kwargs):
-        self.subtotal = Decimal(self.preco_snapshot) * self.quantidade
+        if self.prato_id and self.classificacao_saida in {self.ClassificacaoSaida.CORTESIA, self.ClassificacaoSaida.PROMOCAO}:
+            self.subtotal = Decimal("0.00")
+        else:
+            self.subtotal = Decimal(self.preco_snapshot) * self.quantidade
         super().save(*args, **kwargs)
 
 

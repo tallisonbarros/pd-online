@@ -59,6 +59,7 @@
                         <strong>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</strong>
                         {% if item.variacao_nome_snapshot %}<small>{{ item.variacao_nome_snapshot }}</small>{% endif %}
                         {% if item.observacao %}<small>Obs.: {{ item.observacao }}</small>{% endif %}
+                        {% if item.classificacao_saida != "vendida" %}<small class="ped-item-classification is-{{ item.classificacao_saida }}">{{ item.get_classificacao_saida_display }}</small>{% endif %}
                     </div>
                     <span>R$ {{ item.subtotal|floatformat:2 }}</span>
                 </li>
@@ -112,15 +113,24 @@
                                 {% for item in pedido.itens.all %}
                                     {% if item.prato_id or item.bebida_id or item.adicional_id %}
                                         <div
-                                            class="ped-item-editor-row"
+                                            class="ped-item-editor-row {% if item.classificacao_saida == 'cortesia' %}is-courtesy{% endif %}"
                                             data-editor-row
                                             data-tipo="{% if item.prato_id %}prato{% elif item.bebida_id %}bebida{% else %}adicional{% endif %}"
                                             data-item-id="{% if item.prato_id %}{{ item.prato_id }}{% elif item.bebida_id %}{{ item.bebida_id }}{% else %}{{ item.adicional_id }}{% endif %}"
                                             data-variacao="{{ item.variacao_nome_snapshot }}"
                                             data-quantidade="{{ item.quantidade }}"
                                             data-observacao="{{ item.observacao }}"
+                                            data-classificacao-saida="{{ item.classificacao_saida }}"
                                         >
-                                            <span>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}</span>
+                                            <span>
+                                                {{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}
+                                                {% if item.classificacao_saida != "vendida" %}<small class="ped-item-classification is-{{ item.classificacao_saida }}">{{ item.get_classificacao_saida_display }}</small>{% endif %}
+                                            </span>
+                                            {% if item.prato_id and item.classificacao_saida != "promocao" %}
+                                                <button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="{% if item.classificacao_saida == 'cortesia' %}true{% else %}false{% endif %}">
+                                                    {% if item.classificacao_saida == "cortesia" %}Cortesia{% else %}Venda{% endif %}
+                                                </button>
+                                            {% endif %}
                                             <button type="button" data-editor-remove-item aria-label="Remover item">Remover</button>
                                         </div>
                                     {% endif %}

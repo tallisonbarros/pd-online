@@ -524,6 +524,54 @@ class CozinhaAccessTests(TestCase):
         self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Consumo interno"')
         self.assertNotContains(response, 'data-dashboard-card-detail="Custos de producao:Excedente"')
 
+    def test_dashboard_separates_sold_output_courtesy_and_promotion_meals(self):
+        from pedidos.dashboard import get_dashboard_diaria
+
+        selected_day = timezone.make_aware(datetime(2026, 5, 21, 12, 0))
+        prato = Prato.objects.create(nome="Executivo", preco=Decimal("25.00"), ativo=True)
+        ResumoOperacionalDia.objects.create(data=date(2026, 5, 21), marmitas_produzidas=8, consumo_interno=1)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente",
+            telefone="64999999999",
+            endereco="Rua Hoje",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("100.00"),
+        )
+        Pedido.objects.filter(id=pedido.id).update(criado_em=selected_day)
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=4,
+            classificacao_saida=ItemPedido.ClassificacaoSaida.VENDIDA,
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+            classificacao_saida=ItemPedido.ClassificacaoSaida.CORTESIA,
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot=prato.nome,
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+            classificacao_saida=ItemPedido.ClassificacaoSaida.PROMOCAO,
+        )
+
+        dashboard = get_dashboard_diaria(date(2026, 5, 21))
+
+        self.assertEqual(dashboard["marmitas_saida"], 6)
+        self.assertEqual(dashboard["marmitas_vendidas"], 4)
+        self.assertEqual(dashboard["marmitas_cortesia"], 1)
+        self.assertEqual(dashboard["marmitas_promocao"], 1)
+        self.assertEqual(dashboard["marmitas_excedentes"], 1)
+
     def test_dashboard_counts_legacy_imported_dish_snapshots_as_frozen_marmitas(self):
         self.client.force_login(self.diretor_user)
         selected_day = timezone.make_aware(datetime(2026, 5, 20, 12, 0))
@@ -1768,6 +1816,47 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(pedido.total_sem_desconto, Decimal("69.00"))
         self.assertEqual(pedido.total, Decimal("69.00"))
 
+    def test_manager_can_mark_order_item_as_courtesy_from_modal(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        prato = Prato.objects.create(nome="Carreteiro", preco=Decimal("25.00"), ativo=True)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("10.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/itens/",
+            {
+                "itens_payload": json.dumps(
+                    [
+                        {
+                            "tipo": "prato",
+                            "item_id": prato.id,
+                            "quantidade": 1,
+                            "classificacao_saida": ItemPedido.ClassificacaoSaida.CORTESIA,
+                        }
+                    ]
+                )
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        item = pedido.itens.get()
+        self.assertEqual(item.classificacao_saida, ItemPedido.ClassificacaoSaida.CORTESIA)
+        self.assertEqual(item.preco_snapshot, Decimal("25.00"))
+        self.assertEqual(item.subtotal, Decimal("0.00"))
+        self.assertEqual(pedido.total_sem_desconto, Decimal("35.00"))
+        self.assertEqual(pedido.total, Decimal("10.00"))
+        self.assertEqual(response.json()["itens"][0]["classificacao_saida"], "cortesia")
+
     def test_manager_can_mark_order_as_ifood_and_reprice_items(self):
         self.client.force_login(self.staff_user)
         gerente_group, _created = Group.objects.get_or_create(name="Gerente")
@@ -2612,6 +2701,8 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertNotIn("Oi, Cliente!", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00", payload["confirmacao"])
+        self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada.", payload["confirmacao"])
+        self.assertNotIn("quando sair para entrega", payload["confirmacao"])
         self.assertNotIn("pagamento foi confirmado", payload["confirmacao"])
 
     def test_order_confirmation_copy_for_counter_confirms_full_order(self):
@@ -2655,7 +2746,8 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn("Entrega: R$ 5,00", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00", payload["confirmacao"])
-        self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega.", payload["confirmacao"])
+        self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada.", payload["confirmacao"])
+        self.assertNotIn("quando sair para entrega", payload["confirmacao"])
 
     def test_order_copy_contextualizes_delivery_payment_collection(self):
         self.client.force_login(self.staff_user)
@@ -4015,11 +4107,17 @@ class CriarPedidoFreteTests(TestCase):
         pedido = Pedido.objects.get()
         self.assertEqual(pedido.total_sem_desconto, Decimal("124.50"))
         self.assertEqual(pedido.promocao_descricao, "5ª marmita grátis")
-        self.assertEqual(pedido.promocao_desconto, Decimal("24.90"))
+        self.assertEqual(pedido.promocao_desconto, Decimal("0.00"))
         self.assertEqual(pedido.total, Decimal("99.60"))
+        self.assertEqual(
+            list(pedido.itens.order_by("classificacao_saida").values_list("classificacao_saida", "quantidade", "subtotal")),
+            [
+                (ItemPedido.ClassificacaoSaida.PROMOCAO, 1, Decimal("0.00")),
+                (ItemPedido.ClassificacaoSaida.VENDIDA, 4, Decimal("99.60")),
+            ],
+        )
         success_response = self.client.get(response.url)
         self.assertContains(success_response, "5ª marmita grátis")
-        self.assertContains(success_response, "- R$ 24,90")
 
     def test_pickup_order_applies_frango_fraldinha_pair_promotion(self):
         prato = Prato.objects.create(

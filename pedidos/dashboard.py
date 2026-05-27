@@ -59,23 +59,24 @@ def get_dashboard_diaria(data):
     faturamento_total = sum((pedido.total or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
     custo_entrega = sum((pedido.valor_frete or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
     pedidos_recorrentes = _recurring_order_count(pedidos_do_dia, data)
-    marmitas_vendidas = int(
-        _finished_orders_for_day(data)
-        .filter(
-            Q(itens__prato__isnull=False)
-            | Q(
-                observacao_geral__startswith="[IMPORTADO DO SISTEMA ANTIGO]",
-                itens__prato__isnull=True,
-                itens__bebida__isnull=True,
-                itens__adicional__isnull=True,
-                itens__observacao__icontains="Tipo legado: dish",
-            )
-        )
-        .aggregate(total=Sum("itens__quantidade"))
-        .get("total")
-        or 0
+    marmita_filter = Q(itens__prato__isnull=False) | Q(
+        observacao_geral__startswith="[IMPORTADO DO SISTEMA ANTIGO]",
+        itens__prato__isnull=True,
+        itens__bebida__isnull=True,
+        itens__adicional__isnull=True,
+        itens__observacao__icontains="Tipo legado: dish",
     )
-    marmitas_excedentes = operacional.marmitas_produzidas - marmitas_vendidas - operacional.consumo_interno
+    marmitas = _finished_orders_for_day(data).filter(marmita_filter).aggregate(
+        saida=Sum("itens__quantidade"),
+        vendidas=Sum("itens__quantidade", filter=Q(itens__classificacao_saida="vendida")),
+        cortesias=Sum("itens__quantidade", filter=Q(itens__classificacao_saida="cortesia")),
+        promocao=Sum("itens__quantidade", filter=Q(itens__classificacao_saida="promocao")),
+    )
+    marmitas_saida = int(marmitas.get("saida") or 0)
+    marmitas_vendidas = int(marmitas.get("vendidas") or 0)
+    marmitas_cortesia = int(marmitas.get("cortesias") or 0)
+    marmitas_promocao = int(marmitas.get("promocao") or 0)
+    marmitas_excedentes = operacional.marmitas_produzidas - marmitas_saida - operacional.consumo_interno
     custo_total_producao = operacional.custo_insumos
     custo_total_operacional = (custo_total_producao + custo_entrega).quantize(Decimal("0.01"))
     custo_unitario_marmita = Decimal("0.00")
@@ -97,7 +98,10 @@ def get_dashboard_diaria(data):
         "custo_entrega": custo_entrega,
         "canais": canais,
         "pedidos_recorrentes": pedidos_recorrentes,
+        "marmitas_saida": marmitas_saida,
         "marmitas_vendidas": marmitas_vendidas,
+        "marmitas_cortesia": marmitas_cortesia,
+        "marmitas_promocao": marmitas_promocao,
         "marmitas_produzidas": operacional.marmitas_produzidas,
         "consumo_interno": operacional.consumo_interno,
         "custo_insumos": operacional.custo_insumos,
@@ -127,6 +131,9 @@ def get_dashboard_diaria(data):
                 "label": "Marmitas vendidas",
                 "value": marmitas_vendidas,
                 "details": [
+                    {"label": "Saidas", "value": marmitas_saida},
+                    {"label": "Cortesias", "value": marmitas_cortesia},
+                    {"label": "Promocao", "value": marmitas_promocao},
                     {
                         "label": "Pedidos",
                         "value": total_pedidos,
@@ -140,6 +147,7 @@ def get_dashboard_diaria(data):
                 "label": "Marmitas produzidas",
                 "value": operacional.marmitas_produzidas,
                 "details": [
+                    {"label": "Saidas", "value": marmitas_saida},
                     {"label": "Vendidas", "value": marmitas_vendidas},
                     {"label": "Consumo interno", "value": operacional.consumo_interno},
                     {"label": "Excedente", "value": marmitas_excedentes},

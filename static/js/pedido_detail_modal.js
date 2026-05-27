@@ -629,6 +629,17 @@
         return payload?.pedido || {};
     }
 
+    function itemClassificacaoLabel(value) {
+        if (value === "cortesia") return "Cortesia";
+        if (value === "promocao") return "Promoção";
+        return "Venda";
+    }
+
+    function itemClassificacaoBadge(value) {
+        if (!value || value === "vendida") return "";
+        return `<small class="ped-item-classification is-${escapeHtml(value)}">${escapeHtml(itemClassificacaoLabel(value))}</small>`;
+    }
+
     function fieldValueFromPayload(field, pedido) {
         if (field === "nome_cliente") return pedido.nome_cliente || "";
         if (field === "telefone") return pedido.telefone || "";
@@ -678,6 +689,7 @@
                         <strong>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}</strong>
                         ${item.variacao ? `<small>${escapeHtml(item.variacao)}</small>` : ""}
                         ${item.observacao ? `<small>Obs.: ${escapeHtml(item.observacao)}</small>` : ""}
+                        ${itemClassificacaoBadge(item.classificacao_saida)}
                     </div>
                     <span>${escapeHtml(item.subtotal)}</span>
                 </li>
@@ -711,15 +723,21 @@
     function buildEditorRows(payload) {
         return (Array.isArray(payload?.itens) ? payload.itens : []).filter((item) => item.tipo && item.item_id).map((item) => `
             <div
-                class="ped-item-editor-row"
+                class="ped-item-editor-row ${item.classificacao_saida === "cortesia" ? "is-courtesy" : ""}"
                 data-editor-row
                 data-tipo="${escapeHtml(item.tipo)}"
                 data-item-id="${escapeHtml(item.item_id)}"
                 data-variacao="${escapeHtml(item.variacao)}"
                 data-quantidade="${escapeHtml(item.quantidade)}"
                 data-observacao="${escapeHtml(item.observacao)}"
+                data-classificacao-saida="${escapeHtml(item.classificacao_saida || "vendida")}"
             >
-                <span>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}${item.variacao ? ` - ${escapeHtml(item.variacao)}` : ""}</span>
+                <span>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}${item.variacao ? ` - ${escapeHtml(item.variacao)}` : ""}${itemClassificacaoBadge(item.classificacao_saida)}</span>
+                ${item.tipo === "prato" && item.classificacao_saida !== "promocao" ? `
+                    <button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="${item.classificacao_saida === "cortesia" ? "true" : "false"}">
+                        ${item.classificacao_saida === "cortesia" ? "Cortesia" : "Venda"}
+                    </button>
+                ` : ""}
                 <button type="button" data-editor-remove-item aria-label="Remover item">Remover</button>
             </div>
         `).join("");
@@ -792,7 +810,12 @@
         row.dataset.quantidade = String(qty);
         row.dataset.observacao = "";
         row.dataset.preco = option.dataset.price || "0";
-        row.innerHTML = `<span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span><button type="button" data-editor-remove-item>Remover</button>`;
+        row.dataset.classificacaoSaida = "vendida";
+        row.innerHTML = `
+            <span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span>
+            ${tipo === "prato" ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
+            <button type="button" data-editor-remove-item>Remover</button>
+        `;
         form.querySelector("[data-editor-items]")?.appendChild(row);
         return true;
     }
@@ -856,7 +879,12 @@
         row.dataset.quantidade = String(qty);
         row.dataset.observacao = note;
         row.dataset.preco = option.dataset.price || "0";
-        row.innerHTML = `<span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span><button type="button" data-editor-remove-item>Remover</button>`;
+        row.dataset.classificacaoSaida = "vendida";
+        row.innerHTML = `
+            <span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span>
+            ${tipo === "prato" ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
+            <button type="button" data-editor-remove-item>Remover</button>
+        `;
         form.querySelector("[data-editor-items]")?.appendChild(row);
     }
 
@@ -867,6 +895,7 @@
             variacao: row.dataset.variacao || "",
             quantidade: row.dataset.quantidade || "1",
             observacao: row.dataset.observacao || "",
+            classificacao_saida: row.dataset.classificacaoSaida || "vendida",
         }));
     }
 
@@ -1128,6 +1157,21 @@
             const itemValue = shortcutButton.dataset.editorShortcutItem || "";
             const option = Array.from(form?.querySelectorAll("[data-editor-catalog] option") || []).find((candidate) => candidate.value === itemValue);
             if (!form || !addEditorItemFromOption(form, option, shortcutButton.dataset.editorShortcutVariation || "")) return;
+            trackItemAutosave(form, () => {
+                form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
+            });
+            return;
+        }
+        const courtesyButton = event.target.closest("[data-editor-toggle-courtesy]");
+        if (courtesyButton) {
+            const row = courtesyButton.closest("[data-editor-row]");
+            const form = courtesyButton.closest("[data-items-editor]");
+            if (!row || !form) return;
+            const isCourtesy = row.dataset.classificacaoSaida === "cortesia";
+            row.dataset.classificacaoSaida = isCourtesy ? "vendida" : "cortesia";
+            courtesyButton.textContent = isCourtesy ? "Venda" : "Cortesia";
+            courtesyButton.setAttribute("aria-pressed", isCourtesy ? "false" : "true");
+            row.classList.toggle("is-courtesy", !isCourtesy);
             trackItemAutosave(form, () => {
                 form.querySelector("[data-editor-payload]").value = JSON.stringify(buildItemsPayload(form));
             });
