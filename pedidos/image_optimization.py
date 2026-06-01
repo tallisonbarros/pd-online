@@ -14,7 +14,7 @@ def _source_signature(path):
     return f"{int(stat.st_mtime)}-{stat.st_size}"
 
 
-def optimized_menu_image_path(image_field, *, max_size=MENU_IMAGE_MAX_SIZE, quality=MENU_IMAGE_QUALITY):
+def optimized_menu_image_path(image_field, *, max_size=MENU_IMAGE_MAX_SIZE, quality=MENU_IMAGE_QUALITY, generate=True):
     if not image_field:
         return None
 
@@ -34,6 +34,8 @@ def optimized_menu_image_path(image_field, *, max_size=MENU_IMAGE_MAX_SIZE, qual
 
     if output_path.exists():
         return output_path
+    if not generate:
+        return None
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -52,7 +54,7 @@ def optimized_menu_image_path(image_field, *, max_size=MENU_IMAGE_MAX_SIZE, qual
 
 
 def optimized_menu_image_url(image_field, fallback_url="", **kwargs):
-    output_path = optimized_menu_image_path(image_field, **kwargs)
+    output_path = optimized_menu_image_path(image_field, generate=False, **kwargs)
     if not output_path:
         return fallback_url
 
@@ -61,4 +63,3 @@ def optimized_menu_image_url(image_field, fallback_url="", **kwargs):
     except ValueError:
         return fallback_url
     return f"{settings.MEDIA_URL}{relative_path}"
-
