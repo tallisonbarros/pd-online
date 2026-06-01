@@ -159,16 +159,16 @@ GET /api/pedidos/
 Authorization: Bearer SUA_CHAVE
 ```
 
-Retorna todos os pedidos ordenados do mais recente para o mais antigo.
+Retorna os pedidos ordenados do mais recente para o mais antigo.
 
-Por compatibilidade, se nenhum parâmetro de paginação for enviado, a API continua retornando todos os pedidos filtrados. Para integrações em polling, recomenda-se usar `limit`, `offset`, `fields=summary` e/ou `updated_after`.
+Se nenhum parâmetro de paginação for enviado, a API retorna os 50 pedidos mais recentes por padrão. Para integrações em polling, recomenda-se usar `limit`, `offset`, `fields=summary` e/ou `updated_after`.
 
 Resposta:
 
 ```json
 {
   "count": 1,
-  "limit": null,
+  "limit": 50,
   "offset": 0,
   "has_more": false,
   "next_offset": null,
@@ -354,7 +354,7 @@ Os filtros são opcionais e podem ser combinados.
 | `updated_after` | `/api/pedidos/?updated_after=2026-05-15T12:00:00Z` | Retorna pedidos atualizados após a data/hora informada. Também aceita o alias `atualizado_apos`. |
 | `numero` | `/api/pedidos/?numero=2240` | Filtra pelo número do pedido. |
 | `telefone` | `/api/pedidos/?telefone=64999999999` | Busca parcial no telefone do cliente. |
-| `limit` | `/api/pedidos/?limit=50` | Limita a quantidade retornada. Máximo: `100`. |
+| `limit` | `/api/pedidos/?limit=50` | Limita a quantidade retornada. Valor padrão: `50`. Máximo: `100`. |
 | `offset` | `/api/pedidos/?limit=50&offset=50` | Deslocamento para paginação. |
 | `fields` | `/api/pedidos/?fields=summary` | Quando `summary`, retorna somente campos resumidos do pedido, sem itens aninhados. |
 

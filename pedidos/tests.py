@@ -1307,7 +1307,7 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 1)
-        self.assertIsNone(payload["limit"])
+        self.assertEqual(payload["limit"], 50)
         self.assertFalse(payload["has_more"])
         self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
         self.assertIn("atualizado_em", payload["pedidos"][0])

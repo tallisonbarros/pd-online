@@ -2033,6 +2033,10 @@ def _safe_api_limit(params, default=None, max_limit=100):
         return default
 
 
+PEDIDOS_API_DEFAULT_LIMIT = 50
+PEDIDOS_API_MAX_LIMIT = 100
+
+
 def _safe_api_offset(params):
     try:
         return max(int(params.get("offset", 0)), 0)
@@ -2107,7 +2111,7 @@ def api_pedidos(request):
 
     pedidos = _pedidos_api_queryset(request.GET)
     count = pedidos.count()
-    limit = _safe_api_limit(request.GET, default=None, max_limit=100)
+    limit = _safe_api_limit(request.GET, default=PEDIDOS_API_DEFAULT_LIMIT, max_limit=PEDIDOS_API_MAX_LIMIT)
     offset = _safe_api_offset(request.GET)
     has_more = False
     if limit is not None:
