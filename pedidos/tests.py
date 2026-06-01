@@ -405,6 +405,9 @@ class CozinhaAccessTests(TestCase):
             consumo_interno=1,
             custo_insumos=Decimal("160.00"),
         )
+        config = ConfiguracaoEntrega.get_solo()
+        config.taxa_ifood_percentual = Decimal("10.00")
+        config.save()
 
         previous = Pedido.objects.create(
             nome_cliente="Cliente Recorrente",
@@ -479,13 +482,14 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'class="dashboard-balance-layout"')
         self.assertContains(response, 'class="dashboard-kpi-quadrants"')
         self.assertContains(response, "<p class=\"ops-kicker\">Balanco geral</p>")
-        self.assertContains(response, 'data-dashboard-balance="resultado">R$ 45,00</strong>')
+        self.assertContains(response, 'data-dashboard-balance="resultado">R$ 41,00</strong>')
         self.assertContains(response, 'data-dashboard-balance-detail="Receita">+ R$ 220,00</b>')
         self.assertContains(response, 'data-dashboard-balance-detail="Custos producao">- R$ 160,00</b>')
         self.assertContains(response, 'data-dashboard-balance-detail="Custo entrega">- R$ 15,00</b>')
+        self.assertContains(response, 'data-dashboard-balance-detail="Taxa Ifood">- R$ 4,00</b>')
         self.assertNotContains(response, 'data-dashboard-balance-detail="Custos totais"')
         self.assertNotContains(response, 'data-dashboard-balance-detail="Resultado"')
-        self.assertContains(response, 'data-dashboard-balance-footer="Resultado">R$ 45,00</b>')
+        self.assertContains(response, 'data-dashboard-balance-footer="Resultado">R$ 41,00</b>')
         self.assertContains(response, 'data-dashboard-card="Marmitas vendidas"')
         self.assertContains(response, "Marmitas do dia")
         self.assertContains(response, "Pedidos do dia")
@@ -621,8 +625,7 @@ class CozinhaAccessTests(TestCase):
         response = self.client.get("/controle/?data=2026-05-20")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-dashboard-card="Marmitas vendidas"')
-        self.assertContains(response, "\n                2\n")
+        self.assertContains(response, 'data-dashboard-card="Marmitas vendidas">2</strong>')
 
     def test_dashboard_saves_manual_daily_production(self):
         self.client.force_login(self.diretor_user)
@@ -3309,6 +3312,50 @@ class AjustesAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Chave Pix")
         self.assertContains(response, "pix@pratodelivery.test")
+
+    def test_ifood_tax_can_be_saved_from_ajustes(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=ifood",
+            {
+                "action": "save_ifood",
+                "taxa_ifood_percentual": "12,35",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("aba=ifood", response.url)
+        config = ConfiguracaoEntrega.get_solo()
+        self.assertEqual(config.taxa_ifood_percentual, Decimal("12.35"))
+
+    def test_ifood_tab_displays_saved_tax(self):
+        self.client.force_login(self.staff_user)
+        config = ConfiguracaoEntrega.get_solo()
+        config.taxa_ifood_percentual = Decimal("9.50")
+        config.save()
+
+        response = self.client.get("/controle/ajustes/?aba=ifood")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Taxa Ifood")
+        self.assertContains(response, 'value="9.50"')
+
+    def test_ifood_tax_must_be_between_zero_and_one_hundred(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=ifood",
+            {
+                "action": "save_ifood",
+                "taxa_ifood_percentual": "100.01",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Informe a taxa Ifood entre 0,00% e 100,00%.")
+        config = ConfiguracaoEntrega.get_solo()
+        self.assertEqual(config.taxa_ifood_percentual, Decimal("0.00"))
 
     def test_users_tab_displays_user_and_class_management(self):
         self.client.force_login(self.staff_user)

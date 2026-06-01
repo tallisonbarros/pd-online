@@ -11,7 +11,7 @@
     <header class="context-header" aria-label="Cabeçalho da página">
         <div class="context-header-group">
             <a class="brand-header-logo" href="{% url 'pedidos:cardapio' %}" aria-label="Ir para o cardápio">
-                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY">
+                <img src="{% static 'img/prato-delivery-logo-icon.png' %}" alt="PRATO-DELIVERY" width="96" height="96" decoding="async">
             </a>
             <span class="context-header-label">CARDÁPIO</span>
             <span class="context-header-slogan">Seu almoço, sem erro.</span>
@@ -39,7 +39,7 @@
                 <article
                     class="dish-card"
                     data-prato-card
-                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco":"{{ prato.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if prato.preco_site_resolvido %}R$ {{ prato.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if prato.imagem %}{{ prato.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco": "{{ prato.preco_cardapio }}","preco_formatado":"{% if prato.preco_site_resolvido %}R$ {{ prato.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ prato.imagem_cardapio_url|escapejs }}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
@@ -52,9 +52,9 @@
                             </div>
                         </div>
                         {% if prato.imagem %}
-                            <img src="{{ prato.imagem.url }}" alt="{{ prato.nome }}">
+                            <img src="{{ prato.imagem_cardapio_url }}" alt="{{ prato.nome }}" width="960" height="720" decoding="async" fetchpriority="high">
                         {% else %}
-                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ prato.nome }}">
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ prato.nome }}" width="960" height="720" decoding="async" fetchpriority="high">
                         {% endif %}
                     </div>
                     <div class="dish-body">
@@ -81,14 +81,14 @@
     <section class="quality-signature reveal-on-scroll" aria-label="Marmitas seladas e feitas no dia">
         <div class="quality-marquee" aria-hidden="true">
             <div class="quality-marquee-track">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
-                <img src="{% static 'img/icon_marmita_selada.png' %}" alt="">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">
             </div>
         </div>
         <div class="quality-signature-text">
@@ -107,7 +107,7 @@
                 <article
                     class="dish-card reveal-on-scroll"
                     data-prato-card
-                    data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco":"{{ adicional.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if adicional.preco_site_resolvido %}R$ {{ adicional.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if adicional.imagem %}{{ adicional.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco": "{{ adicional.preco_cardapio }}","preco_formatado":"{% if adicional.preco_site_resolvido %}R$ {{ adicional.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ adicional.imagem_cardapio_url|escapejs }}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
@@ -120,9 +120,9 @@
                             </div>
                         </div>
                         {% if adicional.imagem %}
-                            <img src="{{ adicional.imagem.url }}" alt="{{ adicional.nome }}">
+                            <img src="{{ adicional.imagem_cardapio_url }}" alt="{{ adicional.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% else %}
-                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ adicional.nome }}">
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ adicional.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% endif %}
                     </div>
                     <div class="dish-body">
@@ -157,7 +157,7 @@
                 <article
                     class="dish-card reveal-on-scroll"
                     data-prato-card
-                    data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco":"{{ bebida.preco_site_resolvido|default_if_none:'' }}","preco_formatado":"{% if bebida.preco_site_resolvido %}R$ {{ bebida.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{% if bebida.imagem %}{{ bebida.imagem.url }}{% else %}{% static 'img/placeholder-prato.svg' %}{% endif %}"}'
+                    data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco": "{{ bebida.preco_cardapio }}","preco_formatado":"{% if bebida.preco_site_resolvido %}R$ {{ bebida.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ bebida.imagem_cardapio_url|escapejs }}"}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
@@ -170,9 +170,9 @@
                             </div>
                         </div>
                         {% if bebida.imagem %}
-                            <img src="{{ bebida.imagem.url }}" alt="{{ bebida.nome }}">
+                            <img src="{{ bebida.imagem_cardapio_url }}" alt="{{ bebida.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% else %}
-                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ bebida.nome }}">
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ bebida.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% endif %}
                     </div>
                     <div class="dish-body">

@@ -567,6 +567,7 @@ class ConfiguracaoEntrega(models.Model):
     google_maps_region = models.CharField(max_length=10, blank=True, default="BR")
     whatsapp_numero = models.CharField(max_length=24, blank=True)
     pix_chave = models.CharField(max_length=255, blank=True)
+    taxa_ifood_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

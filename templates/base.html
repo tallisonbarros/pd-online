@@ -35,8 +35,8 @@
             serverNow: "{{ PRATO_FRONTEND_CONFIG.server_now|escapejs }}"
         };
     </script>
-    <script src="{% static 'js/access_metrics.js' %}?v={% now 'U' %}"></script>
-    <script src="{% static 'js/cart.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'js/access_metrics.js' %}" defer></script>
+    <script src="{% static 'js/cart.js' %}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

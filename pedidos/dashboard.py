@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 
-from .models import Pedido, ResumoOperacionalDia
+from .models import ConfiguracaoEntrega, Pedido, ResumoOperacionalDia
 from .order_services import normalize_phone
 
 
@@ -57,6 +57,12 @@ def get_dashboard_diaria(data):
 
     total_pedidos = len(pedidos_do_dia)
     faturamento_total = sum((pedido.total or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
+    faturamento_ifood = sum(
+        (pedido.total or Decimal("0.00") for pedido in pedidos_do_dia if pedido.canal == Pedido.Canal.IFOOD),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+    taxa_ifood_percentual = ConfiguracaoEntrega.get_solo().taxa_ifood_percentual
+    taxa_ifood_valor = (faturamento_ifood * taxa_ifood_percentual / Decimal("100")).quantize(Decimal("0.01"))
     custo_entrega = sum((pedido.valor_frete or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
     pedidos_recorrentes = _recurring_order_count(pedidos_do_dia, data)
     marmita_filter = Q(itens__prato__isnull=False) | Q(
@@ -78,7 +84,7 @@ def get_dashboard_diaria(data):
     marmitas_promocao = int(marmitas.get("promocao") or 0)
     marmitas_excedentes = operacional.marmitas_produzidas - marmitas_saida - operacional.consumo_interno
     custo_total_producao = operacional.custo_insumos
-    custo_total_operacional = (custo_total_producao + custo_entrega).quantize(Decimal("0.01"))
+    custo_total_operacional = (custo_total_producao + custo_entrega + taxa_ifood_valor).quantize(Decimal("0.01"))
     custo_unitario_marmita = Decimal("0.00")
     if operacional.marmitas_produzidas:
         custo_unitario_marmita = (custo_total_producao / Decimal(operacional.marmitas_produzidas)).quantize(Decimal("0.01"))
@@ -95,6 +101,9 @@ def get_dashboard_diaria(data):
         "data_proxima": data + timedelta(days=1),
         "total_pedidos": total_pedidos,
         "faturamento_total": faturamento_total,
+        "faturamento_ifood": faturamento_ifood,
+        "taxa_ifood_percentual": taxa_ifood_percentual,
+        "taxa_ifood_valor": taxa_ifood_valor,
         "custo_entrega": custo_entrega,
         "canais": canais,
         "pedidos_recorrentes": pedidos_recorrentes,
@@ -121,6 +130,7 @@ def get_dashboard_diaria(data):
                 {"label": "Receita", "value": f"+ R$ {faturamento_total:.2f}".replace(".", ",")},
                 {"label": "Custos producao", "value": f"- R$ {custo_total_producao:.2f}".replace(".", ",")},
                 {"label": "Custo entrega", "value": f"- R$ {custo_entrega:.2f}".replace(".", ",")},
+                {"label": "Taxa Ifood", "value": f"- R$ {taxa_ifood_valor:.2f}".replace(".", ",")},
             ],
             "footer_details": [
                 {"label": "Resultado", "value": f"R$ {resultado_operacional:.2f}".replace(".", ",")},

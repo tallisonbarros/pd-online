@@ -23,6 +23,7 @@
             <a class="ajustes-tab {% if ajustes_aba == 'google' %}is-active{% endif %}" {% if ajustes_aba == 'google' %}aria-current="page"{% endif %} href="?aba=google">Google Maps</a>
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'ifood' %}is-active{% endif %}" {% if ajustes_aba == 'ifood' %}aria-current="page"{% endif %} href="?aba=ifood">Ifood</a>
             <a class="ajustes-tab {% if ajustes_aba == 'api' %}is-active{% endif %}" {% if ajustes_aba == 'api' %}aria-current="page"{% endif %} href="?aba=api">API</a>
             <a class="ajustes-tab {% if ajustes_aba == 'lista_impressao' %}is-active{% endif %}" {% if ajustes_aba == 'lista_impressao' %}aria-current="page"{% endif %} href="?aba=lista_impressao">Lista de rotulos</a>
             <a class="ajustes-tab {% if ajustes_aba == 'importacao' %}is-active{% endif %}" {% if ajustes_aba == 'importacao' %}aria-current="page"{% endif %} href="?aba=importacao">Importacao</a>
@@ -474,6 +475,32 @@
 
                         <div class="ajustes-actions ajustes-field ajustes-field--wide">
                             <button type="submit" class="ped-btn ped-btn-primary">Salvar WhatsApp</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'ifood' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Ifood</p>
+                            <h2>Taxa Ifood</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_ifood">
+
+                        <label class="field ajustes-field">
+                            <span>Taxa Ifood (%)</span>
+                            <input type="number" name="taxa_ifood_percentual" value="{{ taxa_ifood_percentual }}" min="0" max="100" step="0.01" inputmode="decimal">
+                            <small class="field-help">Informe um percentual de 0,00 a 100,00 com ate 2 casas decimais.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar Ifood</button>
                         </div>
                     </form>
                 </article>

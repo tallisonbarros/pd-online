@@ -31,6 +31,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
 from .dashboard import get_dashboard_diaria
 from .forms import AdicionalForm, BebidaForm, PratoForm
+from .image_optimization import optimized_menu_image_url
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders, money_decimal as legacy_money_decimal
 from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
 from .order_services import (
@@ -190,8 +191,21 @@ def _cart_closed_notice(config=None, now=None):
     }
 
 
+def _menu_image_fallback(image_field):
+    placeholder = settings.STATIC_URL + "img/placeholder-prato.svg"
+    if not image_field:
+        return placeholder
+    try:
+        if not Path(image_field.path).exists():
+            return placeholder
+    except (NotImplementedError, ValueError):
+        return placeholder
+    return image_field.url
+
+
 def serializar_prato(prato):
     preco = prato.preco_site_resolvido
+    fallback_image = _menu_image_fallback(prato.imagem)
     return {
         "id": prato.id,
         "nome": prato.nome,
@@ -199,31 +213,33 @@ def serializar_prato(prato):
         "variacoes": prato.variacoes,
         "preco": f"{preco:.2f}" if preco is not None else "",
         "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
-        "imagem": prato.imagem.url if prato.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
+        "imagem": optimized_menu_image_url(prato.imagem, fallback_image),
     }
 
 
 def serializar_bebida(bebida):
     preco = bebida.preco_site_resolvido
+    fallback_image = _menu_image_fallback(bebida.imagem)
     return {
         "id": bebida.id,
         "nome": bebida.nome,
         "descricao": bebida.descricao,
         "preco": f"{preco:.2f}" if preco is not None else "",
         "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
-        "imagem": bebida.imagem.url if bebida.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
+        "imagem": optimized_menu_image_url(bebida.imagem, fallback_image),
     }
 
 
 def serializar_adicional(adicional):
     preco = adicional.preco_site_resolvido
+    fallback_image = _menu_image_fallback(adicional.imagem)
     return {
         "id": adicional.id,
         "nome": adicional.nome,
         "descricao": adicional.descricao,
         "preco": f"{preco:.2f}" if preco is not None else "",
         "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
-        "imagem": adicional.imagem.url if adicional.imagem else settings.STATIC_URL + "img/placeholder-prato.svg",
+        "imagem": optimized_menu_image_url(adicional.imagem, fallback_image),
     }
 
 
@@ -495,6 +511,15 @@ def cardapio(request):
     pratos_serializados = [serializar_prato(prato) for prato in pratos]
     adicionais_serializados = [serializar_adicional(adicional) for adicional in adicionais]
     bebidas_serializadas = [serializar_bebida(bebida) for bebida in bebidas]
+    for item, payload in zip(pratos, pratos_serializados):
+        item.imagem_cardapio_url = payload["imagem"]
+        item.preco_cardapio = payload["preco"]
+    for item, payload in zip(adicionais, adicionais_serializados):
+        item.imagem_cardapio_url = payload["imagem"]
+        item.preco_cardapio = payload["preco"]
+    for item, payload in zip(bebidas, bebidas_serializadas):
+        item.imagem_cardapio_url = payload["imagem"]
+        item.preco_cardapio = payload["preco"]
     return render(
         request,
         "pedidos/cardapio.html",
@@ -984,6 +1009,16 @@ def _to_decimal(value):
         return Decimal(str(value).strip().replace(",", "."))
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def _parse_percentual_0_100(value, label):
+    percentual = _to_decimal(value)
+    if percentual is None:
+        raise ValueError(f"Informe {label} entre 0,00% e 100,00%.")
+    percentual = percentual.quantize(Decimal("0.01"))
+    if percentual < Decimal("0.00") or percentual > Decimal("100.00"):
+        raise ValueError(f"Informe {label} entre 0,00% e 100,00%.")
+    return percentual
 
 
 def _calcular_frete_por_distancia(distance_km, faixas=None):
@@ -3763,7 +3798,7 @@ def atualizar_entrega_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "usuarios", "api", "lista_impressao", "importacao"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "ifood", "usuarios", "api", "lista_impressao", "importacao"}:
         ajustes_aba = "geral"
 
     _ensure_default_user_groups()
@@ -3791,6 +3826,7 @@ def ajustes_admin(request):
             "save_google": "google",
             "save_whatsapp": "whatsapp",
             "save_pagamento": "pagamento",
+            "save_ifood": "ifood",
             "create_api_key": "api",
             "delete_api_key": "api",
             "create_user": "usuarios",
@@ -3859,6 +3895,18 @@ def ajustes_admin(request):
             config.pix_chave = _safe_text(request.POST.get("pix_chave"))
             config.save()
             return redirect(f"{request.path}?saved=1&aba=pagamento")
+
+        if action == "save_ifood":
+            try:
+                config.taxa_ifood_percentual = _parse_percentual_0_100(
+                    request.POST.get("taxa_ifood_percentual"),
+                    "a taxa Ifood",
+                )
+                config.save()
+                return redirect(f"{request.path}?saved=1&aba=ifood")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
 
         if action == "create_api_key":
             if not _user_can_manage_order_payment(request.user):
@@ -4029,6 +4077,7 @@ def ajustes_admin(request):
             "google_maps_status": google_maps_status,
             "whatsapp_numero": config.whatsapp_numero,
             "pix_chave": config.pix_chave,
+            "taxa_ifood_percentual": f"{config.taxa_ifood_percentual:.2f}",
             "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
             "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
