@@ -24,6 +24,7 @@
             <a class="ajustes-tab {% if ajustes_aba == 'whatsapp' %}is-active{% endif %}" {% if ajustes_aba == 'whatsapp' %}aria-current="page"{% endif %} href="?aba=whatsapp">WhatsApp</a>
             <a class="ajustes-tab {% if ajustes_aba == 'pagamento' %}is-active{% endif %}" {% if ajustes_aba == 'pagamento' %}aria-current="page"{% endif %} href="?aba=pagamento">Pagamento</a>
             <a class="ajustes-tab {% if ajustes_aba == 'ifood' %}is-active{% endif %}" {% if ajustes_aba == 'ifood' %}aria-current="page"{% endif %} href="?aba=ifood">Ifood</a>
+            <a class="ajustes-tab {% if ajustes_aba == 'contabil' %}is-active{% endif %}" {% if ajustes_aba == 'contabil' %}aria-current="page"{% endif %} href="?aba=contabil">Contabil</a>
             <a class="ajustes-tab {% if ajustes_aba == 'api' %}is-active{% endif %}" {% if ajustes_aba == 'api' %}aria-current="page"{% endif %} href="?aba=api">API</a>
             <a class="ajustes-tab {% if ajustes_aba == 'lista_impressao' %}is-active{% endif %}" {% if ajustes_aba == 'lista_impressao' %}aria-current="page"{% endif %} href="?aba=lista_impressao">Lista de rotulos</a>
             <a class="ajustes-tab {% if ajustes_aba == 'importacao' %}is-active{% endif %}" {% if ajustes_aba == 'importacao' %}aria-current="page"{% endif %} href="?aba=importacao">Importacao</a>
@@ -503,6 +504,247 @@
                             <button type="submit" class="ped-btn ped-btn-primary">Salvar Ifood</button>
                         </div>
                     </form>
+                </article>
+            </section>
+        {% elif ajustes_aba == 'contabil' %}
+            <section class="ajustes-grid">
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Pagamentos</p>
+                            <h2>Bancos por metodo</h2>
+                        </div>
+                    </header>
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_contabil_bancos_pagamento">
+                        <label class="field ajustes-field">
+                            <span>Online Pix</span>
+                            <select name="banco_pix" required>
+                                {% for banco in bancos %}
+                                    <option value="{{ banco.id }}" {% if banco.id == banco_pix_id %}selected{% endif %}>{{ banco.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="field-help">Pedidos Online Pix entram na Conta neste banco.</small>
+                        </label>
+                        <label class="field ajustes-field">
+                            <span>Cartao na entrega</span>
+                            <select name="banco_cartao" required>
+                                {% for banco in bancos %}
+                                    <option value="{{ banco.id }}" {% if banco.id == banco_cartao_id %}selected{% endif %}>{{ banco.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="field-help">Pedidos Cartao na entrega entram na Conta neste banco.</small>
+                        </label>
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar bancos</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Terminais</p>
+                            <h2>Novo terminal</h2>
+                        </div>
+                    </header>
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_terminal">
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Nome</span>
+                            <input type="text" name="terminal_nome" placeholder="Terminal 02" required>
+                        </label>
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Criar terminal</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Categorias do caixa</p>
+                            <h2>Nova categoria</h2>
+                        </div>
+                    </header>
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_categoria">
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Nome</span>
+                            <input type="text" name="categoria_nome" placeholder="Fornecedor" required>
+                        </label>
+                        <label class="field ajustes-field">
+                            <span>Tipo padrao</span>
+                            <select name="tipo_padrao">
+                                <option value="ambos">Ambos</option>
+                                <option value="entrada">Entrada</option>
+                                <option value="saida">Saida</option>
+                            </select>
+                        </label>
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar categoria</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Bancos</p>
+                            <h2>Novo banco</h2>
+                        </div>
+                    </header>
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_banco">
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Nome</span>
+                            <input type="text" name="banco_nome" placeholder="Banco 02" required>
+                        </label>
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Criar banco</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ped-detail-card ajustes-card">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Categorias da conta</p>
+                            <h2>Nova categoria</h2>
+                        </div>
+                    </header>
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_categoria_conta">
+                        <label class="field ajustes-field ajustes-field--wide">
+                            <span>Nome</span>
+                            <input type="text" name="categoria_conta_nome" placeholder="Cartoes" required>
+                        </label>
+                        <label class="field ajustes-field">
+                            <span>Tipo padrao</span>
+                            <select name="tipo_padrao_conta">
+                                <option value="ambos">Ambos</option>
+                                <option value="entrada">Entrada</option>
+                                <option value="saida">Saida</option>
+                            </select>
+                        </label>
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Salvar categoria</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Cadastro</p>
+                            <h2>Estruturas contabeis atuais</h2>
+                        </div>
+                    </header>
+                    <div class="contabil-settings-grid">
+                        <div>
+                            <h3>Terminais</h3>
+                            <ul class="contabil-settings-list">
+                                {% for terminal in terminais %}
+                                    <li>
+                                        <form method="post" class="contabil-settings-edit">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_terminal">
+                                            <input type="hidden" name="terminal_id" value="{{ terminal.id }}">
+                                            <label class="field">
+                                                <span>Nome</span>
+                                                <input type="text" name="terminal_nome" value="{{ terminal.nome }}" required>
+                                            </label>
+                                            <b>{% if terminal.ativo %}Ativo{% else %}Inativo{% endif %}</b>
+                                            <button type="submit" class="ped-btn ped-btn-ghost">Salvar</button>
+                                        </form>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3>Categorias do caixa</h3>
+                            <ul class="contabil-settings-list">
+                                {% for categoria in categorias %}
+                                    <li>
+                                        <form method="post" class="contabil-settings-edit contabil-settings-edit--category">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_categoria">
+                                            <input type="hidden" name="categoria_id" value="{{ categoria.id }}">
+                                            <label class="field">
+                                                <span>Nome</span>
+                                                <input type="text" name="categoria_nome" value="{{ categoria.nome }}" required>
+                                            </label>
+                                            <label class="field">
+                                                <span>Tipo</span>
+                                                <select name="tipo_padrao">
+                                                    <option value="ambos" {% if categoria.tipo_padrao == 'ambos' %}selected{% endif %}>Ambos</option>
+                                                    <option value="entrada" {% if categoria.tipo_padrao == 'entrada' %}selected{% endif %}>Entrada</option>
+                                                    <option value="saida" {% if categoria.tipo_padrao == 'saida' %}selected{% endif %}>Saida</option>
+                                                </select>
+                                            </label>
+                                            <button type="submit" class="ped-btn ped-btn-ghost">Salvar</button>
+                                        </form>
+                                    </li>
+                                {% empty %}
+                                    <li><span>Nenhuma categoria cadastrada.</span><b>-</b></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3>Bancos</h3>
+                            <ul class="contabil-settings-list">
+                                {% for banco in bancos %}
+                                    <li>
+                                        <form method="post" class="contabil-settings-edit">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_banco">
+                                            <input type="hidden" name="banco_id" value="{{ banco.id }}">
+                                            <label class="field">
+                                                <span>Nome</span>
+                                                <input type="text" name="banco_nome" value="{{ banco.nome }}" required>
+                                            </label>
+                                            <b>{% if banco.ativo %}Ativo{% else %}Inativo{% endif %}</b>
+                                            <button type="submit" class="ped-btn ped-btn-ghost">Salvar</button>
+                                        </form>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3>Categorias da conta</h3>
+                            <ul class="contabil-settings-list">
+                                {% for categoria in categorias_conta %}
+                                    <li>
+                                        <form method="post" class="contabil-settings-edit contabil-settings-edit--category">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="update_categoria_conta">
+                                            <input type="hidden" name="categoria_conta_id" value="{{ categoria.id }}">
+                                            <label class="field">
+                                                <span>Nome</span>
+                                                <input type="text" name="categoria_conta_nome" value="{{ categoria.nome }}" required>
+                                            </label>
+                                            <label class="field">
+                                                <span>Tipo</span>
+                                                <select name="tipo_padrao_conta">
+                                                    <option value="ambos" {% if categoria.tipo_padrao == 'ambos' %}selected{% endif %}>Ambos</option>
+                                                    <option value="entrada" {% if categoria.tipo_padrao == 'entrada' %}selected{% endif %}>Entrada</option>
+                                                    <option value="saida" {% if categoria.tipo_padrao == 'saida' %}selected{% endif %}>Saida</option>
+                                                </select>
+                                            </label>
+                                            <button type="submit" class="ped-btn ped-btn-ghost">Salvar</button>
+                                        </form>
+                                    </li>
+                                {% empty %}
+                                    <li><span>Nenhuma categoria cadastrada.</span><b>-</b></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
                 </article>
             </section>
         {% elif ajustes_aba == 'api' %}

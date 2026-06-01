@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Contabil - {{ titulo }} | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active dashboard_badge=pedidos_contabil.pedidos|length pedidos_badge=pedidos_novos %}
+
+    <main class="ops-main contabil-page">
+        <div class="contabil-sticky-top">
+            <header class="ops-session dashboard-day-header contabil-date-header">
+                <div class="dashboard-day-overview">
+                    <nav class="dashboard-day-rail" aria-label="Navegar por dia">
+                        <a class="dashboard-side-day" href="{% url rota_atual %}?data={{ dashboard_nav.previous_day.date|date:'Y-m-d' }}" aria-label="Dia anterior">
+                            <span aria-hidden="true">&larr;</span>
+                            <small>{{ dashboard_nav.previous_day.relative_label }} &middot; {{ dashboard_nav.previous_day.date|date:"d/m" }}</small>
+                            <strong>{{ dashboard_nav.previous_day.pedidos }} ped &middot; {{ dashboard_nav.previous_day.marmitas }} marm</strong>
+                        </a>
+                        <div class="dashboard-date-center">
+                            <p class="dashboard-weekday">{{ dia_semana_dashboard }}</p>
+                            <form class="dashboard-date-current-form" method="get">
+                                <button class="dashboard-date-current {% if data_selecionada == hoje %}is-active{% endif %}" type="button" aria-current="date" data-dashboard-date-trigger aria-label="Escolher data">{{ data_selecionada|date:"d" }}</button>
+                                <input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}" aria-label="Escolher data" data-dashboard-date-input>
+                            </form>
+                            <h1>{{ data_selecionada|date:"F Y" }}</h1>
+                            <p class="dashboard-date-summary">{{ pedidos_contabil.pedidos|length }} pedidos &middot; {{ pedidos_contabil.total_dia_label }}</p>
+                        </div>
+                        <a class="dashboard-side-day" href="{% url rota_atual %}?data={{ dashboard_nav.next_day.date|date:'Y-m-d' }}" aria-label="Proximo dia">
+                            <span aria-hidden="true">&rarr;</span>
+                            <small>{{ dashboard_nav.next_day.relative_label }} &middot; {{ dashboard_nav.next_day.date|date:"d/m" }}</small>
+                            <strong>{{ dashboard_nav.next_day.pedidos }} ped &middot; {{ dashboard_nav.next_day.marmitas }} marm</strong>
+                        </a>
+                    </nav>
+                    <div class="dashboard-date-tools" aria-label="Atalhos de data">
+                        <a class="dashboard-date-tool" href="{% url rota_atual %}?data={{ dashboard_nav.previous_week|date:'Y-m-d' }}">-7 dias</a>
+                        <a class="dashboard-date-tool {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url rota_atual %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+                        <a class="dashboard-date-tool" href="{% url rota_atual %}?data={{ dashboard_nav.next_week|date:'Y-m-d' }}">+7 dias</a>
+                    </div>
+                </div>
+            </header>
+
+            {% include "pedidos/_contabil_tabs.html" %}
+        </div>
+
+        <section class="ops-card contabil-ledger-card">
+            <header class="contabil-card-head">
+                <div>
+                    <p class="ops-kicker">{{ kicker }}</p>
+                    <h3>Lista do dia</h3>
+                </div>
+            </header>
+
+            <div class="contabil-ledger-table">
+                <div class="contabil-ledger-row contabil-ledger-row--pedidos contabil-ledger-head">
+                    <span>Hora</span>
+                    <span>Terminal</span>
+                    <span>Pedido</span>
+                    <span>Cliente</span>
+                    <span>Pagamento</span>
+                    <span>Descricao</span>
+                    <span>Valor</span>
+                </div>
+                {% for pedido in pedidos_contabil.pedidos %}
+                    <a class="contabil-ledger-row contabil-ledger-row--pedidos contabil-ledger-item is-entrada" href="{% url 'pedidos:pedido_detalhe_admin' pedido.id %}">
+                        <span>{{ pedido.criado_em|date:"H:i" }}</span>
+                        <span>{{ pedido.terminal.nome|default:"Terminal 01" }}</span>
+                        <strong>Pedido #{{ pedido.numero|default:pedido.id }}</strong>
+                        <span>{{ pedido.nome_cliente }}</span>
+                        <span>{{ pedido.get_forma_pagamento_display }}</span>
+                        <span>{{ pedido.get_tipo_coleta_display }}{% if pedido.bairro %} - {{ pedido.bairro }}{% endif %}</span>
+                        <b>+ R$ {{ pedido.total|floatformat:2 }}</b>
+                    </a>
+                {% empty %}
+                    <div class="contabil-empty">{{ mensagem_vazia }}</div>
+                {% endfor %}
+            </div>
+
+        </section>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        document.querySelectorAll("[data-dashboard-date-trigger]").forEach((trigger) => {
+            const form = trigger.closest("form");
+            const input = form?.querySelector("[data-dashboard-date-input]");
+            if (!form || !input) return;
+            trigger.addEventListener("click", () => {
+                if (typeof input.showPicker === "function") {
+                    input.showPicker();
+                } else {
+                    input.click();
+                }
+            });
+            input.addEventListener("change", () => {
+                if (input.value) form.submit();
+            });
+        });
+    </script>
+{% endblock %}

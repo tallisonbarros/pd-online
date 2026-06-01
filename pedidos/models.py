@@ -124,6 +124,196 @@ class ResumoOperacionalDia(models.Model):
         return f"Resumo operacional - {self.data:%d/%m/%Y}"
 
 
+class TerminalCaixa(models.Model):
+    nome = models.CharField(max_length=80)
+    codigo = models.CharField(max_length=30, unique=True)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+        verbose_name = "Terminal de caixa"
+        verbose_name_plural = "Terminais de caixa"
+
+    def __str__(self):
+        return self.nome
+
+
+class CategoriaMovimentacaoCaixa(models.Model):
+    class TipoPadrao(models.TextChoices):
+        ENTRADA = "entrada", "Entrada"
+        SAIDA = "saida", "Saida"
+        AMBOS = "ambos", "Ambos"
+
+    nome = models.CharField(max_length=80, unique=True)
+    tipo_padrao = models.CharField(max_length=8, choices=TipoPadrao.choices, default=TipoPadrao.AMBOS)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "Categoria de movimentacao de caixa"
+        verbose_name_plural = "Categorias de movimentacao de caixa"
+
+    def __str__(self):
+        return self.nome
+
+
+class MovimentacaoCaixa(models.Model):
+    class Tipo(models.TextChoices):
+        ENTRADA = "entrada", "Entrada"
+        SAIDA = "saida", "Saida"
+
+    class Origem(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        SISTEMA = "sistema", "Sistema"
+
+    terminal = models.ForeignKey(TerminalCaixa, on_delete=models.PROTECT, related_name="movimentacoes")
+    pedido = models.OneToOneField(
+        "Pedido",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacao_caixa",
+    )
+    categoria = models.ForeignKey(CategoriaMovimentacaoCaixa, on_delete=models.PROTECT, related_name="movimentacoes")
+    data_movimento = models.DateField(db_index=True)
+    tipo = models.CharField(max_length=8, choices=Tipo.choices)
+    nome = models.CharField(max_length=120)
+    descricao = models.TextField(blank=True)
+    valor = models.DecimalField(max_digits=10, decimal_places=2)
+    origem = models.CharField(max_length=10, choices=Origem.choices, default=Origem.MANUAL)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_caixa_criadas",
+    )
+    atualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_caixa_atualizadas",
+    )
+    excluido_em = models.DateTimeField(blank=True, null=True)
+    excluido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_caixa_excluidas",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["data_movimento", "criado_em", "id"]
+        verbose_name = "Movimentacao de caixa"
+        verbose_name_plural = "Movimentacoes de caixa"
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.nome} - R$ {self.valor:.2f}"
+
+
+class BancoConta(models.Model):
+    nome = models.CharField(max_length=80)
+    codigo = models.CharField(max_length=30, unique=True)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+        verbose_name = "Banco da conta"
+        verbose_name_plural = "Bancos da conta"
+
+    def __str__(self):
+        return self.nome
+
+
+class CategoriaMovimentacaoConta(models.Model):
+    class TipoPadrao(models.TextChoices):
+        ENTRADA = "entrada", "Entrada"
+        SAIDA = "saida", "Saida"
+        AMBOS = "ambos", "Ambos"
+
+    nome = models.CharField(max_length=80, unique=True)
+    tipo_padrao = models.CharField(max_length=8, choices=TipoPadrao.choices, default=TipoPadrao.AMBOS)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "Categoria de movimentacao de conta"
+        verbose_name_plural = "Categorias de movimentacao de conta"
+
+    def __str__(self):
+        return self.nome
+
+
+class MovimentacaoConta(models.Model):
+    class Tipo(models.TextChoices):
+        ENTRADA = "entrada", "Entrada"
+        SAIDA = "saida", "Saida"
+
+    class Origem(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        SISTEMA = "sistema", "Sistema"
+
+    banco = models.ForeignKey(BancoConta, on_delete=models.PROTECT, related_name="movimentacoes")
+    pedido = models.OneToOneField(
+        "Pedido",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacao_conta",
+    )
+    categoria = models.ForeignKey(CategoriaMovimentacaoConta, on_delete=models.PROTECT, related_name="movimentacoes")
+    data_movimento = models.DateField(db_index=True)
+    tipo = models.CharField(max_length=8, choices=Tipo.choices)
+    nome = models.CharField(max_length=120)
+    descricao = models.TextField(blank=True)
+    valor = models.DecimalField(max_digits=10, decimal_places=2)
+    origem = models.CharField(max_length=10, choices=Origem.choices, default=Origem.MANUAL)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_conta_criadas",
+    )
+    atualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_conta_atualizadas",
+    )
+    excluido_em = models.DateTimeField(blank=True, null=True)
+    excluido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimentacoes_conta_excluidas",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["data_movimento", "criado_em", "id"]
+        verbose_name = "Movimentacao de conta"
+        verbose_name_plural = "Movimentacoes de conta"
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.nome} - R$ {self.valor:.2f}"
+
+
 class Pedido(models.Model):
     class Canal(models.TextChoices):
         BALCAO = "balcao", "Balcao"
@@ -170,6 +360,7 @@ class Pedido(models.Model):
     icone_pedido = models.CharField(max_length=80, blank=True)
     forma_pagamento = models.CharField(max_length=20, choices=FormaPagamento.choices)
     enviar_talheres = models.BooleanField(default=False)
+    terminal = models.ForeignKey(TerminalCaixa, on_delete=models.PROTECT, null=True, blank=True, related_name="pedidos")
     canal = models.CharField(max_length=12, choices=Canal.choices, default=Canal.BALCAO)
     ifood = models.BooleanField(default=False)
     observacao_geral = models.TextField(blank=True)
@@ -293,6 +484,14 @@ class Pedido(models.Model):
             self.producao_iniciada_em = timezone.now()
             production_start_changed = True
         update_fields = kwargs.get("update_fields")
+        terminal_changed = False
+        if not self.terminal_id:
+            terminal = TerminalCaixa.objects.filter(ativo=True).order_by("ordem", "id").first()
+            if terminal:
+                self.terminal = terminal
+                terminal_changed = True
+        if terminal_changed and update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {"terminal"}
         if production_start_changed and update_fields is not None:
             kwargs["update_fields"] = set(update_fields) | {"producao_iniciada_em"}
 
@@ -568,6 +767,20 @@ class ConfiguracaoEntrega(models.Model):
     whatsapp_numero = models.CharField(max_length=24, blank=True)
     pix_chave = models.CharField(max_length=255, blank=True)
     taxa_ifood_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
+    banco_pix = models.ForeignKey(
+        "BancoConta",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="configuracoes_pix",
+    )
+    banco_cartao = models.ForeignKey(
+        "BancoConta",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="configuracoes_cartao",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

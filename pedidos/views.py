@@ -29,11 +29,29 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
+from .contabil_services import (
+    atualizar_movimentacao_caixa,
+    atualizar_movimentacao_conta,
+    banco_padrao,
+    caixa_diario_context,
+    conta_diario_context,
+    criar_movimentacao_caixa,
+    criar_movimentacao_conta,
+    duplicar_movimentacao_caixa,
+    duplicar_movimentacao_conta,
+    excluir_movimentacao_caixa,
+    excluir_movimentacao_caixa_pedido,
+    excluir_movimentacao_conta,
+    money_label,
+    signed_money_label,
+    sync_movimentacao_caixa_pedido,
+    terminal_padrao,
+)
 from .dashboard import get_dashboard_diaria
 from .forms import AdicionalForm, BebidaForm, PratoForm
 from .image_optimization import optimized_menu_image_url
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders, money_decimal as legacy_money_decimal
-from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -1787,6 +1805,7 @@ def criar_pedido(request):
             )
             create_order_items_from_payload(pedido, itens_payload)
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+            sync_movimentacao_caixa_pedido(pedido)
             inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
@@ -1847,6 +1866,7 @@ def criar_retirada(request):
             )
             create_order_items_from_payload(pedido, itens_payload)
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+            sync_movimentacao_caixa_pedido(pedido)
             inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
@@ -2729,6 +2749,323 @@ def cozinha(request):
     )
 
 
+def _contabil_query(data_selecionada, extra=None):
+    params = {"data": data_selecionada.isoformat()}
+    if extra:
+        params.update(extra)
+    return urlencode(params)
+
+
+def _redirect_contabil_caixa(data_selecionada, extra=None):
+    return redirect(f"{reverse('pedidos:contabil_caixa')}?{_contabil_query(data_selecionada, extra)}")
+
+
+def _redirect_contabil_conta(data_selecionada, extra=None):
+    return redirect(f"{reverse('pedidos:contabil_conta')}?{_contabil_query(data_selecionada, extra)}")
+
+
+def _pedidos_contabil_context(data_selecionada, filtros):
+    statuses_ignorados = [Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO]
+    base = Pedido.objects.exclude(status__in=statuses_ignorados).filter(**filtros)
+    pedidos_dia = (
+        base.filter(criado_em__date=data_selecionada)
+        .select_related("terminal")
+        .order_by("terminal__ordem", "criado_em", "id")
+    )
+    total_dia = pedidos_dia.aggregate(total=Sum("total")).get("total") or Decimal("0.00")
+    total_anterior = (
+        base.filter(criado_em__date__lt=data_selecionada).aggregate(total=Sum("total")).get("total") or Decimal("0.00")
+    )
+    total_atual = total_anterior + total_dia
+    return {
+        "pedidos": list(pedidos_dia),
+        "total_anterior": total_anterior,
+        "total_dia": total_dia,
+        "total_atual": total_atual,
+        "total_anterior_label": money_label(total_anterior),
+        "total_dia_label": money_label(total_dia),
+        "total_dia_signed_label": signed_money_label(total_dia, positive_prefix=True),
+        "total_atual_label": money_label(total_atual),
+    }
+
+
+def _caixa_summary_items(caixa):
+    return [
+        {"label": "Saldo ontem", "value": caixa["saldo_anterior_label"]},
+        {"label": "Saidas", "value": caixa["saidas_dia_label"]},
+        {"label": "Entradas", "value": caixa["entradas_dia_label"]},
+        {"label": "Caixa atual", "value": caixa["saldo_atual_label"]},
+    ]
+
+
+def _conta_summary_items(conta):
+    return [
+        {"label": "Saldo ontem", "value": conta["saldo_anterior_label"]},
+        {"label": "Saidas", "value": conta["saidas_dia_label"]},
+        {"label": "Entradas", "value": conta["entradas_dia_label"]},
+        {"label": "Conta atual", "value": conta["saldo_atual_label"]},
+    ]
+
+
+def _pedidos_summary_items(pedidos_contabil):
+    return [
+        {"label": "Total ontem", "value": pedidos_contabil["total_anterior_label"]},
+        {"label": "Saidas", "value": "- R$ 0,00"},
+        {"label": "Entradas", "value": pedidos_contabil["total_dia_signed_label"]},
+        {"label": "Total atual", "value": pedidos_contabil["total_atual_label"]},
+    ]
+
+
+def _render_contabil_pedidos(request, *, aba, rota, titulo, kicker, filtros, mensagem_vazia):
+    if not user_is_diretor(request.user):
+        return redirect("pedidos:cozinha_operacao")
+
+    hoje = timezone.localdate()
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
+    dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
+    pedidos_contabil = _pedidos_contabil_context(data_selecionada, filtros)
+    return render(
+        request,
+        "pedidos/contabil_pedidos_lista.html",
+        {
+            "active": "contabil",
+            "contabil_aba": aba,
+            "rota_atual": rota,
+            "titulo": titulo,
+            "kicker": kicker,
+            "mensagem_vazia": mensagem_vazia,
+            "data_selecionada": data_selecionada,
+            "dia_semana_dashboard": dias_semana[data_selecionada.weekday()],
+            "dashboard_nav": _dashboard_nav_context(data_selecionada, hoje),
+            "hoje": hoje,
+            "pedidos_contabil": pedidos_contabil,
+            "contabil_summary_items": _pedidos_summary_items(pedidos_contabil),
+            "pedidos_novos": Pedido.objects.filter(status=Pedido.Status.NOVO).count(),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def contabil(request):
+    return redirect("pedidos:contabil_caixa")
+
+
+@staff_member_required(login_url="/admin/login/")
+def contabil_caixa(request):
+    if not user_is_diretor(request.user):
+        return redirect("pedidos:cozinha_operacao")
+
+    hoje = timezone.localdate()
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
+    feedback = None
+    feedback_kind = "success"
+
+    if request.method == "POST":
+        action = _safe_text(request.POST.get("action"))
+        try:
+            if action == "create_movimentacao":
+                criar_movimentacao_caixa(
+                    data_movimento=data_selecionada,
+                    post=request.POST,
+                    user=request.user,
+                )
+                return _redirect_contabil_caixa(data_selecionada)
+
+            if action == "update_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoCaixa,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                atualizar_movimentacao_caixa(movimento, request.POST, request.user)
+                return _redirect_contabil_caixa(data_selecionada)
+
+            if action == "duplicate_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoCaixa,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                duplicada = duplicar_movimentacao_caixa(movimento, request.user)
+                return _redirect_contabil_caixa(duplicada.data_movimento, {"movimentacao": duplicada.id})
+
+            if action == "delete_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoCaixa,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                excluir_movimentacao_caixa(movimento, request.user)
+                return _redirect_contabil_caixa(data_selecionada)
+
+            if action == "create_terminal":
+                nome = _safe_text(request.POST.get("terminal_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome do terminal.")
+                codigo_base = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode("ascii").lower()
+                codigo_base = "-".join(part for part in codigo_base.replace("_", "-").split() if part)[:24] or "terminal"
+                codigo = codigo_base
+                suffix = 2
+                while TerminalCaixa.objects.filter(codigo=codigo).exists():
+                    codigo = f"{codigo_base}-{suffix}"[:30]
+                    suffix += 1
+                novo_terminal = TerminalCaixa.objects.create(
+                    nome=nome,
+                    codigo=codigo,
+                    ordem=(TerminalCaixa.objects.aggregate(max_ordem=Max("ordem")).get("max_ordem") or 0) + 10,
+                )
+                return _redirect_contabil_caixa(data_selecionada)
+        except ValueError as exc:
+            feedback = str(exc)
+            feedback_kind = "error"
+
+    caixa = caixa_diario_context(data_selecionada)
+    movimentacao_edicao = None
+    movimentacao_id = request.GET.get("movimentacao")
+    if movimentacao_id:
+        movimentacao_edicao = (
+            MovimentacaoCaixa.objects.filter(id=movimentacao_id, excluido_em__isnull=True)
+            .select_related("terminal", "categoria")
+            .first()
+        )
+
+    dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
+    terminais = list(TerminalCaixa.objects.filter(ativo=True).order_by("ordem", "nome"))
+    categorias = list(CategoriaMovimentacaoCaixa.objects.filter(ativo=True).order_by("nome"))
+    return render(
+        request,
+        "pedidos/contabil_caixa.html",
+        {
+            "active": "contabil",
+            "contabil_aba": "caixa",
+            "data_selecionada": data_selecionada,
+            "dia_semana_dashboard": dias_semana[data_selecionada.weekday()],
+            "dashboard_nav": _dashboard_nav_context(data_selecionada, hoje),
+            "hoje": hoje,
+            "terminais": terminais,
+            "terminal_padrao": terminal_padrao(),
+            "categorias": categorias,
+            "categorias_datalist_id": "contabil-categorias",
+            "caixa": caixa,
+            "contabil_summary_items": _caixa_summary_items(caixa),
+            "contabil_action_modal": "#contabil-movimento-modal",
+            "feedback": feedback,
+            "feedback_kind": feedback_kind,
+            "movimentacao_edicao": movimentacao_edicao,
+            "money_label": money_label,
+            "signed_money_label": signed_money_label,
+            "pedidos_novos": Pedido.objects.filter(status=Pedido.Status.NOVO).count(),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def contabil_ifood(request):
+    return _render_contabil_pedidos(
+        request,
+        aba="ifood",
+        rota="pedidos:contabil_ifood",
+        titulo="Ifood",
+        kicker="Pedidos iFood",
+        filtros={"canal": Pedido.Canal.IFOOD},
+        mensagem_vazia="Nenhum pedido do iFood registrado neste dia.",
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def contabil_conta(request):
+    if not user_is_diretor(request.user):
+        return redirect("pedidos:cozinha_operacao")
+
+    hoje = timezone.localdate()
+    data_selecionada = parse_date(_safe_text(request.GET.get("data"))) or hoje
+    feedback = None
+    feedback_kind = "success"
+
+    if request.method == "POST":
+        action = _safe_text(request.POST.get("action"))
+        try:
+            if action == "create_movimentacao":
+                criar_movimentacao_conta(
+                    data_movimento=data_selecionada,
+                    post=request.POST,
+                    user=request.user,
+                )
+                return _redirect_contabil_conta(data_selecionada)
+
+            if action == "update_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoConta,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                atualizar_movimentacao_conta(movimento, request.POST, request.user)
+                return _redirect_contabil_conta(data_selecionada)
+
+            if action == "duplicate_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoConta,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                duplicada = duplicar_movimentacao_conta(movimento, request.user)
+                return _redirect_contabil_conta(duplicada.data_movimento, {"movimentacao": duplicada.id})
+
+            if action == "delete_movimentacao":
+                movimento = get_object_or_404(
+                    MovimentacaoConta,
+                    id=request.POST.get("movimentacao_id"),
+                    excluido_em__isnull=True,
+                )
+                excluir_movimentacao_conta(movimento, request.user)
+                return _redirect_contabil_conta(data_selecionada)
+        except ValueError as exc:
+            feedback = str(exc)
+            feedback_kind = "error"
+
+    conta = conta_diario_context(data_selecionada)
+    movimentacao_edicao = None
+    movimentacao_id = request.GET.get("movimentacao")
+    if movimentacao_id:
+        movimentacao_edicao = (
+            MovimentacaoConta.objects.filter(id=movimentacao_id, excluido_em__isnull=True)
+            .select_related("banco", "categoria")
+            .first()
+        )
+
+    dias_semana = ["Segunda-feira", "Terca-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sabado", "Domingo"]
+    bancos = list(BancoConta.objects.filter(ativo=True).order_by("ordem", "nome"))
+    categorias = list(CategoriaMovimentacaoConta.objects.filter(ativo=True).order_by("nome"))
+    return render(
+        request,
+        "pedidos/contabil_conta.html",
+        {
+            "active": "contabil",
+            "contabil_aba": "conta",
+            "data_selecionada": data_selecionada,
+            "dia_semana_dashboard": dias_semana[data_selecionada.weekday()],
+            "dashboard_nav": _dashboard_nav_context(data_selecionada, hoje),
+            "hoje": hoje,
+            "bancos": bancos,
+            "banco_padrao": banco_padrao(),
+            "categorias": categorias,
+            "categorias_datalist_id": "contabil-conta-categorias",
+            "conta": conta,
+            "contabil_summary_items": _conta_summary_items(conta),
+            "contabil_action_modal": "#contabil-conta-movimento-modal",
+            "feedback": feedback,
+            "feedback_kind": feedback_kind,
+            "movimentacao_edicao": movimentacao_edicao,
+            "pedidos_novos": Pedido.objects.filter(status=Pedido.Status.NOVO).count(),
+        },
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+def contabil_ajustes(request):
+    return redirect(f"{reverse('pedidos:ajustes_admin')}?aba=contabil")
+
+
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_order_heatmap(request):
@@ -3361,6 +3698,7 @@ def _pedido_detail_context(request, pedido, *, is_new_order=False):
         "can_edit_payment": _user_can_manage_order_payment(request.user),
         "payment_choices": Pedido.FormaPagamento.choices,
         "canal_choices": Pedido.Canal.choices,
+        "terminal_choices": TerminalCaixa.objects.filter(ativo=True).order_by("ordem", "nome"),
         "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
         "is_new_order": is_new_order,
     }
@@ -3389,6 +3727,8 @@ def _pedido_modal_payload(pedido):
             "enviar_talheres_label": "Enviar" if pedido.enviar_talheres else "Nao enviar",
             "canal": pedido.canal,
             "canal_label": pedido.get_canal_display(),
+            "terminal": str(pedido.terminal_id or ""),
+            "terminal_label": pedido.terminal.nome if pedido.terminal_id and pedido.terminal else "",
             "ifood": "sim" if pedido.ifood else "nao",
             "ifood_label": "iFood" if pedido.ifood else "Balcao/PD",
             "observacao_geral": pedido.observacao_geral,
@@ -3473,6 +3813,7 @@ def finalizar_pedido_novo_admin(request, pedido_id):
         return HttpResponseBadRequest(str(exc))
     pedido.status = Pedido.Status.EM_PREPARO
     pedido.save(update_fields=["status"])
+    sync_movimentacao_caixa_pedido(pedido, request.user)
     sync_customer_from_order(pedido)
     return JsonResponse(
         {
@@ -3502,6 +3843,7 @@ def _clone_order_as_draft(pedido):
         ponto_referencia=pedido.ponto_referencia,
         tipo_coleta=pedido.tipo_coleta,
         forma_pagamento=pedido.forma_pagamento,
+        terminal=pedido.terminal,
         enviar_talheres=pedido.enviar_talheres,
         canal=pedido.canal,
         ifood=pedido.ifood,
@@ -3550,6 +3892,7 @@ def excluir_pedido_admin(request, pedido_id):
     if not _user_can_manage_order_payment(request.user):
         return HttpResponseBadRequest("Usuario sem permissao para excluir pedido.")
     pedido = get_object_or_404(Pedido, id=pedido_id)
+    excluir_movimentacao_caixa_pedido(pedido, request.user)
     pedido.delete()
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True})
@@ -3567,6 +3910,7 @@ def atualizar_pagamento_pedido(request, pedido_id):
         return HttpResponseBadRequest("Forma de pagamento invalida.")
     pedido.forma_pagamento = forma_pagamento
     pedido.save(update_fields=["forma_pagamento"])
+    sync_movimentacao_caixa_pedido(pedido, request.user)
     return JsonResponse(_pedido_modal_payload(pedido))
 
 
@@ -3580,6 +3924,7 @@ def atualizar_cupom_pedido(request, pedido_id):
     cupom_codigo = normalize_coupon_code(request.POST.get("cupom_codigo"))
     try:
         recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
+        sync_movimentacao_caixa_pedido(pedido, request.user)
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
@@ -3608,6 +3953,7 @@ def atualizar_itens_pedido(request, pedido_id):
         return HttpResponseBadRequest("O pedido precisa ter pelo menos um item.")
     try:
         replace_order_items(pedido, payload)
+        sync_movimentacao_caixa_pedido(pedido, request.user)
     except ValueError as exc:
         transaction.set_rollback(True)
         return HttpResponseBadRequest(str(exc))
@@ -3625,6 +3971,7 @@ def atualizar_dados_pedido(request, pedido_id):
     if field == "nome_cliente":
         pedido.nome_cliente = _safe_text(request.POST.get("value")) or pedido.nome_cliente
         pedido.save(update_fields=["nome_cliente"])
+        sync_movimentacao_caixa_pedido(pedido, request.user)
         sync_customer_from_order(pedido)
     elif field == "telefone":
         pedido.telefone = normalize_phone(request.POST.get("value"))
@@ -3635,6 +3982,7 @@ def atualizar_dados_pedido(request, pedido_id):
                 pedido.nome_cliente = cliente.nome
                 update_fields.append("nome_cliente")
         pedido.save(update_fields=update_fields)
+        sync_movimentacao_caixa_pedido(pedido, request.user)
         sync_customer_from_order(pedido)
     elif field == "enviar_talheres":
         pedido.enviar_talheres = request.POST.get("value") == "sim"
@@ -3646,6 +3994,7 @@ def atualizar_dados_pedido(request, pedido_id):
         try:
             reprice_order_items_from_catalog(pedido)
             recalculate_order_totals(pedido)
+            sync_movimentacao_caixa_pedido(pedido, request.user)
         except ValueError as exc:
             transaction.set_rollback(True)
             return HttpResponseBadRequest(str(exc))
@@ -3659,9 +4008,17 @@ def atualizar_dados_pedido(request, pedido_id):
         try:
             reprice_order_items_from_catalog(pedido)
             recalculate_order_totals(pedido)
+            sync_movimentacao_caixa_pedido(pedido, request.user)
         except ValueError as exc:
             transaction.set_rollback(True)
             return HttpResponseBadRequest(str(exc))
+    elif field == "terminal":
+        terminal = TerminalCaixa.objects.filter(id=request.POST.get("value"), ativo=True).first()
+        if not terminal:
+            return HttpResponseBadRequest("Terminal invalido.")
+        pedido.terminal = terminal
+        pedido.save(update_fields=["terminal"])
+        sync_movimentacao_caixa_pedido(pedido, request.user)
     elif field == "tipo_coleta":
         tipo_coleta = _safe_text(request.POST.get("value"))
         if tipo_coleta not in dict(Pedido.TipoColeta.choices):
@@ -3704,6 +4061,7 @@ def atualizar_dados_pedido(request, pedido_id):
             "status",
         ])
         recalculate_order_totals(pedido)
+        sync_movimentacao_caixa_pedido(pedido, request.user)
         sync_customer_from_order(pedido)
     elif field == "observacao_geral":
         pedido.observacao_geral = _safe_text(request.POST.get("value"))
@@ -3746,6 +4104,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         for field, value in common_fields.items():
             setattr(pedido, field, value)
         pedido.save(update_fields=list(common_fields.keys()))
+        sync_movimentacao_caixa_pedido(pedido, request.user)
         sync_customer_from_order(pedido)
         payload = _pedido_modal_payload(pedido)
         payload["frete_recalculado"] = False
@@ -3789,6 +4148,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         "valor_frete",
     ])
     recalculate_order_totals(pedido)
+    sync_movimentacao_caixa_pedido(pedido, request.user)
     sync_customer_from_order(pedido)
     payload = _pedido_modal_payload(pedido)
     payload["frete_recalculado"] = True
@@ -3798,7 +4158,7 @@ def atualizar_entrega_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 def ajustes_admin(request):
     ajustes_aba = (_safe_text(request.GET.get("aba")) or "geral").lower()
-    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "ifood", "usuarios", "api", "lista_impressao", "importacao"}:
+    if ajustes_aba not in {"geral", "frete", "google", "whatsapp", "pagamento", "ifood", "contabil", "usuarios", "api", "lista_impressao", "importacao"}:
         ajustes_aba = "geral"
 
     _ensure_default_user_groups()
@@ -3827,6 +4187,15 @@ def ajustes_admin(request):
             "save_whatsapp": "whatsapp",
             "save_pagamento": "pagamento",
             "save_ifood": "ifood",
+            "create_terminal": "contabil",
+            "update_terminal": "contabil",
+            "create_categoria": "contabil",
+            "update_categoria": "contabil",
+            "create_banco": "contabil",
+            "update_banco": "contabil",
+            "create_categoria_conta": "contabil",
+            "update_categoria_conta": "contabil",
+            "save_contabil_bancos_pagamento": "contabil",
             "create_api_key": "api",
             "delete_api_key": "api",
             "create_user": "usuarios",
@@ -3907,6 +4276,166 @@ def ajustes_admin(request):
             except ValueError as exc:
                 feedback = str(exc)
                 feedback_kind = "error"
+
+        if action == "create_terminal":
+            try:
+                nome = _safe_text(request.POST.get("terminal_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome do terminal.")
+                codigo_base = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode("ascii").lower()
+                codigo_base = "-".join(part for part in codigo_base.replace("_", "-").split() if part)[:24] or "terminal"
+                codigo = codigo_base
+                suffix = 2
+                while TerminalCaixa.objects.filter(codigo=codigo).exists():
+                    codigo = f"{codigo_base}-{suffix}"[:30]
+                    suffix += 1
+                TerminalCaixa.objects.create(
+                    nome=nome,
+                    codigo=codigo,
+                    ordem=(TerminalCaixa.objects.aggregate(max_ordem=Max("ordem")).get("max_ordem") or 0) + 10,
+                )
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "create_categoria":
+            try:
+                nome = _safe_text(request.POST.get("categoria_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome da categoria.")
+                tipo_padrao = _safe_text(request.POST.get("tipo_padrao"))
+                if tipo_padrao not in dict(CategoriaMovimentacaoCaixa.TipoPadrao.choices):
+                    tipo_padrao = CategoriaMovimentacaoCaixa.TipoPadrao.AMBOS
+                categoria, created = CategoriaMovimentacaoCaixa.objects.get_or_create(
+                    nome=nome,
+                    defaults={"tipo_padrao": tipo_padrao, "ativo": True},
+                )
+                if not created:
+                    categoria.tipo_padrao = tipo_padrao
+                    categoria.ativo = True
+                    categoria.save(update_fields=["tipo_padrao", "ativo"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "update_terminal":
+            try:
+                terminal = get_object_or_404(TerminalCaixa, id=request.POST.get("terminal_id"))
+                nome = _safe_text(request.POST.get("terminal_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome do terminal.")
+                terminal.nome = nome
+                terminal.save(update_fields=["nome", "atualizado_em"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "update_categoria":
+            try:
+                categoria = get_object_or_404(CategoriaMovimentacaoCaixa, id=request.POST.get("categoria_id"))
+                nome = _safe_text(request.POST.get("categoria_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome da categoria.")
+                if CategoriaMovimentacaoCaixa.objects.filter(nome__iexact=nome).exclude(id=categoria.id).exists():
+                    raise ValueError("Ja existe uma categoria do caixa com este nome.")
+                tipo_padrao = _safe_text(request.POST.get("tipo_padrao"))
+                if tipo_padrao not in dict(CategoriaMovimentacaoCaixa.TipoPadrao.choices):
+                    tipo_padrao = CategoriaMovimentacaoCaixa.TipoPadrao.AMBOS
+                categoria.nome = nome
+                categoria.tipo_padrao = tipo_padrao
+                categoria.ativo = True
+                categoria.save(update_fields=["nome", "tipo_padrao", "ativo"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "create_banco":
+            try:
+                nome = _safe_text(request.POST.get("banco_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome do banco.")
+                codigo_base = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode("ascii").lower()
+                codigo_base = "-".join(part for part in codigo_base.replace("_", "-").split() if part)[:24] or "banco"
+                codigo = codigo_base
+                suffix = 2
+                while BancoConta.objects.filter(codigo=codigo).exists():
+                    codigo = f"{codigo_base}-{suffix}"[:30]
+                    suffix += 1
+                BancoConta.objects.create(
+                    nome=nome,
+                    codigo=codigo,
+                    ordem=(BancoConta.objects.aggregate(max_ordem=Max("ordem")).get("max_ordem") or 0) + 10,
+                )
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "update_banco":
+            try:
+                banco = get_object_or_404(BancoConta, id=request.POST.get("banco_id"))
+                nome = _safe_text(request.POST.get("banco_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome do banco.")
+                banco.nome = nome
+                banco.save(update_fields=["nome", "atualizado_em"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "create_categoria_conta":
+            try:
+                nome = _safe_text(request.POST.get("categoria_conta_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome da categoria da conta.")
+                tipo_padrao = _safe_text(request.POST.get("tipo_padrao_conta"))
+                if tipo_padrao not in dict(CategoriaMovimentacaoConta.TipoPadrao.choices):
+                    tipo_padrao = CategoriaMovimentacaoConta.TipoPadrao.AMBOS
+                categoria, created = CategoriaMovimentacaoConta.objects.get_or_create(
+                    nome=nome,
+                    defaults={"tipo_padrao": tipo_padrao, "ativo": True},
+                )
+                if not created:
+                    categoria.tipo_padrao = tipo_padrao
+                    categoria.ativo = True
+                    categoria.save(update_fields=["tipo_padrao", "ativo"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "update_categoria_conta":
+            try:
+                categoria = get_object_or_404(CategoriaMovimentacaoConta, id=request.POST.get("categoria_conta_id"))
+                nome = _safe_text(request.POST.get("categoria_conta_nome"))
+                if not nome:
+                    raise ValueError("Informe o nome da categoria da conta.")
+                if CategoriaMovimentacaoConta.objects.filter(nome__iexact=nome).exclude(id=categoria.id).exists():
+                    raise ValueError("Ja existe uma categoria da conta com este nome.")
+                tipo_padrao = _safe_text(request.POST.get("tipo_padrao_conta"))
+                if tipo_padrao not in dict(CategoriaMovimentacaoConta.TipoPadrao.choices):
+                    tipo_padrao = CategoriaMovimentacaoConta.TipoPadrao.AMBOS
+                categoria.nome = nome
+                categoria.tipo_padrao = tipo_padrao
+                categoria.ativo = True
+                categoria.save(update_fields=["nome", "tipo_padrao", "ativo"])
+                return redirect(f"{request.path}?saved=1&aba=contabil")
+            except ValueError as exc:
+                feedback = str(exc)
+                feedback_kind = "error"
+
+        if action == "save_contabil_bancos_pagamento":
+            banco_pix = BancoConta.objects.filter(id=request.POST.get("banco_pix"), ativo=True).first()
+            banco_cartao = BancoConta.objects.filter(id=request.POST.get("banco_cartao"), ativo=True).first()
+            config.banco_pix = banco_pix
+            config.banco_cartao = banco_cartao
+            config.save(update_fields=["banco_pix", "banco_cartao", "atualizado_em"])
+            return redirect(f"{request.path}?saved=1&aba=contabil")
 
         if action == "create_api_key":
             if not _user_can_manage_order_payment(request.user):
@@ -4078,6 +4607,12 @@ def ajustes_admin(request):
             "whatsapp_numero": config.whatsapp_numero,
             "pix_chave": config.pix_chave,
             "taxa_ifood_percentual": f"{config.taxa_ifood_percentual:.2f}",
+            "terminais": TerminalCaixa.objects.all().order_by("ordem", "nome"),
+            "categorias": CategoriaMovimentacaoCaixa.objects.all().order_by("nome"),
+            "bancos": BancoConta.objects.all().order_by("ordem", "nome"),
+            "categorias_conta": CategoriaMovimentacaoConta.objects.all().order_by("nome"),
+            "banco_pix_id": config.banco_pix_id,
+            "banco_cartao_id": config.banco_cartao_id,
             "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
             "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
@@ -4455,6 +4990,7 @@ def atualizar_status_pedido(request, pedido_id):
         pedido.pagamento_recebido_em = timezone.now()
         update_fields.append("pagamento_recebido_em")
     pedido.save(update_fields=update_fields)
+    sync_movimentacao_caixa_pedido(pedido, request.user if getattr(request, "user", None) and request.user.is_authenticated else None)
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "status": pedido.status_label_contextual})
     return redirect("pedidos:cozinha_pedidos")

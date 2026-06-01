@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Contabil - Caixa | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active=active dashboard_badge=caixa.movimentacoes|length pedidos_badge=pedidos_novos %}
+
+    <main class="ops-main contabil-page">
+        <div class="contabil-sticky-top">
+            <header class="ops-session dashboard-day-header contabil-date-header">
+                <div class="dashboard-day-overview">
+                    <nav class="dashboard-day-rail" aria-label="Navegar por dia">
+                        <a class="dashboard-side-day" href="{% url 'pedidos:contabil_caixa' %}?data={{ dashboard_nav.previous_day.date|date:'Y-m-d' }}" aria-label="Dia anterior">
+                            <span aria-hidden="true">&larr;</span>
+                            <small>{{ dashboard_nav.previous_day.relative_label }} &middot; {{ dashboard_nav.previous_day.date|date:"d/m" }}</small>
+                            <strong>{{ dashboard_nav.previous_day.pedidos }} ped &middot; {{ dashboard_nav.previous_day.marmitas }} marm</strong>
+                        </a>
+                        <div class="dashboard-date-center">
+                            <p class="dashboard-weekday">{{ dia_semana_dashboard }}</p>
+                            <form class="dashboard-date-current-form" method="get">
+                                <button class="dashboard-date-current {% if data_selecionada == hoje %}is-active{% endif %}" type="button" aria-current="date" data-dashboard-date-trigger aria-label="Escolher data">{{ data_selecionada|date:"d" }}</button>
+                                <input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}" aria-label="Escolher data" data-dashboard-date-input>
+                            </form>
+                            <h1>{{ data_selecionada|date:"F Y" }}</h1>
+                            <p class="dashboard-date-summary">{{ caixa.movimentacoes|length }} movimentacoes &middot; {{ caixa.saldo_atual_label }}</p>
+                        </div>
+                        <a class="dashboard-side-day" href="{% url 'pedidos:contabil_caixa' %}?data={{ dashboard_nav.next_day.date|date:'Y-m-d' }}" aria-label="Proximo dia">
+                            <span aria-hidden="true">&rarr;</span>
+                            <small>{{ dashboard_nav.next_day.relative_label }} &middot; {{ dashboard_nav.next_day.date|date:"d/m" }}</small>
+                            <strong>{{ dashboard_nav.next_day.pedidos }} ped &middot; {{ dashboard_nav.next_day.marmitas }} marm</strong>
+                        </a>
+                    </nav>
+                    <div class="dashboard-date-tools" aria-label="Atalhos de data">
+                        <a class="dashboard-date-tool" href="{% url 'pedidos:contabil_caixa' %}?data={{ dashboard_nav.previous_week|date:'Y-m-d' }}">-7 dias</a>
+                        <a class="dashboard-date-tool {% if data_selecionada == hoje %}is-active{% endif %}" href="{% url 'pedidos:contabil_caixa' %}?data={{ hoje|date:'Y-m-d' }}">Hoje</a>
+                        <a class="dashboard-date-tool" href="{% url 'pedidos:contabil_caixa' %}?data={{ dashboard_nav.next_week|date:'Y-m-d' }}">+7 dias</a>
+                    </div>
+                </div>
+            </header>
+
+            {% include "pedidos/_contabil_tabs.html" %}
+        </div>
+
+        {% if feedback %}
+            <div class="ajustes-feedback {% if feedback_kind == 'error' %}is-error{% endif %}">{{ feedback }}</div>
+        {% endif %}
+
+        <section class="ops-card contabil-ledger-card">
+            <header class="contabil-card-head">
+                <div>
+                    <p class="ops-kicker">Movimentacoes</p>
+                    <h3>Lista do dia</h3>
+                </div>
+            </header>
+
+            <div class="contabil-ledger-table">
+                <div class="contabil-ledger-row contabil-ledger-head">
+                    <span>Hora</span>
+                    <span>Terminal</span>
+                    <span>Tipo</span>
+                    <span>Nome</span>
+                    <span>Categoria</span>
+                    <span>Descricao</span>
+                    <span>Valor</span>
+                </div>
+                {% for movimento in caixa.movimentacoes %}
+                    <a class="contabil-ledger-row contabil-ledger-item is-{{ movimento.tipo }}" href="{% url 'pedidos:contabil_caixa' %}?data={{ data_selecionada|date:'Y-m-d' }}&movimentacao={{ movimento.id }}" data-caixa-movimentacao="{{ movimento.id }}">
+                        <span>{{ movimento.criado_em|date:"H:i" }}</span>
+                        <span>{{ movimento.terminal.nome }}</span>
+                        <span>{{ movimento.get_tipo_display }}</span>
+                        <strong>{{ movimento.nome }}</strong>
+                        <span>{{ movimento.categoria.nome }}</span>
+                        <span>{{ movimento.descricao|default:"-" }}</span>
+                        <b>{% if movimento.tipo == "entrada" %}+{% else %}-{% endif %} R$ {{ movimento.valor|floatformat:2 }}</b>
+                    </a>
+                {% empty %}
+                    <div class="contabil-empty">Nenhuma movimentacao registrada neste dia.</div>
+                {% endfor %}
+            </div>
+
+        </section>
+    </main>
+
+    <datalist id="{{ categorias_datalist_id }}">
+        {% for categoria in categorias %}
+            <option value="{{ categoria.nome }}"></option>
+        {% endfor %}
+    </datalist>
+
+    <div id="contabil-movimento-modal" class="modal-backdrop hidden management-modal" data-management-modal aria-hidden="true">
+        <div class="modal-card management-modal-card contabil-modal-card" role="dialog" aria-modal="true" aria-labelledby="contabil-movimento-title">
+            <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+            <div class="modal-content dashboard-production-card">
+                <div class="panel-head management-modal-head">
+                    <p class="ops-kicker">Caixa</p>
+                    <h2 id="contabil-movimento-title">Nova movimentacao</h2>
+                </div>
+                <form method="post" class="checkout-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_movimentacao">
+                    <label class="field">
+                        <span>Terminal</span>
+                        <select name="terminal" data-terminal-select data-default-terminal="{{ terminal_padrao.id }}">
+                            {% for terminal in terminais %}
+                                <option value="{{ terminal.id }}" {% if terminal.id == terminal_padrao.id %}selected{% endif %}>{{ terminal.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Tipo</span>
+                        <select name="tipo" data-movement-type-field>
+                            <option value="entrada">Entrada</option>
+                            <option value="saida">Saida</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Nome</span>
+                        <input type="text" name="nome" maxlength="120" required>
+                    </label>
+                    <label class="field">
+                        <span>Valor</span>
+                        <input type="number" name="valor" min="0.01" step="0.01" required>
+                    </label>
+                    <label class="field">
+                        <span>Categoria</span>
+                        <input type="text" name="categoria" list="{{ categorias_datalist_id }}" autocomplete="off" required>
+                    </label>
+                    <label class="field">
+                        <span>Descricao</span>
+                        <textarea name="descricao" rows="3"></textarea>
+                    </label>
+                    <button type="submit" class="primary-button wide">Salvar movimentacao</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if movimentacao_edicao %}
+        <div id="contabil-edicao-modal" class="modal-backdrop management-modal" data-management-modal data-auto-open="true" aria-hidden="false">
+            <div class="modal-card management-modal-card contabil-modal-card" role="dialog" aria-modal="true" aria-labelledby="contabil-edicao-title">
+                <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+                <div class="modal-content dashboard-production-card">
+                    <div class="panel-head management-modal-head">
+                        <p class="ops-kicker">Caixa</p>
+                        <h2 id="contabil-edicao-title">Editar movimentacao</h2>
+                    </div>
+                    <form method="post" class="checkout-form contabil-edit-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_movimentacao">
+                        <input type="hidden" name="movimentacao_id" value="{{ movimentacao_edicao.id }}">
+                        <label class="field">
+                            <span>Terminal</span>
+                            <select name="terminal" data-terminal-select data-default-terminal="{{ movimentacao_edicao.terminal.id }}">
+                                {% for terminal in terminais %}
+                                    <option value="{{ terminal.id }}" {% if terminal.id == movimentacao_edicao.terminal.id %}selected{% endif %}>{{ terminal.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Tipo</span>
+                            <select name="tipo">
+                                <option value="entrada" {% if movimentacao_edicao.tipo == "entrada" %}selected{% endif %}>Entrada</option>
+                                <option value="saida" {% if movimentacao_edicao.tipo == "saida" %}selected{% endif %}>Saida</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>Nome</span>
+                            <input type="text" name="nome" maxlength="120" value="{{ movimentacao_edicao.nome }}" required>
+                        </label>
+                        <label class="field">
+                            <span>Valor</span>
+                            <input type="number" name="valor" min="0.01" step="0.01" value="{{ movimentacao_edicao.valor|stringformat:'.2f' }}" required>
+                        </label>
+                        <label class="field">
+                            <span>Categoria</span>
+                            <input type="text" name="categoria" list="{{ categorias_datalist_id }}" value="{{ movimentacao_edicao.categoria.nome }}" autocomplete="off" required>
+                        </label>
+                        <label class="field">
+                            <span>Descricao</span>
+                            <textarea name="descricao" rows="3">{{ movimentacao_edicao.descricao }}</textarea>
+                        </label>
+                        <button type="submit" class="primary-button wide">Salvar alteracoes</button>
+                    </form>
+                    <div class="contabil-modal-secondary-actions">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="duplicate_movimentacao">
+                            <input type="hidden" name="movimentacao_id" value="{{ movimentacao_edicao.id }}">
+                            <button type="submit" class="ped-btn ped-btn-soft">Duplicar</button>
+                        </form>
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_movimentacao">
+                            <input type="hidden" name="movimentacao_id" value="{{ movimentacao_edicao.id }}">
+                            <button type="submit" class="ped-btn ped-btn-danger">Excluir</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/management_modal.js' %}?v={% now 'U' %}"></script>
+    <script src="{% static 'js/contabil.js' %}?v={% now 'U' %}"></script>
+    <script>
+        document.querySelectorAll("[data-dashboard-date-trigger]").forEach((trigger) => {
+            const form = trigger.closest("form");
+            const input = form?.querySelector("[data-dashboard-date-input]");
+            if (!form || !input) return;
+            trigger.addEventListener("click", () => {
+                if (typeof input.showPicker === "function") {
+                    input.showPicker();
+                } else {
+                    input.click();
+                }
+            });
+            input.addEventListener("change", () => {
+                if (input.value) form.submit();
+            });
+        });
+    </script>
+{% endblock %}

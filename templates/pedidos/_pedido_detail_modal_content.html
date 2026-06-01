@@ -247,6 +247,24 @@
                 </dd>
             </div>
             <div>
+                <dt>Terminal</dt>
+                <dd data-modal-fact="terminal">
+                    {% if can_edit_payment %}
+                        <span
+                            class="ped-inline-edit"
+                            data-inline-edit
+                            data-field="terminal"
+                            data-type="select"
+                            data-value="{{ pedido.terminal_id }}"
+                            data-options="{% for terminal in terminal_choices %}{{ terminal.id }}:{{ terminal.nome }}{% if not forloop.last %}|{% endif %}{% endfor %}"
+                            data-action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}"
+                        >{{ pedido.terminal.nome|default:"Terminal 01" }}</span>
+                    {% else %}
+                        {{ pedido.terminal.nome|default:"Terminal 01" }}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
                 <dt>Endereço</dt>
                 <dd class="ped-address-row" data-modal-address>
                     {% if can_edit_payment %}

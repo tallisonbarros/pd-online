@@ -5817,6 +5817,23 @@ fieldset.field {
     border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.ops-sidebar-session {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.ops-sidebar-session .ops-user-chip,
+.ops-sidebar-session .ops-logout {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+}
+
+.ops-sidebar-session form {
+    margin: 0;
+}
+
 .ops-nav-item--subtle {
     opacity: 0.88;
     font-size: 0.95rem;
@@ -6552,6 +6569,513 @@ fieldset.field {
 .dashboard-balance-footer b {
     color: var(--text);
     font-size: 1.25rem;
+}
+
+.contabil-page {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+    gap: 14px;
+    overflow: hidden;
+}
+
+.ops-shell--cozinha .ops-main.contabil-page {
+    box-sizing: border-box;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.contabil-sticky-top {
+    position: sticky;
+    top: 12px;
+    z-index: 20;
+    display: grid;
+    gap: 8px;
+}
+
+.contabil-page .contabil-date-header {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(65, 45, 37, 0.10);
+}
+
+.contabil-page .dashboard-day-overview {
+    width: 100%;
+    gap: 8px;
+}
+
+.contabil-page .dashboard-day-rail {
+    width: 100%;
+    max-width: 760px;
+    grid-template-columns: 210px 160px 210px;
+    justify-content: center;
+    gap: 10px;
+}
+
+.contabil-page .dashboard-side-day {
+    min-height: 58px;
+    padding: 9px 12px;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.contabil-page .dashboard-side-day small,
+.contabil-page .dashboard-side-day strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contabil-page .dashboard-date-center {
+    width: 160px;
+    gap: 3px;
+}
+
+.contabil-page .dashboard-weekday {
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+}
+
+.contabil-page .dashboard-date-current {
+    min-width: 74px;
+    min-height: 48px;
+    border-radius: 16px;
+    font-size: 1.55rem;
+}
+
+.contabil-page .dashboard-date-center h1 {
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.05;
+    white-space: nowrap;
+}
+
+.contabil-page .dashboard-date-summary {
+    max-width: 160px;
+    overflow: hidden;
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contabil-page .dashboard-date-tools {
+    gap: 6px;
+}
+
+.contabil-page .dashboard-date-tool {
+    min-width: 64px;
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 0.7rem;
+}
+
+.contabil-page .ops-session-actions {
+    position: static;
+    align-self: start;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.contabil-page .ops-user-chip,
+.contabil-page .ops-logout {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 0.78rem;
+}
+
+.contabil-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-height: 46px;
+    padding: 6px;
+    border: 1px solid rgba(216, 193, 183, 0.70);
+    border-radius: 16px;
+    background: rgba(255, 253, 250, 0.94);
+    box-shadow: 0 10px 26px rgba(65, 45, 37, 0.08);
+}
+
+.contabil-tab-summary {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    flex: 1 1 360px;
+    min-width: 280px;
+    max-width: 620px;
+    margin-left: 2px;
+}
+
+.contabil-tab-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.contabil-icon-action {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #fffdfa;
+    font: inherit;
+    font-size: 1.14rem;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(65, 45, 37, 0.06);
+}
+
+.contabil-icon-action--entrada {
+    background: #16834a;
+}
+
+.contabil-icon-action--saida {
+    background: #b42318;
+}
+
+.contabil-icon-action:hover,
+.contabil-icon-action:focus-visible {
+    filter: brightness(0.94);
+    color: #fffdfa;
+    outline: none;
+}
+
+.contabil-tab-summary-item {
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    min-width: 0;
+    min-height: 34px;
+    padding: 3px 10px;
+    border-left: 1px solid rgba(216, 193, 183, 0.70);
+}
+
+.contabil-tab-summary-item small,
+.contabil-tab-summary-item b {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contabil-tab-summary-item small {
+    color: rgba(95, 75, 66, 0.72);
+    font-size: 0.6rem;
+    font-weight: 850;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.contabil-tab-summary-item b {
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1.15;
+}
+
+.contabil-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 92px;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid rgba(216, 193, 183, 0.78);
+    border-radius: 999px;
+    background: #fffdfa;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.contabil-tab.is-active {
+    color: #fffdfa;
+    border-color: var(--text);
+    background: var(--text);
+}
+
+.contabil-tab--settings {
+    margin-left: auto;
+    border-style: dashed;
+}
+
+.contabil-tab:disabled {
+    color: rgba(95, 75, 66, 0.64);
+    cursor: default;
+    opacity: 0.82;
+}
+
+.contabil-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-height: 46px;
+}
+
+.contabil-ledger-card {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-self: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.contabil-card-head {
+    min-height: 72px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(216, 193, 183, 0.58);
+}
+
+.contabil-card-head h3 {
+    margin: 0;
+    color: var(--text);
+}
+
+.contabil-ledger-table {
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.contabil-ledger-row {
+    display: grid;
+    grid-template-columns: 72px 132px 94px 180px 150px minmax(220px, 1fr) 126px;
+    align-items: center;
+    gap: 14px;
+    min-width: 1010px;
+    min-height: 52px;
+    padding: 0 20px;
+    border-bottom: 1px solid rgba(216, 193, 183, 0.46);
+}
+
+.contabil-ledger-row--pedidos {
+    grid-template-columns: 72px 132px 118px 210px 170px minmax(220px, 1fr) 126px;
+}
+
+.contabil-ledger-row > * {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contabil-ledger-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fffdfa;
+    box-shadow: 0 1px 0 rgba(216, 193, 183, 0.46);
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.contabil-ledger-item {
+    color: var(--text);
+    text-decoration: none;
+}
+
+.contabil-ledger-item:hover,
+.contabil-ledger-item:focus-visible {
+    background: rgba(255, 106, 0, 0.06);
+}
+
+.contabil-ledger-item strong,
+.contabil-ledger-item b {
+    color: var(--text);
+}
+
+.contabil-ledger-item.is-entrada b {
+    color: #16834a;
+}
+
+.contabil-ledger-item.is-saida b {
+    color: #b42318;
+}
+
+.contabil-empty {
+    min-height: 104px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    color: var(--muted);
+}
+
+.contabil-ledger-footer {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    min-width: 760px;
+    min-height: 86px;
+    border-top: 1px solid rgba(216, 193, 183, 0.76);
+    background: #fff8f2;
+}
+
+.contabil-ledger-footer span {
+    display: grid;
+    gap: 4px;
+    padding: 16px 18px;
+    border-right: 1px solid rgba(216, 193, 183, 0.58);
+    overflow: hidden;
+}
+
+.contabil-ledger-footer span:last-child {
+    border-right: 0;
+}
+
+.contabil-ledger-footer small {
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.contabil-ledger-footer b {
+    color: var(--text);
+    font-size: 1.18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contabil-modal-card {
+    width: min(620px, 100%);
+}
+
+.contabil-modal-secondary-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(216, 193, 183, 0.58);
+}
+
+.contabil-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.contabil-settings-grid h3 {
+    margin: 0 0 10px;
+    color: var(--text);
+}
+
+.contabil-settings-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.contabil-settings-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(216, 193, 183, 0.58);
+    border-radius: 12px;
+    background: #fffdfa;
+}
+
+.contabil-settings-list b {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.contabil-settings-edit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: end;
+    gap: 10px;
+    width: 100%;
+}
+
+.contabil-settings-edit--category {
+    grid-template-columns: minmax(0, 1fr) 128px auto;
+}
+
+.contabil-settings-edit .field {
+    min-width: 0;
+    margin: 0;
+}
+
+.contabil-settings-edit input,
+.contabil-settings-edit select {
+    min-height: 42px;
+}
+
+.contabil-settings-edit b {
+    align-self: center;
+    white-space: nowrap;
+}
+
+.contabil-settings-edit .ped-btn {
+    min-height: 42px;
+    padding: 0 14px;
+    white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+    .contabil-modal-secondary-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .contabil-tab-summary {
+        order: 2;
+        flex-basis: 100%;
+        max-width: none;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .contabil-tab-actions {
+        margin-left: 0;
+    }
+
+    .contabil-tab--settings {
+        margin-left: 0;
+    }
+
+    .contabil-ledger-footer,
+    .contabil-settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .contabil-ledger-footer span {
+        border-right: 0;
+        border-bottom: 1px solid rgba(216, 193, 183, 0.58);
+    }
+
+    .contabil-ledger-footer span:last-child {
+        border-bottom: 0;
+    }
 }
 
 .ops-kpi-card,
@@ -7922,6 +8446,50 @@ fieldset.field {
     .ops-order-hint {
         text-align: left;
         max-width: none;
+    }
+}
+
+@media (max-width: 1180px) {
+    .contabil-page .contabil-date-header {
+        grid-template-columns: 1fr;
+    }
+
+    .contabil-page .dashboard-day-rail {
+        grid-template-columns: minmax(170px, 1fr) 150px minmax(170px, 1fr);
+        max-width: none;
+    }
+
+    .contabil-page .ops-session-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 940px) {
+    .contabil-sticky-top {
+        position: static;
+    }
+
+    .contabil-page .dashboard-day-rail {
+        grid-template-columns: 1fr;
+    }
+
+    .contabil-page .dashboard-date-center {
+        order: -1;
+        width: 100%;
+    }
+
+    .contabil-page .dashboard-date-summary {
+        max-width: 100%;
+    }
+
+    .contabil-page .dashboard-side-day,
+    .contabil-page .dashboard-side-day:last-child {
+        text-align: center;
+    }
+
+    .contabil-page .ops-session-actions {
+        justify-content: space-between;
     }
 }
 

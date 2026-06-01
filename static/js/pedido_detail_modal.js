@@ -646,6 +646,7 @@
         if (field === "forma_pagamento") return pedido.forma_pagamento || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres || "nao";
         if (field === "canal") return pedido.canal || "balcao";
+        if (field === "terminal") return pedido.terminal || "";
         if (field === "ifood") return pedido.ifood || "nao";
         if (field === "tipo_coleta") return pedido.tipo_coleta || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "";
@@ -658,6 +659,7 @@
         if (field === "forma_pagamento") return pedido.forma_pagamento_label || "";
         if (field === "enviar_talheres") return pedido.enviar_talheres_label || "";
         if (field === "canal") return pedido.canal_label || "";
+        if (field === "terminal") return pedido.terminal_label || "";
         if (field === "ifood") return pedido.ifood_label || "";
         if (field === "tipo_coleta") return pedido.tipo_coleta_label || "";
         if (field === "observacao_geral") return pedido.observacao_geral || "Adicionar observacao";

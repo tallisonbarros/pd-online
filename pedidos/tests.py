@@ -15,7 +15,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import AccessEvent, Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
+from .contabil_services import sync_movimentacao_caixa_pedido
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, normalize_phone, sync_customer_from_order
 from .utils import build_google_maps_route_url
@@ -371,6 +372,360 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-label="Navegar por dia"')
 
+    def test_contabil_requires_diretor_access(self):
+        self.client.force_login(self.gerente_user)
+
+        response = self.client.get("/controle/contabil/caixa/", follow=True)
+
+        self.assertRedirects(response, "/controle/operacao/")
+        self.assertNotContains(response, "Nova entrada")
+
+    def test_contabil_caixa_displays_default_terminal_context(self):
+        self.client.force_login(self.diretor_user)
+
+        response = self.client.get("/controle/contabil/caixa/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Contabil")
+        self.assertContains(response, 'href="/controle/contabil/caixa/')
+        self.assertNotContains(response, "Operando Terminal 01")
+        self.assertContains(response, "contabil-icon-action")
+        self.assertContains(response, 'data-open-management-modal="#contabil-movimento-modal"')
+        self.assertContains(response, 'aria-label="Nova entrada"')
+        self.assertNotContains(response, ">Nova entrada</button>")
+        self.assertNotContains(response, ">Nova saida</button>")
+        self.assertContains(response, "<span>Terminal</span>", html=True)
+        self.assertContains(response, '<select name="terminal" data-terminal-select')
+        self.assertContains(response, "Caixa atual")
+        self.assertNotContains(response, 'href="/controle/contabil/ajustes/')
+        self.assertContains(response, 'href="/controle/contabil/ifood/')
+        self.assertContains(response, 'href="/controle/contabil/conta/')
+
+    def test_contabil_settings_live_in_main_settings_tab(self):
+        self.client.force_login(self.diretor_user)
+
+        response = self.client.get("/controle/ajustes/?aba=contabil")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Estruturas contabeis atuais")
+        self.assertContains(response, 'name="action" value="create_terminal"')
+        self.assertContains(response, 'name="action" value="create_banco"')
+        self.assertContains(response, 'name="action" value="save_contabil_bancos_pagamento"')
+        self.assertContains(response, 'name="banco_pix"')
+        self.assertContains(response, 'name="banco_cartao"')
+        self.assertContains(response, 'name="action" value="update_terminal"')
+        self.assertContains(response, 'name="action" value="update_banco"')
+        self.assertContains(response, "Terminal 01")
+        self.assertContains(response, "Banco 01")
+
+    def test_contabil_existing_structures_can_be_renamed_from_settings(self):
+        self.client.force_login(self.diretor_user)
+        terminal = TerminalCaixa.objects.get(codigo="terminal-01")
+        banco = BancoConta.objects.get(codigo="banco-01")
+        categoria_caixa = CategoriaMovimentacaoCaixa.objects.create(
+            nome="Caixa antigo",
+            tipo_padrao=CategoriaMovimentacaoCaixa.TipoPadrao.AMBOS,
+        )
+        categoria_conta = CategoriaMovimentacaoConta.objects.create(
+            nome="Conta antiga",
+            tipo_padrao=CategoriaMovimentacaoConta.TipoPadrao.AMBOS,
+        )
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=contabil",
+            {
+                "action": "update_terminal",
+                "terminal_id": terminal.id,
+                "terminal_nome": "Terminal Frente",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        terminal.refresh_from_db()
+        self.assertEqual(terminal.nome, "Terminal Frente")
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=contabil",
+            {
+                "action": "update_banco",
+                "banco_id": banco.id,
+                "banco_nome": "Banco Principal",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        banco.refresh_from_db()
+        self.assertEqual(banco.nome, "Banco Principal")
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=contabil",
+            {
+                "action": "update_categoria",
+                "categoria_id": categoria_caixa.id,
+                "categoria_nome": "Caixa nova",
+                "tipo_padrao": CategoriaMovimentacaoCaixa.TipoPadrao.ENTRADA,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        categoria_caixa.refresh_from_db()
+        self.assertEqual(categoria_caixa.nome, "Caixa nova")
+        self.assertEqual(categoria_caixa.tipo_padrao, CategoriaMovimentacaoCaixa.TipoPadrao.ENTRADA)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=contabil",
+            {
+                "action": "update_categoria_conta",
+                "categoria_conta_id": categoria_conta.id,
+                "categoria_conta_nome": "Conta nova",
+                "tipo_padrao_conta": CategoriaMovimentacaoConta.TipoPadrao.SAIDA,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        categoria_conta.refresh_from_db()
+        self.assertEqual(categoria_conta.nome, "Conta nova")
+        self.assertEqual(categoria_conta.tipo_padrao, CategoriaMovimentacaoConta.TipoPadrao.SAIDA)
+
+    def test_contabil_payment_bank_defaults_can_be_saved_from_settings(self):
+        self.client.force_login(self.diretor_user)
+        banco_pix = BancoConta.objects.create(nome="Banco Pix", codigo="banco-pix", ordem=20)
+        banco_cartao = BancoConta.objects.create(nome="Banco Cartao", codigo="banco-cartao", ordem=30)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=contabil",
+            {
+                "action": "save_contabil_bancos_pagamento",
+                "banco_pix": banco_pix.id,
+                "banco_cartao": banco_cartao.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("aba=contabil", response.url)
+        config = ConfiguracaoEntrega.get_solo()
+        self.assertEqual(config.banco_pix, banco_pix)
+        self.assertEqual(config.banco_cartao, banco_cartao)
+
+    def test_old_contabil_settings_url_redirects_to_main_settings_tab(self):
+        self.client.force_login(self.diretor_user)
+
+        response = self.client.get("/controle/contabil/ajustes/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/controle/ajustes/?aba=contabil")
+
+    def test_contabil_ifood_lists_only_ifood_orders_from_selected_day(self):
+        self.client.force_login(self.diretor_user)
+        terminal = TerminalCaixa.objects.get(codigo="terminal-01")
+        pedido_ifood = Pedido.objects.create(
+            nome_cliente="Cliente iFood",
+            telefone="64999990000",
+            endereco="Rua iFood",
+            forma_pagamento=Pedido.FormaPagamento.CARTAO,
+            canal=Pedido.Canal.IFOOD,
+            terminal=terminal,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("88.50"),
+        )
+        pedido_site = Pedido.objects.create(
+            nome_cliente="Cliente Site",
+            telefone="64999990001",
+            endereco="Rua Site",
+            forma_pagamento=Pedido.FormaPagamento.CARTAO,
+            canal=Pedido.Canal.SITE,
+            terminal=terminal,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+        Pedido.objects.filter(id__in=[pedido_ifood.id, pedido_site.id]).update(
+            criado_em=timezone.make_aware(datetime(2026, 5, 20, 15, 30))
+        )
+
+        response = self.client.get("/controle/contabil/ifood/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pedidos iFood")
+        self.assertContains(response, "Pedido #")
+        self.assertContains(response, "Cliente iFood")
+        self.assertContains(response, "+ R$ 88,50")
+        self.assertNotContains(response, "Cliente Site")
+        self.assertContains(response, "Total atual")
+
+    def test_contabil_conta_creates_entry_with_auto_category_and_totals(self):
+        self.client.force_login(self.diretor_user)
+        banco = BancoConta.objects.get(codigo="banco-01")
+
+        response = self.client.post(
+            "/controle/contabil/conta/?data=2026-05-20",
+            {
+                "action": "create_movimentacao",
+                "banco": banco.id,
+                "tipo": "entrada",
+                "nome": "Recebimento cartao",
+                "valor": "80.75",
+                "categoria": "Cartoes",
+                "descricao": "Entrada manual",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        movimento = MovimentacaoConta.objects.get(nome="Recebimento cartao")
+        self.assertEqual(movimento.banco, banco)
+        self.assertEqual(movimento.valor, Decimal("80.75"))
+        self.assertEqual(movimento.categoria.nome, "Cartoes")
+
+        response = self.client.get("/controle/contabil/conta/?data=2026-05-20")
+        self.assertContains(response, "Banco 01")
+        self.assertContains(response, "<small>Entradas</small>", html=True)
+        self.assertContains(response, "<b>+ R$ 80,75</b>", html=True)
+        self.assertContains(response, "<small>Conta atual</small>", html=True)
+        self.assertContains(response, "<b>R$ 80,75</b>", html=True)
+
+    def test_card_delivery_order_creates_linked_account_movement(self):
+        self.client.force_login(self.diretor_user)
+        banco_cartao = BancoConta.objects.create(nome="Banco Cartao", codigo="banco-cartao", ordem=20)
+        config = ConfiguracaoEntrega.get_solo()
+        config.banco_cartao = banco_cartao
+        config.save(update_fields=["banco_cartao"])
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Cartao",
+            telefone="64999990002",
+            endereco="Rua Cartao",
+            forma_pagamento=Pedido.FormaPagamento.CARTAO,
+            canal=Pedido.Canal.BALCAO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("64.00"),
+        )
+        Pedido.objects.filter(id=pedido.id).update(criado_em=timezone.make_aware(datetime(2026, 5, 20, 16, 10)))
+        pedido.refresh_from_db()
+
+        sync_movimentacao_caixa_pedido(pedido, self.diretor_user)
+
+        response = self.client.get("/controle/contabil/conta/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Movimentacoes")
+        self.assertContains(response, "Cliente Cartao")
+        self.assertContains(response, "Pedidos no cartao")
+        self.assertContains(response, "+ R$ 64,00")
+        movimento = MovimentacaoConta.objects.get(pedido=pedido)
+        self.assertEqual(movimento.banco, banco_cartao)
+        self.assertEqual(movimento.origem, MovimentacaoConta.Origem.SISTEMA)
+
+    def test_contabil_caixa_creates_entry_with_auto_category_and_totals(self):
+        self.client.force_login(self.diretor_user)
+        terminal = TerminalCaixa.objects.get(codigo="terminal-01")
+
+        response = self.client.post(
+            "/controle/contabil/caixa/?data=2026-05-20",
+            {
+                "action": "create_movimentacao",
+                "terminal": terminal.id,
+                "tipo": "entrada",
+                "nome": "Aporte inicial",
+                "valor": "150.25",
+                "categoria": "Aportes",
+                "descricao": "Entrada manual",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        movimento = MovimentacaoCaixa.objects.get(nome="Aporte inicial")
+        self.assertEqual(movimento.terminal, terminal)
+        self.assertEqual(movimento.valor, Decimal("150.25"))
+        self.assertEqual(movimento.categoria.nome, "Aportes")
+
+        response = self.client.get("/controle/contabil/caixa/?data=2026-05-20")
+        self.assertContains(response, "<small>Entradas</small>", html=True)
+        self.assertContains(response, "<b>+ R$ 150,25</b>", html=True)
+        self.assertContains(response, "<small>Caixa atual</small>", html=True)
+        self.assertContains(response, "<b>R$ 150,25</b>", html=True)
+        self.assertContains(response, "Terminal 01")
+
+    def test_contabil_caixa_uses_previous_balance_and_expenses(self):
+        self.client.force_login(self.diretor_user)
+        terminal = TerminalCaixa.objects.get(codigo="terminal-01")
+        terminal_2 = TerminalCaixa.objects.create(nome="Terminal 02", codigo="terminal-02", ordem=20)
+        categoria = CategoriaMovimentacaoCaixa.objects.create(nome="Fornecedor")
+        MovimentacaoCaixa.objects.create(
+            terminal=terminal,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 19),
+            tipo=MovimentacaoCaixa.Tipo.ENTRADA,
+            nome="Saldo anterior",
+            valor=Decimal("200.00"),
+            criado_por=self.diretor_user,
+        )
+        MovimentacaoCaixa.objects.create(
+            terminal=terminal_2,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 20),
+            tipo=MovimentacaoCaixa.Tipo.SAIDA,
+            nome="Compra insumos",
+            valor=Decimal("45.50"),
+            criado_por=self.diretor_user,
+        )
+
+        response = self.client.get("/controle/contabil/caixa/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<small>Saldo ontem</small>", html=True)
+        self.assertContains(response, "<b>R$ 200,00</b>", html=True)
+        self.assertContains(response, "<small>Saidas</small>", html=True)
+        self.assertContains(response, "<b>- R$ 45,50</b>", html=True)
+        self.assertContains(response, "<small>Caixa atual</small>", html=True)
+        self.assertContains(response, "<b>R$ 154,50</b>", html=True)
+        self.assertContains(response, "Terminal 02")
+
+    def test_contabil_caixa_edit_duplicate_and_soft_delete(self):
+        self.client.force_login(self.diretor_user)
+        terminal = TerminalCaixa.objects.get(codigo="terminal-01")
+        categoria = CategoriaMovimentacaoCaixa.objects.create(nome="Diversos")
+        movimento = MovimentacaoCaixa.objects.create(
+            terminal=terminal,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 20),
+            tipo=MovimentacaoCaixa.Tipo.SAIDA,
+            nome="Taxa",
+            valor=Decimal("10.00"),
+            criado_por=self.diretor_user,
+        )
+
+        response = self.client.get(f"/controle/contabil/caixa/?data=2026-05-20&movimentacao={movimento.id}")
+        self.assertContains(response, 'data-auto-open="true"')
+        self.assertContains(response, "Editar movimentacao")
+
+        response = self.client.post(
+            "/controle/contabil/caixa/?data=2026-05-20",
+            {
+                "action": "update_movimentacao",
+                "movimentacao_id": movimento.id,
+                "terminal": terminal.id,
+                "tipo": "saida",
+                "nome": "Taxa editada",
+                "valor": "12.00",
+                "categoria": "Diversos",
+                "descricao": "Ajuste",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.nome, "Taxa editada")
+        self.assertEqual(movimento.valor, Decimal("12.00"))
+
+        response = self.client.post(
+            "/controle/contabil/caixa/?data=2026-05-20",
+            {"action": "duplicate_movimentacao", "movimentacao_id": movimento.id},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("movimentacao=", response.url)
+        self.assertTrue(MovimentacaoCaixa.objects.filter(nome="Taxa editada (copia)").exists())
+
+        response = self.client.post(
+            "/controle/contabil/caixa/?data=2026-05-20",
+            {"action": "delete_movimentacao", "movimentacao_id": movimento.id},
+        )
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertIsNotNone(movimento.excluido_em)
+
     def test_dashboard_logout_returns_to_login_page(self):
         self.client.force_login(self.diretor_user)
 
@@ -482,7 +837,7 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, 'class="dashboard-balance-layout"')
         self.assertContains(response, 'class="dashboard-kpi-quadrants"')
         self.assertContains(response, "<p class=\"ops-kicker\">Balanco geral</p>")
-        self.assertContains(response, 'data-dashboard-balance="resultado">R$ 41,00</strong>')
+        self.assertNotContains(response, 'data-dashboard-balance="resultado"')
         self.assertContains(response, 'data-dashboard-balance-detail="Receita">+ R$ 220,00</b>')
         self.assertContains(response, 'data-dashboard-balance-detail="Custos producao">- R$ 160,00</b>')
         self.assertContains(response, 'data-dashboard-balance-detail="Custo entrega">- R$ 15,00</b>')
@@ -1615,6 +1970,159 @@ class PedidoDetalheAdminTests(TestCase):
         pedido.refresh_from_db()
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.DINHEIRO)
 
+    def test_order_defaults_to_terminal_01(self):
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Terminal",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            total=Decimal("35.00"),
+        )
+
+        self.assertEqual(pedido.terminal.codigo, "terminal-01")
+
+    def test_cash_payment_creates_and_updates_linked_cash_movement(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        terminal_2 = TerminalCaixa.objects.create(nome="Terminal 02", codigo="terminal-02", ordem=20)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Dinheiro",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.DINHEIRO},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento = MovimentacaoCaixa.objects.get(pedido=pedido)
+        self.assertEqual(movimento.origem, MovimentacaoCaixa.Origem.SISTEMA)
+        self.assertEqual(movimento.terminal.codigo, "terminal-01")
+        self.assertEqual(movimento.valor, Decimal("35.00"))
+        self.assertIsNone(movimento.excluido_em)
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "terminal", "value": str(terminal_2.id)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.terminal, terminal_2)
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.PIX},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento.refresh_from_db()
+        self.assertIsNotNone(movimento.excluido_em)
+
+    def test_card_delivery_payment_creates_and_updates_linked_account_movement(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        banco_cartao = BancoConta.objects.create(nome="Banco Cartao", codigo="banco-cartao", ordem=20)
+        config = ConfiguracaoEntrega.get_solo()
+        config.banco_cartao = banco_cartao
+        config.save(update_fields=["banco_cartao"])
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Cartao",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.CARTAO},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento = MovimentacaoConta.objects.get(pedido=pedido)
+        self.assertEqual(movimento.origem, MovimentacaoConta.Origem.SISTEMA)
+        self.assertEqual(movimento.banco, banco_cartao)
+        self.assertEqual(movimento.categoria.nome, "Pedidos no cartao")
+        self.assertEqual(movimento.valor, Decimal("42.00"))
+        self.assertIsNone(movimento.excluido_em)
+
+        pedido.refresh_from_db()
+        pedido.total = Decimal("55.00")
+        pedido.save(update_fields=["total"])
+        sync_movimentacao_caixa_pedido(pedido, self.staff_user)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("55.00"))
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.DINHEIRO},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento.refresh_from_db()
+        self.assertIsNotNone(movimento.excluido_em)
+
+    def test_online_pix_payment_creates_account_movement_using_configured_bank(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        banco_pix = BancoConta.objects.create(nome="Banco Pix", codigo="banco-pix", ordem=20)
+        config = ConfiguracaoEntrega.get_solo()
+        config.banco_pix = banco_pix
+        config.save(update_fields=["banco_pix"])
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Pix",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/pagamento/",
+            {"forma_pagamento": Pedido.FormaPagamento.PIX},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        movimento = MovimentacaoConta.objects.get(pedido=pedido)
+        self.assertEqual(movimento.origem, MovimentacaoConta.Origem.SISTEMA)
+        self.assertEqual(movimento.banco, banco_pix)
+        self.assertEqual(movimento.categoria.nome, "Pedidos no pix online")
+        self.assertEqual(movimento.valor, Decimal("42.00"))
+        self.assertIsNone(movimento.excluido_em)
+
+    def test_deleting_cash_order_soft_deletes_linked_cash_movement(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Excluir",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+        sync_movimentacao_caixa_pedido(pedido, self.staff_user)
+        movimento_id = pedido.movimentacao_caixa.id
+
+        response = self.client.post(f"/controle/pedido/{pedido.id}/excluir/")
+
+        self.assertEqual(response.status_code, 302)
+        movimento = MovimentacaoCaixa.objects.get(id=movimento_id)
+        self.assertIsNone(movimento.pedido_id)
+        self.assertIsNotNone(movimento.excluido_em)
+
     def test_manager_can_update_simple_order_fields(self):
         self.client.force_login(self.staff_user)
         gerente_group, _created = Group.objects.get_or_create(name="Gerente")
@@ -2552,7 +3060,7 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_active_order_marks_recurring_customer(self):
         self.client.force_login(self.staff_user)
-        Pedido.objects.create(
+        pedido_antigo = Pedido.objects.create(
             nome_cliente="Cliente Antigo",
             telefone="(64) 99999-9999",
             endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
@@ -2560,6 +3068,7 @@ class PedidoDetalheAdminTests(TestCase):
             status=Pedido.Status.FINALIZADO,
             total=Decimal("35.00"),
         )
+        Pedido.objects.filter(id=pedido_antigo.id).update(criado_em=timezone.now() - timedelta(days=2))
         pedido = Pedido.objects.create(
             nome_cliente="Cliente Recorrente",
             telefone="64999999999",

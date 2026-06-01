@@ -12,6 +12,12 @@
                 </span>
                 <span>Dashboard</span>
             </a>
+            <a class="ops-nav-item {% if active == 'contabil' %}is-active{% endif %}" href="{% url 'pedidos:contabil_caixa' %}">
+                <span class="ops-nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4zm2 2v3h10V6H7zm0 5v2h4v-2H7zm6 0v2h4v-2h-4zm-6 4v2h4v-2H7zm6 0v2h4v-2h-4z"/></svg>
+                </span>
+                <span>Contabil</span>
+            </a>
         {% endif %}
         <a class="ops-nav-item {% if active == 'metricas' %}is-active{% endif %}" href="{% url 'pedidos:metricas_acesso' %}">
             <span class="ops-nav-icon" aria-hidden="true">
@@ -80,5 +86,13 @@
             </span>
             <span>Ajustes</span>
         </a>
+        <div class="ops-sidebar-session">
+            <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
+            <form method="post" action="/admin/logout/">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'admin:login' %}">
+                <button type="submit" class="ops-logout">Sair</button>
+            </form>
+        </div>
     </div>
 </aside>

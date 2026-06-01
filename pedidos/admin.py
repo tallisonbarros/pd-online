@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import AccessEvent, Adicional, Bebida, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, Pedido, Prato, ResumoOperacionalDia
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, Prato, ResumoOperacionalDia, TerminalCaixa
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -68,6 +68,7 @@ class PedidoAdmin(admin.ModelAdmin):
         "cidade",
         "rota_google_maps",
         "forma_pagamento",
+        "terminal",
         "enviar_talheres",
         "canal",
         "status",
@@ -76,7 +77,7 @@ class PedidoAdmin(admin.ModelAdmin):
         "criado_em",
     )
     list_editable = ("status",)
-    list_filter = ("status", "canal", "forma_pagamento", "enviar_talheres", "criado_em")
+    list_filter = ("status", "canal", "forma_pagamento", "terminal", "enviar_talheres", "criado_em")
     search_fields = ("numero", "nome_cliente", "telefone", "rua", "numero_endereco", "bairro", "cidade", "endereco")
     readonly_fields = ("numero", "total", "criado_em", "rota_google_maps", "total_sem_desconto")
     list_per_page = 25
@@ -108,6 +109,7 @@ class PedidoAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "forma_pagamento",
+                    "terminal",
                     "enviar_talheres",
                     "observacao_geral",
                     "status",
@@ -141,6 +143,50 @@ class ResumoOperacionalDiaAdmin(admin.ModelAdmin):
     search_fields = ("data", "observacao")
     readonly_fields = ("criado_em", "atualizado_em")
     list_per_page = 31
+
+
+@admin.register(TerminalCaixa)
+class TerminalCaixaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "codigo", "ativo", "ordem", "atualizado_em")
+    list_editable = ("ativo", "ordem")
+    search_fields = ("nome", "codigo")
+
+
+@admin.register(CategoriaMovimentacaoCaixa)
+class CategoriaMovimentacaoCaixaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "tipo_padrao", "ativo", "criado_em")
+    list_editable = ("tipo_padrao", "ativo")
+    search_fields = ("nome",)
+
+
+@admin.register(MovimentacaoCaixa)
+class MovimentacaoCaixaAdmin(admin.ModelAdmin):
+    list_display = ("data_movimento", "terminal", "tipo", "nome", "categoria", "valor", "excluido_em")
+    list_filter = ("terminal", "tipo", "categoria", "data_movimento", "excluido_em")
+    search_fields = ("nome", "descricao", "categoria__nome")
+    readonly_fields = ("criado_em", "atualizado_em", "excluido_em")
+
+
+@admin.register(BancoConta)
+class BancoContaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "codigo", "ativo", "ordem", "atualizado_em")
+    list_editable = ("ativo", "ordem")
+    search_fields = ("nome", "codigo")
+
+
+@admin.register(CategoriaMovimentacaoConta)
+class CategoriaMovimentacaoContaAdmin(admin.ModelAdmin):
+    list_display = ("nome", "tipo_padrao", "ativo", "criado_em")
+    list_editable = ("tipo_padrao", "ativo")
+    search_fields = ("nome",)
+
+
+@admin.register(MovimentacaoConta)
+class MovimentacaoContaAdmin(admin.ModelAdmin):
+    list_display = ("data_movimento", "banco", "tipo", "nome", "categoria", "valor", "excluido_em")
+    list_filter = ("banco", "tipo", "categoria", "data_movimento", "excluido_em")
+    search_fields = ("nome", "descricao", "categoria__nome")
+    readonly_fields = ("criado_em", "atualizado_em", "excluido_em")
 
 
 @admin.register(ItemPedido)

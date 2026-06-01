@@ -1,0 +1,21 @@
+<section class="contabil-tabs" aria-label="Guias do contabil">
+    <a class="contabil-tab {% if contabil_aba == 'caixa' %}is-active{% endif %}" {% if contabil_aba == 'caixa' %}aria-current="page"{% endif %} href="{% url 'pedidos:contabil_caixa' %}?data={{ data_selecionada|date:'Y-m-d' }}">Caixa</a>
+    <a class="contabil-tab {% if contabil_aba == 'ifood' %}is-active{% endif %}" {% if contabil_aba == 'ifood' %}aria-current="page"{% endif %} href="{% url 'pedidos:contabil_ifood' %}?data={{ data_selecionada|date:'Y-m-d' }}">Ifood</a>
+    <a class="contabil-tab {% if contabil_aba == 'conta' %}is-active{% endif %}" {% if contabil_aba == 'conta' %}aria-current="page"{% endif %} href="{% url 'pedidos:contabil_conta' %}?data={{ data_selecionada|date:'Y-m-d' }}">Conta</a>
+    {% if contabil_summary_items %}
+        <div class="contabil-tab-summary" aria-label="Resumo do dia">
+            {% for item in contabil_summary_items %}
+                <span class="contabil-tab-summary-item">
+                    <small>{{ item.label }}</small>
+                    <b>{{ item.value }}</b>
+                </span>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if contabil_action_modal %}
+        <div class="contabil-tab-actions" aria-label="Acoes de movimentacao">
+            <button type="button" class="contabil-icon-action contabil-icon-action--entrada" data-open-management-modal="{{ contabil_action_modal }}" data-movement-type="entrada" aria-label="Nova entrada">+</button>
+            <button type="button" class="contabil-icon-action contabil-icon-action--saida" data-open-management-modal="{{ contabil_action_modal }}" data-movement-type="saida" aria-label="Nova saida">-</button>
+        </div>
+    {% endif %}
+</section>

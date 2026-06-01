@@ -49,12 +49,6 @@
             </div>
             <div class="ops-session-actions">
                 <button type="button" class="ops-logout dashboard-production-trigger" data-open-management-modal="#dashboard-production-modal">Producao</button>
-                <span class="ops-user-chip">Usuario: {{ request.user.username }}</span>
-                <form method="post" action="/admin/logout/">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{% url 'admin:login' %}">
-                    <button type="submit" class="ops-logout">Sair</button>
-                </form>
             </div>
         </header>
 
@@ -66,7 +60,6 @@
             </div>
             <article class="ops-card dashboard-balance-card">
                 <p class="ops-kicker">{{ dashboard.balanco.label }}</p>
-                <strong class="dashboard-balance-value" data-dashboard-balance="resultado">{{ dashboard.balanco.value }}</strong>
                 <div class="dashboard-balance-details">
                     {% for detail in dashboard.balanco.details %}
                         <span>

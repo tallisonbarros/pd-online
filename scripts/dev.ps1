@@ -62,6 +62,9 @@ function Stop-PortOwner {
 Stop-ProjectRunservers -ManagePyPath $managePy -SelfPid $currentPid
 Stop-PortOwner -LocalPort $Port -SelfPid $currentPid
 
+Write-Host "Aplicando migracoes do banco de dados."
+& $pythonExe $managePy "migrate"
+
 $runserverArgs = @($managePy, "runserver", $bindAddress, "--noreload")
 Write-Host "Subindo servidor sem autoreload para evitar multiplas instancias no Windows."
 
