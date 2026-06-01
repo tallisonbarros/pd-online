@@ -1311,8 +1311,18 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertFalse(payload["has_more"])
         self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
         self.assertIn("atualizado_em", payload["pedidos"][0])
+        self.assertNotIn("itens", payload["pedidos"][0])
         self.api_key.refresh_from_db()
         self.assertIsNotNone(self.api_key.ultimo_uso_em)
+
+    def test_authenticated_list_supports_explicit_full_fields(self):
+        response = self.client.get("/api/pedidos/?fields=full", HTTP_AUTHORIZATION=f"Bearer {self.raw_api_key}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["limit"], 10)
+        self.assertEqual(payload["pedidos"][0]["id"], self.pedido.id)
+        self.assertIn("itens", payload["pedidos"][0])
 
     def test_authenticated_list_supports_pagination_and_summary_fields(self):
         second = Pedido.objects.create(

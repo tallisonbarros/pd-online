@@ -161,7 +161,7 @@ Authorization: Bearer SUA_CHAVE
 
 Retorna os pedidos ordenados do mais recente para o mais antigo.
 
-Se nenhum parâmetro de paginação for enviado, a API retorna os 50 pedidos mais recentes por padrão. Para integrações em polling, recomenda-se usar `limit`, `offset`, `fields=summary` e/ou `updated_after`.
+Se nenhum parâmetro de paginação for enviado, a API retorna os 50 pedidos mais recentes em formato resumido por padrão. Para integrações em polling, recomenda-se usar `limit`, `offset`, `fields=summary` e/ou `updated_after`.
 
 Resposta:
 
@@ -356,7 +356,7 @@ Os filtros são opcionais e podem ser combinados.
 | `telefone` | `/api/pedidos/?telefone=64999999999` | Busca parcial no telefone do cliente. |
 | `limit` | `/api/pedidos/?limit=50` | Limita a quantidade retornada. Valor padrão: `50`. Máximo: `100`. |
 | `offset` | `/api/pedidos/?limit=50&offset=50` | Deslocamento para paginação. |
-| `fields` | `/api/pedidos/?fields=summary` | Quando `summary`, retorna somente campos resumidos do pedido, sem itens aninhados. |
+| `fields` | `/api/pedidos/?fields=full` | Por padrão, a listagem retorna campos resumidos, sem itens aninhados. Use `full` somente quando precisar dos itens na listagem; nesse modo o padrão é `10` e o máximo é `25`. |
 
 Exemplo combinando filtros:
 

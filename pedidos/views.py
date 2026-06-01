@@ -1985,8 +1985,10 @@ def api_meus_pedidos(request):
     return JsonResponse({"pedidos": [_pedido_public_payload(pedido) for pedido in pedidos]})
 
 
-def _pedidos_api_queryset(params):
-    pedidos = Pedido.objects.select_related("cupom").prefetch_related("itens").all()
+def _pedidos_api_queryset(params, *, include_items=False):
+    pedidos = Pedido.objects.select_related("cupom").all()
+    if include_items:
+        pedidos = pedidos.prefetch_related("itens")
 
     status = _safe_text(params.get("status"))
     if status:
@@ -2035,6 +2037,8 @@ def _safe_api_limit(params, default=None, max_limit=100):
 
 PEDIDOS_API_DEFAULT_LIMIT = 50
 PEDIDOS_API_MAX_LIMIT = 100
+PEDIDOS_API_FULL_DEFAULT_LIMIT = 10
+PEDIDOS_API_FULL_MAX_LIMIT = 25
 
 
 def _safe_api_offset(params):
@@ -2109,9 +2113,15 @@ def api_pedidos(request):
     if limited:
         return limited
 
-    pedidos = _pedidos_api_queryset(request.GET)
+    fields = _safe_text(request.GET.get("fields")).lower()
+    include_items = fields in {"full", "complete", "detalhado"}
+    pedidos = _pedidos_api_queryset(request.GET, include_items=include_items)
     count = pedidos.count()
-    limit = _safe_api_limit(request.GET, default=PEDIDOS_API_DEFAULT_LIMIT, max_limit=PEDIDOS_API_MAX_LIMIT)
+    limit = _safe_api_limit(
+        request.GET,
+        default=PEDIDOS_API_FULL_DEFAULT_LIMIT if include_items else PEDIDOS_API_DEFAULT_LIMIT,
+        max_limit=PEDIDOS_API_FULL_MAX_LIMIT if include_items else PEDIDOS_API_MAX_LIMIT,
+    )
     offset = _safe_api_offset(request.GET)
     has_more = False
     if limit is not None:
@@ -2120,7 +2130,7 @@ def api_pedidos(request):
         pedidos_payload = page[:limit]
     else:
         pedidos_payload = pedidos
-    serializer = serialize_pedido_summary_api if _safe_text(request.GET.get("fields")).lower() == "summary" else serialize_pedido_api
+    serializer = serialize_pedido_api if include_items else serialize_pedido_summary_api
     return JsonResponse(
         {
             "count": count,
