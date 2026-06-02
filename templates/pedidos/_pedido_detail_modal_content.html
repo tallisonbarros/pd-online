@@ -296,6 +296,17 @@
         </dl>
         <a class="ped-btn ped-btn-soft ped-modal-route {% if pedido.tipo_coleta == 'retirada' %}hidden{% endif %}" href="{{ pedido.google_maps_route_url }}" target="_blank" rel="noopener noreferrer" data-modal-route>Abrir rota</a>
         {% if can_edit_payment %}
+            <form class="ped-free-delivery-form {% if pedido.tipo_coleta == 'retirada' %}hidden{% endif %}" method="post" action="{% url 'pedidos:atualizar_dados_pedido' pedido.id %}" data-free-delivery-form>
+                {% csrf_token %}
+                <input type="hidden" name="field" value="frete_gratis">
+                <label class="delivery-free-toggle">
+                    <input type="checkbox" name="value" value="1" {% if pedido.frete_gratis %}checked{% endif %} data-free-delivery-checkbox>
+                    <span>Entrega gratuita</span>
+                </label>
+                <span class="ped-autosave-status" data-free-delivery-status aria-live="polite"></span>
+            </form>
+        {% endif %}
+        {% if can_edit_payment %}
             <template data-delivery-editor-template>
                 <section class="profile-selector-panel" data-delivery-selector-panel>
                     <div class="profile-selector-head">
@@ -490,8 +501,8 @@
         <div>
             <dt>Entrega</dt>
             <dd data-modal-audit="frete">
-                <span data-modal-frete>R$ {{ pedido.valor_frete|floatformat:2 }}</span>
-                <small data-modal-distancia>{{ pedido.distancia_km|floatformat:2 }} km</small>
+                <span data-modal-frete>{% if pedido.frete_gratis %}Gratis{% else %}R$ {{ pedido.valor_frete|floatformat:2 }}{% endif %}</span>
+                <small data-modal-distancia>{% if pedido.frete_gratis %}Entrega gratis - distancia {{ pedido.distancia_km|floatformat:2 }} km{% else %}{{ pedido.distancia_km|floatformat:2 }} km{% endif %}</small>
             </dd>
         </div>
         <div><dt>Total</dt><dd data-modal-audit="total">R$ {{ pedido.total|floatformat:2 }}</dd></div>

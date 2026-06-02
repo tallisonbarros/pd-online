@@ -482,9 +482,35 @@ def conta_diario_context(data):
         agregados_anteriores["saidas"] or Decimal("0.00")
     )
     saldo_atual = saldo_anterior + entradas_dia - saidas_dia
+    bancos = list(BancoConta.objects.filter(ativo=True).order_by("ordem", "nome"))
+    agregados_por_banco = {
+        row["banco_id"]: row
+        for row in movimentacoes_conta_ativas()
+        .filter(data_movimento__lte=data, banco_id__in=[banco.id for banco in bancos])
+        .values("banco_id")
+        .annotate(
+            entradas=Sum("valor", filter=Q(tipo=MovimentacaoConta.Tipo.ENTRADA)),
+            saidas=Sum("valor", filter=Q(tipo=MovimentacaoConta.Tipo.SAIDA)),
+        )
+    }
+    saldos_por_banco = []
+    for banco in bancos:
+        agregados = agregados_por_banco.get(banco.id, {})
+        saldo_banco = (agregados.get("entradas") or Decimal("0.00")) - (
+            agregados.get("saidas") or Decimal("0.00")
+        )
+        saldos_por_banco.append(
+            {
+                "id": banco.id,
+                "nome": banco.nome,
+                "saldo": saldo_banco.quantize(Decimal("0.01")),
+                "saldo_label": money_label(saldo_banco),
+            }
+        )
 
     return {
         "movimentacoes": list(movimentos),
+        "saldos_por_banco": saldos_por_banco,
         "saldo_anterior": saldo_anterior.quantize(Decimal("0.01")),
         "entradas_dia": entradas_dia.quantize(Decimal("0.01")),
         "saidas_dia": saidas_dia.quantize(Decimal("0.01")),

@@ -43,11 +43,11 @@
                     </div>
                     <div class="ped-detail-kpi">
                         <span>Entrega salva</span>
-                        <strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong>
+                        <strong>{% if pedido.frete_gratis %}Gratis{% else %}R$ {{ pedido.valor_frete|floatformat:2 }}{% endif %}</strong>
                     </div>
                     <div class="ped-detail-kpi">
                         <span>Distância calculada</span>
-                        <strong>{{ pedido.distancia_km|floatformat:2 }} km</strong>
+                        <strong>{% if pedido.frete_gratis %}Entrega gratis - distancia {{ pedido.distancia_km|floatformat:2 }} km{% else %}{{ pedido.distancia_km|floatformat:2 }} km{% endif %}</strong>
                     </div>
                 </div>
             </article>
@@ -185,7 +185,7 @@
                     </div>
                     <div>
                         <dt>Entrega salva no pedido</dt>
-                        <dd>R$ {{ pedido.valor_frete|floatformat:2 }}</dd>
+                        <dd>{% if pedido.frete_gratis %}Gratis{% else %}R$ {{ pedido.valor_frete|floatformat:2 }}{% endif %}</dd>
                     </div>
                     <div>
                         <dt>Entrega esperada pela regra atual</dt>

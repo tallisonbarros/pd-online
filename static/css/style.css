@@ -6842,9 +6842,31 @@ fieldset.field {
 }
 
 .contabil-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
     min-height: 72px;
     padding: 16px 20px;
     border-bottom: 1px solid rgba(216, 193, 183, 0.58);
+}
+
+.contabil-card-account-summary {
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 0;
+    max-width: min(760px, 66%);
+    margin-left: auto;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+}
+
+.contabil-card-account-summary .contabil-tab-summary-item {
+    flex: 0 0 auto;
+    min-width: 118px;
+    min-height: 32px;
+    border-left: 1px solid rgba(216, 193, 183, 0.70);
 }
 
 .contabil-card-head h3 {
@@ -7042,6 +7064,17 @@ fieldset.field {
 }
 
 @media (max-width: 760px) {
+    .contabil-card-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .contabil-card-account-summary {
+        justify-content: flex-start;
+        max-width: none;
+        margin-left: 0;
+    }
+
     .contabil-modal-secondary-actions {
         align-items: stretch;
         flex-direction: column;
@@ -11858,6 +11891,46 @@ fieldset.field {
 }
 .ped-delivery-modal-grid .is-wide {
     grid-column: 1 / -1;
+}
+.ped-free-delivery-form {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+.ped-free-delivery-form.hidden {
+    display: none;
+}
+.delivery-free-toggle {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 10px;
+    row-gap: 2px;
+    align-items: center;
+    border: 1px solid #dfd1c8;
+    border-radius: 14px;
+    background: #fffdfa;
+    padding: 10px 12px;
+    color: #221311;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.delivery-free-toggle input {
+    width: 18px;
+    min-height: 18px;
+    padding: 0;
+    accent-color: #1f8f53;
+}
+.delivery-free-toggle span {
+    font-size: 14px;
+    font-weight: 900;
+}
+.delivery-free-toggle small {
+    grid-column: 2;
+    color: #7a6257;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
 }
 .ped-modal-note {
     margin-top: 12px;

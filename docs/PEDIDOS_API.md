@@ -178,82 +178,24 @@ Resposta:
       "numero": 2240,
       "nome_cliente": "Cliente API",
       "telefone": "64999999999",
-      "cliente_id": null,
-      "rua": "Rua API",
-      "numero_endereco": "123",
-      "bairro": "Centro",
-      "cidade": "Rio Verde",
-      "estado": "GO",
-      "endereco_formatado": "Rua API, 123, Centro, Rio Verde - GO",
-      "latitude": "-17.7923000",
-      "longitude": "-50.9192000",
-      "endereco": "Rua API, 123 - Centro, Rio Verde - GO",
-      "complemento": "Casa",
-      "lote_quadra": "Qd. 1 Lt. 2",
-      "ponto_referencia": "Portao azul",
       "tipo_coleta": "entrega",
-      "tipo_coleta_label": "Entrega",
-      "icone_pedido": "img/Icones_pedidos/1.svg",
-      "icone_pedido_numero": 1,
       "forma_pagamento": "pix",
-      "forma_pagamento_label": "Online Pix",
-      "enviar_talheres": false,
-      "observacao_geral": "Sem cebola",
+      "canal": "site",
       "status": "em_preparo",
       "status_label": "Em preparo",
-      "distancia_km": "4.20",
-      "valor_frete": "10.00",
-      "total_sem_desconto": "45.00",
-      "promocao_descricao": "Promocao teste",
-      "promocao_desconto": "5.00",
-      "cupom_id": 1,
-      "cupom_codigo": "API10",
-      "cupom_desconto": "10.00",
+      "status_label_contextual": "Em preparo",
+      "pagamento_recebido": false,
+      "pagamento_recebido_em": null,
       "total": "30.00",
       "public_token": "token-publico-do-pedido",
       "criado_em": "2026-05-15T12:00:00Z",
-      "atualizado_em": "2026-05-15T12:06:00Z",
-      "producao_iniciada_em": "2026-05-15T12:05:00Z",
-      "entregador_solicitado": true,
-      "status_label_contextual": "Em preparo",
-      "has_coordinates": true,
-      "google_maps_route_url": "https://www.google.com/maps/dir/?api=1&origin=...&destination=...&travelmode=driving",
-      "icone_pedido_url": "/static/img/Icones_pedidos/1.svg",
-      "is_retirada": false,
-      "stage_labels": [
-        {
-          "status": "novo",
-          "number": "1",
-          "label": "Pedido recebido"
-        }
-      ],
-      "cupom": {
-        "id": 1,
-        "codigo": "API10",
-        "descricao": "Desconto API",
-        "tipo_desconto": "valor_fixo",
-        "valor": "10.00",
-        "valor_minimo_pedido": "30.00",
-        "ativo": true
-      },
-      "itens": [
-        {
-          "id": 1,
-          "prato_id": 10,
-          "bebida_id": null,
-          "adicional_id": null,
-          "nome_prato_snapshot": "Marmita API",
-          "variacao_nome_snapshot": "Grande",
-          "preco_snapshot": "35.00",
-          "quantidade": 1,
-          "observacao": "Arroz extra",
-          "subtotal": "35.00"
-        }
-      ]
+      "atualizado_em": "2026-05-15T12:06:00Z"
     }
   ]
 }
 ```
+
+Por padrão, a listagem não inclui endereço completo, cupom, rota de mapa, etapas nem `itens`. Para buscar esses dados, use `GET /api/pedidos/<id>/`, `GET /api/pedidos/token/<public_token>/` ou `GET /api/pedidos/?fields=full` com paginação curta.
 
 Exemplo de consulta leve para sincronização:
 
@@ -298,7 +240,7 @@ GET /api/pedidos/<id>/
 Authorization: Bearer SUA_CHAVE
 ```
 
-Retorna um pedido específico com os mesmos campos da listagem.
+Retorna um pedido específico com os campos completos, incluindo endereço, cupom, rota de mapa, etapas e `itens`.
 
 Resposta:
 
@@ -397,6 +339,7 @@ GET /api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999
 | `status_label` | string | Label padrão do status. |
 | `distancia_km` | string | Decimal serializado como string. |
 | `valor_frete` | string | Decimal serializado como string. |
+| `frete_gratis` | boolean | Indica cortesia operacional de entrega. Quando `true`, `valor_frete` fica `0.00` e `distancia_km` continua informando a rota calculada. |
 | `total_sem_desconto` | string | Decimal serializado como string. |
 | `promocao_descricao` | string | Descrição da promoção aplicada. |
 | `promocao_desconto` | string | Decimal serializado como string. |
@@ -423,7 +366,7 @@ GET /api/pedidos/?status=em_preparo&tipo_coleta=entrega&telefone=9999
 
 ## Campos dos Itens
 
-Cada pedido inclui `itens` aninhados.
+Pedidos retornados pelos endpoints de detalhe incluem `itens` aninhados. Na listagem `GET /api/pedidos/`, os itens só aparecem quando `fields=full` é informado.
 
 | Campo | Tipo JSON | Observação |
 | --- | --- | --- |

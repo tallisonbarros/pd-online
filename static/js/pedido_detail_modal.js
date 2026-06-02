@@ -773,13 +773,17 @@
             route.href = pedido.google_maps_route_url || "#";
             route.classList.toggle("hidden", pedido.tipo_coleta === "retirada");
         }
+        const freeDeliveryForm = content?.querySelector("[data-free-delivery-form]");
+        if (freeDeliveryForm) freeDeliveryForm.classList.toggle("hidden", pedido.tipo_coleta === "retirada");
+        const freeDeliveryCheckbox = content?.querySelector("[data-free-delivery-checkbox]");
+        if (freeDeliveryCheckbox) freeDeliveryCheckbox.checked = Boolean(pedido.frete_gratis);
 
         const subtotal = content?.querySelector("[data-modal-audit='subtotal']");
         if (subtotal) subtotal.textContent = pedido.itens_subtotal || "";
         const frete = content?.querySelector("[data-modal-frete]");
-        if (frete) frete.textContent = pedido.valor_frete || "";
+        if (frete) frete.textContent = pedido.valor_frete_label || pedido.valor_frete || "";
         const distancia = content?.querySelector("[data-modal-distancia]");
-        if (distancia) distancia.textContent = `${pedido.distancia_km || "0,00"} km`;
+        if (distancia) distancia.textContent = pedido.distancia_label || `${pedido.distancia_km || "0,00"} km`;
         const auditTotal = content?.querySelector("[data-modal-audit='total']");
         if (auditTotal) auditTotal.textContent = pedido.total || "";
 
@@ -948,7 +952,7 @@
 
     async function submitAjaxForm(form, beforeSubmit, options = {}) {
         const button = form.querySelector('button[type="submit"]');
-        const statusNode = form.querySelector("[data-inline-autosave-status], [data-editor-autosave-status], [data-coupon-autosave-status], [data-delivery-autosave-status]");
+        const statusNode = form.querySelector("[data-inline-autosave-status], [data-editor-autosave-status], [data-coupon-autosave-status], [data-delivery-autosave-status], [data-free-delivery-status]");
         if (typeof beforeSubmit === "function") beforeSubmit();
         if (button) button.disabled = true;
         if (statusNode) statusNode.textContent = "Salvando...";
@@ -1104,6 +1108,11 @@
             submitInlineForm(inlineForm);
             return;
         }
+        const freeDeliveryForm = event.target.closest("[data-free-delivery-form]");
+        if (freeDeliveryForm && event.target.matches("[data-free-delivery-checkbox]")) {
+            submitAjaxForm(freeDeliveryForm, null, { syncEditor: false });
+            return;
+        }
     });
 
     document.addEventListener("blur", (event) => {
@@ -1227,6 +1236,12 @@
         if (couponForm) {
             event.preventDefault();
             submitAjaxForm(couponForm);
+            return;
+        }
+        const freeDeliveryForm = event.target.closest("[data-free-delivery-form]");
+        if (freeDeliveryForm) {
+            event.preventDefault();
+            submitAjaxForm(freeDeliveryForm, null, { syncEditor: false });
             return;
         }
         const printQueueForm = event.target.closest("[data-print-queue-form]");

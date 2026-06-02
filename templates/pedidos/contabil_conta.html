@@ -53,6 +53,16 @@
                     <p class="ops-kicker">Movimentacoes</p>
                     <h3>Lista do dia</h3>
                 </div>
+                {% if conta.saldos_por_banco %}
+                    <div class="contabil-card-account-summary" aria-label="Saldo final por conta">
+                        {% for banco in conta.saldos_por_banco %}
+                            <span class="contabil-tab-summary-item">
+                                <small>{{ banco.nome }}</small>
+                                <b>{{ banco.saldo_label }}</b>
+                            </span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </header>
 
             <div class="contabil-ledger-table">

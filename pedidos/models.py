@@ -367,6 +367,7 @@ class Pedido(models.Model):
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOVO)
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     valor_frete = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    frete_gratis = models.BooleanField(default=False)
     total_sem_desconto = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     promocao_descricao = models.CharField(max_length=120, blank=True)
     promocao_desconto = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))

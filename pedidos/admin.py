@@ -73,6 +73,7 @@ class PedidoAdmin(admin.ModelAdmin):
         "canal",
         "status",
         "valor_frete",
+        "frete_gratis",
         "total",
         "criado_em",
     )
@@ -115,6 +116,7 @@ class PedidoAdmin(admin.ModelAdmin):
                     "status",
                     "distancia_km",
                     "valor_frete",
+                    "frete_gratis",
                     "total_sem_desconto",
                     "promocao_descricao",
                     "promocao_desconto",

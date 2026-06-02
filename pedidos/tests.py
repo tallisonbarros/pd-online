@@ -578,6 +578,51 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, "<small>Conta atual</small>", html=True)
         self.assertContains(response, "<b>R$ 80,75</b>", html=True)
 
+    def test_contabil_conta_displays_final_daily_balance_by_bank(self):
+        self.client.force_login(self.diretor_user)
+        banco_pix = BancoConta.objects.get(codigo="banco-01")
+        banco_cartao = BancoConta.objects.create(nome="Banco Cartao", codigo="banco-cartao", ordem=20)
+        categoria = CategoriaMovimentacaoConta.objects.create(
+            nome="Ajustes",
+            tipo_padrao=CategoriaMovimentacaoConta.TipoPadrao.AMBOS,
+        )
+        MovimentacaoConta.objects.create(
+            banco=banco_pix,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 19),
+            tipo=MovimentacaoConta.Tipo.ENTRADA,
+            nome="Saldo anterior pix",
+            valor=Decimal("100.00"),
+            criado_por=self.diretor_user,
+        )
+        MovimentacaoConta.objects.create(
+            banco=banco_pix,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 20),
+            tipo=MovimentacaoConta.Tipo.SAIDA,
+            nome="Saida pix",
+            valor=Decimal("25.50"),
+            criado_por=self.diretor_user,
+        )
+        MovimentacaoConta.objects.create(
+            banco=banco_cartao,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 20),
+            tipo=MovimentacaoConta.Tipo.ENTRADA,
+            nome="Entrada cartao",
+            valor=Decimal("42.30"),
+            criado_por=self.diretor_user,
+        )
+
+        response = self.client.get("/controle/contabil/conta/?data=2026-05-20")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'aria-label="Saldo final por conta"')
+        self.assertContains(response, "<small>Banco 01</small>", html=True)
+        self.assertContains(response, "<b>R$ 74,50</b>", html=True)
+        self.assertContains(response, "<small>Banco Cartao</small>", html=True)
+        self.assertContains(response, "<b>R$ 42,30</b>", html=True)
+
     def test_card_delivery_order_creates_linked_account_movement(self):
         self.client.force_login(self.diretor_user)
         banco_cartao = BancoConta.objects.create(nome="Banco Cartao", codigo="banco-cartao", ordem=20)
@@ -1400,6 +1445,7 @@ class PedidosReadOnlyApiTests(TestCase):
             "forma_pagamento",
             "status",
             "valor_frete",
+            "frete_gratis",
             "total",
             "public_token",
             "criado_em",
@@ -1414,6 +1460,7 @@ class PedidosReadOnlyApiTests(TestCase):
         self.assertEqual(pedido["nome_cliente"], "Cliente API")
         self.assertIsInstance(pedido["icone_pedido_numero"], int)
         self.assertEqual(pedido["valor_frete"], "10.00")
+        self.assertFalse(pedido["frete_gratis"])
         self.assertEqual(pedido["total"], "30.00")
         self.assertEqual(pedido["cupom"]["id"], self.cupom.id)
         self.assertEqual(pedido["cupom"]["codigo"], "API10")
@@ -2243,6 +2290,7 @@ class PedidoDetalheAdminTests(TestCase):
             forma_pagamento=Pedido.FormaPagamento.PIX,
             status=Pedido.Status.SAIU_ENTREGA,
             valor_frete=Decimal("12.00"),
+            frete_gratis=True,
             total=Decimal("35.00"),
         )
         ItemPedido.objects.create(
@@ -2263,6 +2311,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(pedido.endereco, "Retirada no local")
         self.assertEqual(pedido.valor_frete, Decimal("0.00"))
         self.assertEqual(pedido.distancia_km, Decimal("0.00"))
+        self.assertFalse(pedido.frete_gratis)
         self.assertIsNone(pedido.latitude)
         self.assertIsNone(pedido.longitude)
         self.assertEqual(pedido.status, Pedido.Status.FINALIZADO)
@@ -2298,6 +2347,180 @@ class PedidoDetalheAdminTests(TestCase):
         pedido.refresh_from_db()
         self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.ENTREGA)
         self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro, Rio Verde - GO")
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 4200.0))
+    def test_manager_can_mark_delivery_as_free_preserving_distance(self, _mock_route):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        config = ConfiguracaoEntrega.get_solo()
+        config.origem_latitude = Decimal("-17.7923000")
+        config.origem_longitude = Decimal("-50.9192000")
+        config.save()
+        FaixaFrete.objects.create(
+            tipo=FaixaFrete.Tipo.ATE,
+            km_limite=Decimal("5.00"),
+            valor=Decimal("10.00"),
+            ordem=10,
+            ativo=True,
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("10.00"),
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Prato",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entrega/",
+            {
+                "rua": "Rua Nova",
+                "numero": "55",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "latitude": "-17.7707268",
+                "longitude": "-50.9003217",
+                "endereco_formatado": "Rua Nova, 55 - Centro, Rio Verde - GO",
+                "frete_gratis": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        payload = response.json()["pedido"]
+        self.assertTrue(payload["frete_gratis"])
+        self.assertEqual(payload["valor_frete_label"], "Gratis")
+        self.assertEqual(payload["distancia_label"], "Entrega gratis - distancia 4,20 km")
+        self.assertTrue(response.json()["frete_recalculado"])
+        self.assertTrue(pedido.frete_gratis)
+        self.assertEqual(pedido.distancia_km, Decimal("4.20"))
+        self.assertEqual(pedido.valor_frete, Decimal("0.00"))
+        self.assertEqual(pedido.total, Decimal("25.00"))
+
+        detail_response = self.client.get(f"/controle/pedidos/{pedido.id}/")
+        self.assertContains(detail_response, "Gratis")
+        self.assertContains(detail_response, "Entrega gratis - distancia 4,20 km")
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 4200.0))
+    def test_manager_can_disable_free_delivery_and_recalculate_shipping(self, _mock_route):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        config = ConfiguracaoEntrega.get_solo()
+        config.origem_latitude = Decimal("-17.7923000")
+        config.origem_longitude = Decimal("-50.9192000")
+        config.save()
+        FaixaFrete.objects.create(
+            tipo=FaixaFrete.Tipo.ATE,
+            km_limite=Decimal("5.00"),
+            valor=Decimal("10.00"),
+            ordem=10,
+            ativo=True,
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            distancia_km=Decimal("4.20"),
+            valor_frete=Decimal("0.00"),
+            frete_gratis=True,
+            total=Decimal("25.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Prato",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entrega/",
+            {
+                "rua": "Rua Nova",
+                "numero": "55",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "latitude": "-17.7707268",
+                "longitude": "-50.9003217",
+                "endereco_formatado": "Rua Nova, 55 - Centro, Rio Verde - GO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        payload = response.json()["pedido"]
+        self.assertFalse(payload["frete_gratis"])
+        self.assertEqual(payload["valor_frete_label"], "R$ 10,00")
+        self.assertEqual(payload["distancia_label"], "4,20 km")
+        self.assertFalse(pedido.frete_gratis)
+        self.assertEqual(pedido.distancia_km, Decimal("4.20"))
+        self.assertEqual(pedido.valor_frete, Decimal("10.00"))
+        self.assertEqual(pedido.total, Decimal("35.00"))
+
+    def test_manager_can_toggle_free_delivery_from_order_details(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        FaixaFrete.objects.create(
+            tipo=FaixaFrete.Tipo.ATE,
+            km_limite=Decimal("5.00"),
+            valor=Decimal("10.00"),
+            ordem=10,
+            ativo=True,
+        )
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            distancia_km=Decimal("4.20"),
+            valor_frete=Decimal("10.00"),
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Prato",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "frete_gratis", "value": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertTrue(pedido.frete_gratis)
+        self.assertEqual(pedido.distancia_km, Decimal("4.20"))
+        self.assertEqual(pedido.valor_frete, Decimal("0.00"))
+        self.assertEqual(pedido.total, Decimal("25.00"))
+        self.assertEqual(response.json()["pedido"]["valor_frete_label"], "Gratis")
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "frete_gratis"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertFalse(pedido.frete_gratis)
+        self.assertEqual(pedido.valor_frete, Decimal("10.00"))
+        self.assertEqual(pedido.total, Decimal("35.00"))
 
     def test_manager_can_replace_order_items_and_recalculate_total(self):
         self.client.force_login(self.staff_user)
@@ -3202,6 +3425,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn("Referencia: Portao azul", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
         self.assertIn("Total: R$ 35,00", payload["confirmacao"])
+        self.assertIn("Total: R$ 35,00\nPagamento: AGUARDANDO PAGAMENTO", payload["confirmacao"])
         self.assertNotIn("Itens:", payload["confirmacao"])
         self.assertNotIn("pagamento foi confirmado", payload["confirmacao"])
         self.assertIn("Complemento: Casa 2", payload["entregador"])
@@ -3226,6 +3450,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertNotIn("Oi, Cliente!", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00", payload["confirmacao"])
+        self.assertIn("Total: R$ 50,00\nPagamento: AGUARDANDO PAGAMENTO", payload["confirmacao"])
         self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada.", payload["confirmacao"])
         self.assertNotIn("quando sair para entrega", payload["confirmacao"])
         self.assertNotIn("pagamento foi confirmado", payload["confirmacao"])
@@ -3271,6 +3496,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertIn("Entrega: R$ 5,00", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00", payload["confirmacao"])
+        self.assertIn("Total: R$ 50,00\nPagamento: AGUARDANDO PAGAMENTO", payload["confirmacao"])
         self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada.", payload["confirmacao"])
         self.assertNotIn("quando sair para entrega", payload["confirmacao"])
 
@@ -3295,6 +3521,7 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get(f"/controle/api/pedido/{pedido.id}/copias/").json()
         self.assertIn("*PAGO*", payload["cliente"])
         self.assertIn("*PAGO*", payload["entregador"])
+        self.assertIn("Total: R$ 35,00\nPagamento: PAGO", payload["confirmacao"])
         self.assertNotIn("*Pago em:*", payload["cliente"])
         self.assertNotIn("Pago em:", payload["entregador"])
 

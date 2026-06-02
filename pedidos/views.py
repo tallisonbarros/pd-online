@@ -322,7 +322,7 @@ def montar_mensagem_whatsapp(pedido):
         pix_chave = _safe_text(getattr(ConfiguracaoEntrega.get_solo(), "pix_chave", ""))
         if pix_chave:
             linhas.append(f"*Chave Pix:* {pix_chave}")
-    linhas.extend(["", f"*Entrega:* R$ {pedido.valor_frete:.2f}".replace(".", ",")])
+    linhas.extend(["", f"*Entrega:* {_pedido_frete_line_value(pedido)}"])
     if pedido.promocao_desconto and pedido.promocao_desconto > 0:
         descricao = pedido.promocao_descricao or "Promoção especial"
         linhas.append(f"*{descricao}:* - R$ {pedido.promocao_desconto:.2f}".replace(".", ","))
@@ -374,10 +374,33 @@ def _money_line_value(value):
     return f"R$ {value:.2f}".replace(".", ",")
 
 
+def _pedido_frete_line_value(pedido):
+    return "gratis" if pedido.frete_gratis else _money_line_value(pedido.valor_frete)
+
+
+def _pedido_frete_display_value(pedido):
+    return "Gratis" if pedido.frete_gratis else _money_line_value(pedido.valor_frete)
+
+
+def _pedido_distancia_display_value(pedido):
+    distancia = f"{pedido.distancia_km:.2f}".replace(".", ",")
+    if pedido.frete_gratis and pedido.tipo_coleta == Pedido.TipoColeta.ENTREGA:
+        return f"Entrega gratis - distancia {distancia} km"
+    return f"{distancia} km"
+
+
+def _post_bool(value):
+    return _safe_text(value).lower() in {"1", "true", "on", "sim", "yes"}
+
+
 def _pedido_confirmacao_status_final(pedido):
     if pedido.tipo_coleta == Pedido.TipoColeta.RETIRADA:
         return "Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada."
     return "Ja vamos iniciar o preparo e te avisamos por aqui quando sair para entrega."
+
+
+def _pedido_confirmacao_pagamento_line(pedido):
+    return f"Pagamento: {pedido.pagamento_copia_status}"
 
 
 def montar_mensagem_confirmacao_pedido(pedido):
@@ -409,9 +432,10 @@ def montar_mensagem_confirmacao_pedido(pedido):
                 "",
                 _pedido_confirmacao_entrega_line(pedido),
                 "",
-                f"Entrega: {_money_line_value(pedido.valor_frete)}",
+                f"Entrega: {_pedido_frete_line_value(pedido)}",
                 f"Pagamento: {pedido.get_forma_pagamento_display()}",
                 f"Total: {_money_line_value(pedido.total)}",
+                _pedido_confirmacao_pagamento_line(pedido),
                 "",
                 _pedido_confirmacao_status_final(pedido),
             ]
@@ -426,6 +450,7 @@ def montar_mensagem_confirmacao_pedido(pedido):
         "",
         f"Pagamento: {pedido.get_forma_pagamento_display()}",
         f"Total: {_money_line_value(pedido.total)}",
+        _pedido_confirmacao_pagamento_line(pedido),
         "",
         _pedido_confirmacao_status_final(pedido),
     ]
@@ -3694,7 +3719,7 @@ def _pedido_detail_context(request, pedido, *, is_new_order=False):
     itens_subtotal = pedido.itens.aggregate(total=Sum("subtotal")).get("total") or Decimal("0.00")
     frete_esperado, faixa_frete_atual = _calcular_frete_por_distancia(pedido.distancia_km)
     total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
-    diferenca_frete = pedido.valor_frete - frete_esperado
+    diferenca_frete = Decimal("0.00") if pedido.frete_gratis else pedido.valor_frete - frete_esperado
 
     context = {
         "active": "pedidos",
@@ -3723,7 +3748,7 @@ def _pedido_modal_payload(pedido):
     pedido = Pedido.objects.prefetch_related("itens").get(pk=pedido.pk)
     itens_subtotal = pedido.itens.aggregate(total=Sum("subtotal")).get("total") or Decimal("0.00")
     frete_esperado, _faixa_frete_atual = _calcular_frete_por_distancia(pedido.distancia_km)
-    diferenca_frete = pedido.valor_frete - frete_esperado
+    diferenca_frete = Decimal("0.00") if pedido.frete_gratis else pedido.valor_frete - frete_esperado
     total_recalculado = itens_subtotal + pedido.valor_frete - pedido.promocao_desconto - pedido.cupom_desconto
     return {
         "ok": True,
@@ -3753,7 +3778,10 @@ def _pedido_modal_payload(pedido):
             "endereco": pedido.endereco,
             "google_maps_route_url": pedido.google_maps_route_url,
             "valor_frete": f"R$ {pedido.valor_frete:.2f}".replace(".", ","),
+            "valor_frete_label": _pedido_frete_display_value(pedido),
+            "frete_gratis": pedido.frete_gratis,
             "distancia_km": f"{pedido.distancia_km:.2f}".replace(".", ","),
+            "distancia_label": _pedido_distancia_display_value(pedido),
             "itens_subtotal": f"R$ {itens_subtotal:.2f}".replace(".", ","),
             "total": f"R$ {pedido.total:.2f}".replace(".", ","),
             "cupom_codigo": pedido.cupom_codigo,
@@ -3865,6 +3893,7 @@ def _clone_order_as_draft(pedido):
         status=Pedido.Status.RASCUNHO,
         distancia_km=pedido.distancia_km,
         valor_frete=pedido.valor_frete,
+        frete_gratis=pedido.frete_gratis,
         cupom=pedido.cupom,
         cupom_codigo=pedido.cupom_codigo,
     )
@@ -4033,6 +4062,18 @@ def atualizar_dados_pedido(request, pedido_id):
         pedido.terminal = terminal
         pedido.save(update_fields=["terminal"])
         sync_movimentacao_caixa_pedido(pedido, request.user)
+    elif field == "frete_gratis":
+        frete_gratis = _post_bool(request.POST.get("value"))
+        pedido.frete_gratis = frete_gratis
+        if frete_gratis:
+            pedido.valor_frete = Decimal("0.00")
+        elif pedido.distancia_km > 0:
+            pedido.valor_frete, _ = _calcular_frete_por_distancia(pedido.distancia_km)
+        else:
+            pedido.valor_frete = Decimal("0.00")
+        pedido.save(update_fields=["frete_gratis", "valor_frete"])
+        recalculate_order_totals(pedido)
+        sync_movimentacao_caixa_pedido(pedido, request.user)
     elif field == "tipo_coleta":
         tipo_coleta = _safe_text(request.POST.get("value"))
         if tipo_coleta not in dict(Pedido.TipoColeta.choices):
@@ -4054,6 +4095,7 @@ def atualizar_dados_pedido(request, pedido_id):
         pedido.ponto_referencia = ""
         pedido.distancia_km = Decimal("0.00")
         pedido.valor_frete = Decimal("0.00")
+        pedido.frete_gratis = False
         if pedido.status == Pedido.Status.SAIU_ENTREGA:
             pedido.status = Pedido.Status.FINALIZADO
         pedido.save(update_fields=[
@@ -4072,6 +4114,7 @@ def atualizar_dados_pedido(request, pedido_id):
             "ponto_referencia",
             "distancia_km",
             "valor_frete",
+            "frete_gratis",
             "status",
         ])
         recalculate_order_totals(pedido)
@@ -4098,6 +4141,7 @@ def atualizar_entrega_pedido(request, pedido_id):
     cidade = _safe_text(request.POST.get("cidade")) or "Rio Verde"
     estado = _safe_text(request.POST.get("estado")) or "GO"
     endereco_formatado = _safe_text(request.POST.get("endereco_formatado"))
+    frete_gratis = _post_bool(request.POST.get("frete_gratis"))
     destination_result = _destination_result_from_values(request.POST)
     endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
     endereco = f"{endereco_base}, {cidade} - {estado}" if cidade and estado and endereco_base else endereco_base
@@ -4117,7 +4161,19 @@ def atualizar_entrega_pedido(request, pedido_id):
     if not destination_result:
         for field, value in common_fields.items():
             setattr(pedido, field, value)
-        pedido.save(update_fields=list(common_fields.keys()))
+        update_fields = list(common_fields.keys())
+        was_frete_gratis = pedido.frete_gratis
+        pedido.frete_gratis = frete_gratis
+        update_fields.append("frete_gratis")
+        if frete_gratis:
+            pedido.valor_frete = Decimal("0.00")
+            update_fields.append("valor_frete")
+        elif was_frete_gratis and pedido.distancia_km > 0:
+            pedido.valor_frete, _ = _calcular_frete_por_distancia(pedido.distancia_km)
+            update_fields.append("valor_frete")
+        pedido.save(update_fields=update_fields)
+        if "valor_frete" in update_fields:
+            recalculate_order_totals(pedido)
         sync_movimentacao_caixa_pedido(pedido, request.user)
         sync_customer_from_order(pedido)
         payload = _pedido_modal_payload(pedido)
@@ -4143,7 +4199,8 @@ def atualizar_entrega_pedido(request, pedido_id):
     pedido.latitude = _to_decimal(destination_result.get("lat"))
     pedido.longitude = _to_decimal(destination_result.get("lng"))
     pedido.distancia_km = distancia_km
-    pedido.valor_frete = valor_frete
+    pedido.frete_gratis = frete_gratis
+    pedido.valor_frete = Decimal("0.00") if frete_gratis else valor_frete
     pedido.save(update_fields=[
         "rua",
         "numero_endereco",
@@ -4160,6 +4217,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         "tipo_coleta",
         "distancia_km",
         "valor_frete",
+        "frete_gratis",
     ])
     recalculate_order_totals(pedido)
     sync_movimentacao_caixa_pedido(pedido, request.user)

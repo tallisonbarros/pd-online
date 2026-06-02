@@ -81,6 +81,7 @@ def serialize_pedido_api(pedido):
         "status_label": pedido.get_status_display(),
         "distancia_km": _decimal_payload(pedido.distancia_km),
         "valor_frete": _decimal_payload(pedido.valor_frete),
+        "frete_gratis": pedido.frete_gratis,
         "total_sem_desconto": _decimal_payload(pedido.total_sem_desconto),
         "promocao_descricao": pedido.promocao_descricao,
         "promocao_desconto": _decimal_payload(pedido.promocao_desconto),
