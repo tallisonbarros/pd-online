@@ -15,6 +15,9 @@
             </a>
             <span class="context-header-label">CARDÁPIO</span>
             <span class="context-header-slogan">Seu almoço, sem erro.</span>
+            {% if cardapio_closed_notice %}
+                <span class="context-header-closed-note">{{ cardapio_closed_notice.message }}</span>
+            {% endif %}
         </div>
         {% if cardapio_status_tag %}
             <div class="menu-status-tag" aria-label="{{ cardapio_status_tag.label }} {{ cardapio_status_tag.time }}">

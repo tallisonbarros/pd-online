@@ -4677,7 +4677,8 @@ class CardapioOperationalDayTests(TestCase):
         self.assertContains(response, "Prato Quarta")
         self.assertNotContains(response, "Prato Terca")
         self.assertContains(response, "Fechado")
-        self.assertContains(response, "Retorna")
+        self.assertNotContains(response, "retorna")
+        self.assertContains(response, '<span class="menu-status-label">QUARTA</span>', html=True)
 
     @patch("pedidos.views.timezone.localtime")
     def test_carrinho_closed_notice_mentions_closed_tomorrow(self, mock_localtime):

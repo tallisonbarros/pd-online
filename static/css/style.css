@@ -256,6 +256,17 @@ textarea {
     text-align: center;
 }
 
+.context-header-closed-note {
+    order: 4;
+    margin-top: 4px;
+    color: #56372f;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+    text-transform: uppercase;
+}
+
 .menu-status-tag {
     position: absolute;
     top: 34px;

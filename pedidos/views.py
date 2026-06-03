@@ -194,18 +194,6 @@ def _cardapio_status_tag(config, cardapio_context, now=None):
     weekday_label = WEEKDAY_LABELS.get(weekday_key, "HOJE")
     closed_dates = closed_dates_map(current_date, days=max(day_offset + 1, 2))
 
-    if current_date in closed_dates:
-        return {
-            "label": f"Fechado {relative_day_label(current_date, current_date)}",
-            "time": f"Retorna {relative_day_label(target_date, current_date)} {opening_range}",
-        }
-    tomorrow = current_date + timedelta(days=1)
-    if current_time >= fechamento and tomorrow in closed_dates and target_date > tomorrow:
-        return {
-            "label": f"Fechado {relative_day_label(tomorrow, current_date)}",
-            "time": f"Retorna {relative_day_label(target_date, current_date)} {opening_range}",
-        }
-
     if is_today and abertura <= current_time < fechamento:
         return {"label": "Aberto agora", "time": f"até {fechamento.strftime('%H:%M')}"}
     if is_today and current_time < abertura:
@@ -213,6 +201,33 @@ def _cardapio_status_tag(config, cardapio_context, now=None):
     if day_offset == 1:
         return {"label": "Amanhã", "time": opening_range}
     return {"label": weekday_label, "time": opening_range}
+
+
+def _cardapio_closed_notice(config, cardapio_context, now=None):
+    abertura = getattr(config, "horario_abertura", None)
+    fechamento = getattr(config, "horario_fechamento", None)
+    if not abertura or not fechamento:
+        return None
+
+    current = now or timezone.localtime()
+    current_time = current.time()
+    current_date = current.date()
+    day_offset = int(cardapio_context.get("day_offset") or 0)
+    target_date = cardapio_context.get("target_date") or (current_date + timedelta(days=day_offset))
+    closed_dates = closed_dates_map(current_date, days=max(day_offset + 1, 2))
+    tomorrow = current_date + timedelta(days=1)
+
+    closed_date = None
+    if current_date in closed_dates:
+        closed_date = current_date
+    elif current_time >= fechamento and tomorrow in closed_dates and target_date > tomorrow:
+        closed_date = tomorrow
+    if not closed_date:
+        return None
+
+    return {
+        "message": f"Fechado {relative_day_label(closed_date, current_date)}"
+    }
 
 
 def _cart_closed_notice(config=None, now=None):
@@ -638,6 +653,7 @@ def cardapio(request):
               "cardapio_title_lines": cardapio_context["title_lines"],
               "cardapio_empty_label": cardapio_context["empty_label"],
               "cardapio_status_tag": _cardapio_status_tag(config, cardapio_context),
+              "cardapio_closed_notice": _cardapio_closed_notice(config, cardapio_context),
               "horario_abertura": config.horario_abertura,
               "horario_fechamento": config.horario_fechamento,
               "whatsapp_cardapio_url": whatsapp_cardapio_url,
