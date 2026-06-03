@@ -324,6 +324,7 @@ class Pedido(models.Model):
         PIX = "pix", "Online Pix"
         DINHEIRO = "dinheiro", "Dinheiro"
         CARTAO = "cartao_entrega", "Cartao na entrega"
+        IFOOD = "ifood", "Pago no iFood"
 
     class TipoColeta(models.TextChoices):
         ENTREGA = "entrega", "Entrega"

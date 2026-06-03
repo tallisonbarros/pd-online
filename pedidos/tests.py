@@ -2158,6 +2158,77 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(movimento.valor, Decimal("42.00"))
         self.assertIsNone(movimento.excluido_em)
 
+    def test_ifood_channel_does_not_create_cash_or_account_movements(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido_dinheiro = Pedido.objects.create(
+            nome_cliente="Cliente iFood Dinheiro",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            canal=Pedido.Canal.IFOOD,
+            ifood=True,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+        pedido_cartao = Pedido.objects.create(
+            nome_cliente="Cliente iFood Cartao",
+            telefone="64999999998",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.CARTAO,
+            canal=Pedido.Canal.IFOOD,
+            ifood=True,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("55.00"),
+        )
+
+        sync_movimentacao_caixa_pedido(pedido_dinheiro, self.staff_user)
+        sync_movimentacao_caixa_pedido(pedido_cartao, self.staff_user)
+
+        self.assertFalse(MovimentacaoCaixa.objects.filter(pedido=pedido_dinheiro).exists())
+        self.assertFalse(MovimentacaoConta.objects.filter(pedido=pedido_cartao).exists())
+
+    def test_switching_order_to_ifood_soft_deletes_existing_movements(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Virou iFood",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("42.00"),
+        )
+        sync_movimentacao_caixa_pedido(pedido, self.staff_user)
+        movimento = MovimentacaoCaixa.objects.get(pedido=pedido)
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/dados/",
+            {"field": "canal", "value": Pedido.Canal.IFOOD},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        movimento.refresh_from_db()
+        self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.IFOOD)
+        self.assertTrue(pedido.ifood)
+        self.assertIsNotNone(movimento.excluido_em)
+
+    def test_new_ifood_order_starts_with_internal_ifood_payment(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+
+        response = self.client.get("/controle/pedidos/novo/?canal=ifood")
+
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.get(status=Pedido.Status.RASCUNHO)
+        self.assertEqual(pedido.canal, Pedido.Canal.IFOOD)
+        self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.IFOOD)
+        self.assertContains(response, "Pago no iFood")
+
     def test_deleting_cash_order_soft_deletes_linked_cash_movement(self):
         self.client.force_login(self.staff_user)
         gerente_group, _created = Group.objects.get_or_create(name="Gerente")
@@ -2269,10 +2340,41 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.json()["frete_recalculado"])
         pedido.refresh_from_db()
-        self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro, Rio Verde - GO")
+        self.assertEqual(pedido.endereco, "Rua Nova, 55 - Centro - Lote 2, Rio Verde - GO")
         self.assertEqual(pedido.valor_frete, Decimal("12.00"))
         self.assertEqual(pedido.complemento, "Casa")
         self.assertEqual(pedido.tipo_coleta, Pedido.TipoColeta.ENTREGA)
+
+    def test_manager_delivery_update_keeps_district_without_number(self):
+        self.client.force_login(self.staff_user)
+        gerente_group, _created = Group.objects.get_or_create(name="Gerente")
+        self.staff_user.groups.add(gerente_group)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente WhatsApp",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            valor_frete=Decimal("12.00"),
+            total=Decimal("35.00"),
+        )
+
+        response = self.client.post(
+            f"/controle/pedido/{pedido.id}/entrega/",
+            {
+                "rua": "Avenida Marginal",
+                "numero": "",
+                "bairro": "Setor Industrial",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "lote_quadra": "Qd. 1 Lt. 2",
+                "endereco_formatado": "Av. Marginal, 1478 - Setor Industrial, Rio Verde - GO",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.endereco, "Avenida Marginal - Setor Industrial - Qd. 1 Lt. 2, Rio Verde - GO")
 
     def test_manager_can_change_order_to_pickup_and_zero_delivery(self):
         self.client.force_login(self.staff_user)
@@ -3120,6 +3222,14 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_completed_orders_admin_shows_closed_orders(self):
         self.client.force_login(self.staff_user)
+        Pedido.objects.create(
+            nome_cliente="Cliente Entregue Antigo",
+            telefone="64999999999",
+            endereco="Rua Teste, 90 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("30.00"),
+        )
         pedido = Pedido.objects.create(
             nome_cliente="Cliente Entregue",
             telefone="64999999999",
@@ -3135,7 +3245,39 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(response, "Concluídos")
         self.assertIn(pedido, list(response.context["pedidos_concluidos"]))
         self.assertContains(response, 'data-concluded-badge')
+        self.assertContains(response, "Sem itens")
+        self.assertContains(response, "<span>Status</span>", html=True)
+        self.assertContains(response, "Cliente recorrente")
         self.assertContains(response, 'data-closed-total')
+
+    def test_orders_nav_shows_concluded_badge_outside_completed_page(self):
+        self.client.force_login(self.staff_user)
+        today_order = Pedido.objects.create(
+            nome_cliente="Cliente Entregue",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+        older_order = Pedido.objects.create(
+            nome_cliente="Cliente Entregue Ontem",
+            telefone="64888888888",
+            endereco="Rua Teste, 101 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("40.00"),
+        )
+        Pedido.objects.filter(id=today_order.id).update(criado_em=timezone.localtime(timezone.now()))
+        Pedido.objects.filter(id=older_order.id).update(criado_em=timezone.localtime(timezone.now()) - timedelta(days=1))
+
+        current_response = self.client.get("/controle/pedidos/")
+        approval_response = self.client.get("/controle/pedidos-aprovacao/")
+
+        self.assertContains(current_response, 'data-concluded-badge')
+        self.assertContains(current_response, 'data-concluded-badge>1</span>')
+        self.assertContains(approval_response, 'data-concluded-badge')
+        self.assertContains(approval_response, 'data-concluded-badge>1</span>')
 
     def test_completed_orders_admin_filters_by_selected_day(self):
         self.client.force_login(self.staff_user)
@@ -3728,6 +3870,36 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["cancelados_count"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_concluidos"]], [done.id])
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_cancelados"]], [canceled.id])
+
+    def test_completed_orders_api_marks_recurring_customer(self):
+        self.client.force_login(self.staff_user)
+        older = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="64999999999",
+            endereco="Rua Teste, 90 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("30.00"),
+        )
+        done = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="64999999999",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("35.00"),
+        )
+        agora = timezone.localtime(timezone.now())
+        Pedido.objects.filter(id=older.id).update(criado_em=agora - timedelta(hours=1))
+        Pedido.objects.filter(id=done.id).update(criado_em=agora)
+
+        response = self.client.get("/controle/api/pedidos-concluidos/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        pedido_payload = next(pedido for pedido in payload["pedidos_concluidos"] if pedido["id"] == done.id)
+        self.assertTrue(pedido_payload["cliente_recorrente"])
+        self.assertEqual(pedido_payload["cliente_recorrente_label"], "Cliente recorrente")
 
     def test_completed_orders_page_opens_modal_and_shows_only_back_action(self):
         self.client.force_login(self.staff_user)
@@ -4613,6 +4785,25 @@ class CriarPedidoFreteTests(TestCase):
         self.assertIn(ORDER_HISTORY_COOKIE, response.cookies)
 
     @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    def test_order_creation_keeps_district_without_number(self, _mock_route):
+        payload = self._delivery_payload(checkout_key="checkout-key-no-number")
+        payload.update(
+            {
+                "rua": "Avenida Marginal",
+                "numero": "",
+                "bairro": "Setor Industrial",
+                "lote_quadra": "Qd. 1 Lt. 2",
+                "endereco_formatado": "Av. Marginal, 1478 - Setor Industrial, Rio Verde - GO",
+            }
+        )
+
+        response = self.client.post("/pedido/criar/", payload)
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.endereco, "Avenida Marginal - Setor Industrial - Qd. 1 Lt. 2, Rio Verde - GO")
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
     def test_checkout_key_retry_returns_existing_order_without_duplicate(self, mock_route):
         first_response = self.client.post(
             "/pedido/criar/",
@@ -4791,6 +4982,33 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(item.subtotal, Decimal("15.00"))
         self.assertEqual(pedido.total, Decimal("25.00"))
         self.assertEqual(pedido.forma_pagamento, Pedido.FormaPagamento.CARTAO)
+
+    @patch("pedidos.views._fetch_route_summary", return_value=(780.0, 1200.0))
+    def test_public_checkout_rejects_internal_ifood_payment_method(self, _mock_route):
+        response = self.client.post(
+            "/pedido/criar/",
+            {
+                "carrinho_payload": '[{"prato_id": %d, "quantidade": 1, "preco": "24.90"}]' % self.prato.id,
+                "nome_cliente": "Cliente Teste",
+                "telefone": "64999999999",
+                "rua": "Rua Teste",
+                "numero": "10",
+                "bairro": "Centro",
+                "cidade": "Rio Verde",
+                "estado": "GO",
+                "latitude": "-17.7707268",
+                "longitude": "-50.9003217",
+                "endereco_formatado": "Rua Teste, 10, Centro, Rio Verde - GO",
+                "geocode_tipo": "house",
+                "geocode_precision": "exact",
+                "valor_frete": "0.00",
+                "distancia_km": "0.00",
+                "forma_pagamento": Pedido.FormaPagamento.IFOOD,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Pedido.objects.exists())
 
     @patch("pedidos.views._fetch_route_summary")
     def test_online_pix_requires_configured_key(self, mock_route):

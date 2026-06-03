@@ -434,11 +434,15 @@
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
                             <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
-                            <p class="ped-item-line">${escapeHtml(pedido.status_label)}</p>
                         </div>
                     </div>
+                    ${buildItemList(pedido)}
                     <div class="ped-card-tools">
                         <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Status</span>
+                                <strong>${escapeHtml(pedido.status_label)}</strong>
+                            </div>
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
                                 <strong>${escapeHtml(pedido.total)}</strong>

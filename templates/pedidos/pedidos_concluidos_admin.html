@@ -112,11 +112,21 @@
                                     <span class="ped-recurring-tag">{{ pedido.cliente_recorrente_label }}</span>
                                 {% endif %}
                             </p>
-                            <p class="ped-item-line">{{ pedido.status_label_contextual }}</p>
                         </div>
                     </div>
+                    <ul class="ped-item-list ped-item-list--top">
+                        {% for item in pedido.itens.all %}
+                            <li>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}</li>
+                        {% empty %}
+                            <li>Sem itens</li>
+                        {% endfor %}
+                    </ul>
                     <div class="ped-card-tools">
                         <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Status</span>
+                                <strong>{{ pedido.status_label_contextual }}</strong>
+                            </div>
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
                                 <strong>R$ {{ pedido.total|floatformat:2 }}</strong>
@@ -183,11 +193,21 @@
                                     <span class="ped-recurring-tag">{{ pedido.cliente_recorrente_label }}</span>
                                 {% endif %}
                             </p>
-                            <p class="ped-item-line">{{ pedido.status_label_contextual }}</p>
                         </div>
                     </div>
+                    <ul class="ped-item-list ped-item-list--top">
+                        {% for item in pedido.itens.all %}
+                            <li>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}</li>
+                        {% empty %}
+                            <li>Sem itens</li>
+                        {% endfor %}
+                    </ul>
                     <div class="ped-card-tools">
                         <div class="ped-stats">
+                            <div class="ped-chip-box">
+                                <span>Status</span>
+                                <strong>{{ pedido.status_label_contextual }}</strong>
+                            </div>
                             <div class="ped-chip-box">
                                 <span>Valor total</span>
                                 <strong>R$ {{ pedido.total|floatformat:2 }}</strong>

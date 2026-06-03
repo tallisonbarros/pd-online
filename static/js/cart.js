@@ -2722,6 +2722,22 @@
             };
         }
 
+        function applyOperatorDistrictPreference(item) {
+            if (!isOperatorCheckout || !operatorDistrictInput) return item;
+            const typedDistrict = String(operatorDistrictInput.value || "").trim();
+            if (!typedDistrict) return item;
+            const googleDistrict = String(item?.district || "").trim();
+            if (!googleDistrict || normalizeText(googleDistrict) === normalizeText(typedDistrict)) {
+                return { ...item, district: typedDistrict };
+            }
+            showFeedback(`Google retornou ${googleDistrict}; mantivemos ${typedDistrict}.`, true);
+            return {
+                ...item,
+                district: typedDistrict,
+                google_district: googleDistrict,
+            };
+        }
+
         async function reverseGeocodeWithGoogle(lat, lng) {
             try {
                 await ensureGoogleGeocoder();
@@ -2777,13 +2793,13 @@
             }
 
             applyResolvedAddress(
-                {
+                applyOperatorDistrictPreference({
                     ...resolved,
                     lat: center.lat,
                     lng: center.lng,
                     type: resolved.type || "manual",
                     precision: resolved.precision || "manual",
-                },
+                }),
                 { updateMap: false, confirmed }
             );
             showMapFeedback(confirmed ? "Local confirmado pelo centro do mapa." : "");

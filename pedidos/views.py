@@ -699,6 +699,25 @@ DELIVERY_ETA_SHORT_TRIP_PENALTY_MINUTES = _setting_int("DELIVERY_ETA_SHORT_TRIP_
 DELIVERY_FRETE_PADRAO = Decimal("0.00")
 
 
+def _build_order_address(rua="", numero="", bairro="", cidade="", estado="", lote_quadra=""):
+    street_line = _safe_text(rua)
+    numero = _safe_text(numero)
+    bairro = _safe_text(bairro)
+    cidade = _safe_text(cidade)
+    estado = _safe_text(estado)
+    lote_quadra = _safe_text(lote_quadra)
+
+    if numero:
+        street_line = f"{street_line}, {numero}" if street_line else numero
+    if bairro:
+        street_line = f"{street_line} - {bairro}" if street_line else bairro
+    if lote_quadra:
+        street_line = f"{street_line} - {lote_quadra}" if street_line else lote_quadra
+    if cidade and estado and street_line:
+        return f"{street_line}, {cidade} - {estado}"
+    return street_line
+
+
 def _load_bairros_coords_manual():
     path = Path(__file__).resolve().parent / "data" / "bairros_coords_manual.json"
     if not path.exists():
@@ -1738,14 +1757,16 @@ def criar_pedido(request):
     if not _configured_whatsapp_number(config_entrega):
         return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
 
-    endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
-    endereco = endereco_base or endereco_formatado or endereco_antigo
-    if cidade and estado and endereco:
-        endereco = f"{endereco}, {cidade} - {estado}"
+    endereco = _build_order_address(rua, numero, bairro, cidade, estado, lote_quadra) or endereco_formatado or endereco_antigo
 
-    if not all([numero, cidade, estado, endereco]) or not (rua or endereco_formatado):
+    if not all([cidade, estado, endereco]) or not (rua or endereco_formatado):
         return HttpResponseBadRequest("Preencha os campos obrigatorios.")
-    if forma_pagamento not in dict(Pedido.FormaPagamento.choices):
+    formas_pagamento_checkout = {
+        Pedido.FormaPagamento.PIX,
+        Pedido.FormaPagamento.DINHEIRO,
+        Pedido.FormaPagamento.CARTAO,
+    }
+    if forma_pagamento not in formas_pagamento_checkout:
         return HttpResponseBadRequest("Selecione uma forma de pagamento.")
     if forma_pagamento == Pedido.FormaPagamento.PIX and not _safe_text(config_entrega.pix_chave):
         return HttpResponseBadRequest("Configure a chave Pix antes de aceitar pagamento online.")
@@ -3269,6 +3290,7 @@ def api_cozinha_operacao(request):
 @staff_member_required(login_url="/admin/login/")
 def pedidos_admin(request):
     base = Pedido.objects.prefetch_related("itens")
+    hoje = timezone.localdate()
     pedidos_ativos = _marcar_clientes_recorrentes(base.exclude(
         status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
     ).order_by("-criado_em", "-id")[:20])
@@ -3279,6 +3301,7 @@ def pedidos_admin(request):
             "pedidos_ativos": pedidos_ativos,
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+            "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=hoje).count(),
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
@@ -3289,6 +3312,7 @@ def pedidos_admin(request):
 @staff_member_required(login_url="/admin/login/")
 def pedidos_aprovacao_admin(request):
     base = Pedido.objects.prefetch_related("itens")
+    hoje = timezone.localdate()
     return render(
         request,
         "pedidos/pedidos_aprovacao_admin.html",
@@ -3296,6 +3320,7 @@ def pedidos_aprovacao_admin(request):
             "pedidos_aprovacao": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20],
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
+            "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=hoje).count(),
             "pedidos_badge": base.exclude(
                 status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
             ).count(),
@@ -3354,13 +3379,15 @@ def pedidos_concluidos_admin(request):
     else:
         rotulo_data_relativa = f"Em {delta_dias} dias"
 
+    pedidos_concluidos = _marcar_clientes_recorrentes(concluidos.order_by("-criado_em", "-id"))
+    pedidos_cancelados = _marcar_clientes_recorrentes(cancelados.order_by("-criado_em", "-id"))
     resumo_dia = concluidos.aggregate(total=Sum("total"), ultimo=Max("criado_em"))
     return render(
         request,
         "pedidos/pedidos_concluidos_admin.html",
         {
-            "pedidos_concluidos": concluidos.order_by("-criado_em", "-id"),
-            "pedidos_cancelados": cancelados.order_by("-criado_em", "-id"),
+            "pedidos_concluidos": pedidos_concluidos,
+            "pedidos_cancelados": pedidos_cancelados,
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "concluidos_count": concluidos.count(),
@@ -3499,6 +3526,18 @@ def _marcar_clientes_recorrentes(pedidos):
     cliente_ids = {pedido.cliente_id for pedido in pedidos if pedido.cliente_id}
     telefones = {normalize_phone(pedido.telefone) for pedido in pedidos}
     telefones.discard("")
+    clientes_na_lista = {}
+    telefones_na_lista = {}
+    for pedido in pedidos:
+        if pedido.cliente_id and (
+            pedido.cliente_id not in clientes_na_lista or pedido.criado_em < clientes_na_lista[pedido.cliente_id]
+        ):
+            clientes_na_lista[pedido.cliente_id] = pedido.criado_em
+        telefone_normalizado = normalize_phone(pedido.telefone)
+        if telefone_normalizado and (
+            telefone_normalizado not in telefones_na_lista or pedido.criado_em < telefones_na_lista[telefone_normalizado]
+        ):
+            telefones_na_lista[telefone_normalizado] = pedido.criado_em
 
     clientes_recorrentes = {}
     if cliente_ids:
@@ -3530,9 +3569,13 @@ def _marcar_clientes_recorrentes(pedidos):
         telefone_normalizado = normalize_phone(pedido.telefone)
         cliente_recorrente_em = clientes_recorrentes.get(pedido.cliente_id)
         telefone_recorrente_em = telefones_recorrentes.get(telefone_normalizado)
+        cliente_na_lista_em = clientes_na_lista.get(pedido.cliente_id)
+        telefone_na_lista_em = telefones_na_lista.get(telefone_normalizado)
         pedido.cliente_recorrente = bool(
             (cliente_recorrente_em and cliente_recorrente_em < pedido.criado_em)
             or (telefone_recorrente_em and telefone_recorrente_em < pedido.criado_em)
+            or (cliente_na_lista_em and cliente_na_lista_em < pedido.criado_em)
+            or (telefone_na_lista_em and telefone_na_lista_em < pedido.criado_em)
         )
         pedido.cliente_recorrente_label = "Cliente recorrente"
     return pedidos
@@ -3566,6 +3609,7 @@ def _pedido_admin_summary(pedido):
 
 
 def _pedidos_base_counts(base):
+    hoje = timezone.localdate()
     return {
         "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
         "aprovacao_ids": list(
@@ -3574,6 +3618,7 @@ def _pedidos_base_counts(base):
         "pedidos_badge": base.exclude(
             status__in=[Pedido.Status.RASCUNHO, Pedido.Status.AGUARDANDO_APROVACAO, Pedido.Status.FINALIZADO, Pedido.Status.CANCELADO]
         ).count(),
+        "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=hoje).count(),
     }
 
 
@@ -3614,18 +3659,20 @@ def _pedidos_concluidos_payload(data_selecionada=None):
     base = Pedido.objects.prefetch_related("itens")
     concluidos = base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
     cancelados = base.filter(status=Pedido.Status.CANCELADO, criado_em__date=data_selecionada).order_by("-criado_em", "-id")
+    concluidos_marcados = _marcar_clientes_recorrentes(concluidos)
+    cancelados_marcados = _marcar_clientes_recorrentes(cancelados)
     resumo_dia = concluidos.aggregate(total=Sum("total"), ultimo=Max("criado_em"))
     ultimo_concluido = resumo_dia.get("ultimo")
     return {
-        "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos],
-        "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados],
+        **_pedidos_base_counts(base),
+        "pedidos_concluidos": [_pedido_admin_summary(pedido) for pedido in concluidos_marcados],
+        "pedidos_cancelados": [_pedido_admin_summary(pedido) for pedido in cancelados_marcados],
         "concluidos_count": concluidos.count(),
         "total_concluidos_geral": base.filter(status=Pedido.Status.FINALIZADO).count(),
         "cancelados_count": cancelados.count(),
         "data_label": data_selecionada.strftime("%d/%m/%Y"),
         "total_concluidos_dia": f"R$ {(resumo_dia.get('total') or Decimal('0.00')):.2f}".replace(".", ","),
         "ultimo_concluido_label": _format_local_datetime(ultimo_concluido, "%H:%M") if ultimo_concluido else "-",
-        **_pedidos_base_counts(base),
     }
 
 
@@ -3825,7 +3872,7 @@ def pedido_novo_admin(request):
         endereco_formatado="Retirada no local",
         endereco="Retirada no local",
         tipo_coleta=Pedido.TipoColeta.RETIRADA,
-        forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+        forma_pagamento=Pedido.FormaPagamento.IFOOD if canal == Pedido.Canal.IFOOD else Pedido.FormaPagamento.DINHEIRO,
         enviar_talheres=False,
         canal=canal,
         ifood=canal == Pedido.Canal.IFOOD,
@@ -3952,7 +3999,16 @@ def atualizar_pagamento_pedido(request, pedido_id):
     if forma_pagamento not in dict(Pedido.FormaPagamento.choices):
         return HttpResponseBadRequest("Forma de pagamento invalida.")
     pedido.forma_pagamento = forma_pagamento
-    pedido.save(update_fields=["forma_pagamento"])
+    update_fields = ["forma_pagamento"]
+    if forma_pagamento == Pedido.FormaPagamento.IFOOD:
+        pedido.canal = Pedido.Canal.IFOOD
+        pedido.ifood = True
+        update_fields.extend(["canal", "ifood"])
+    elif pedido.canal == Pedido.Canal.IFOOD:
+        pedido.canal = Pedido.Canal.BALCAO
+        pedido.ifood = False
+        update_fields.extend(["canal", "ifood"])
+    pedido.save(update_fields=update_fields)
     sync_movimentacao_caixa_pedido(pedido, request.user)
     return JsonResponse(_pedido_modal_payload(pedido))
 
@@ -4033,7 +4089,14 @@ def atualizar_dados_pedido(request, pedido_id):
     elif field == "ifood":
         pedido.ifood = request.POST.get("value") == "sim"
         pedido.canal = Pedido.Canal.IFOOD if pedido.ifood else Pedido.Canal.BALCAO
-        pedido.save(update_fields=["ifood", "canal"])
+        update_fields = ["ifood", "canal"]
+        if pedido.ifood:
+            pedido.forma_pagamento = Pedido.FormaPagamento.IFOOD
+            update_fields.append("forma_pagamento")
+        elif pedido.forma_pagamento == Pedido.FormaPagamento.IFOOD:
+            pedido.forma_pagamento = Pedido.FormaPagamento.DINHEIRO
+            update_fields.append("forma_pagamento")
+        pedido.save(update_fields=update_fields)
         try:
             reprice_order_items_from_catalog(pedido)
             recalculate_order_totals(pedido)
@@ -4047,7 +4110,14 @@ def atualizar_dados_pedido(request, pedido_id):
             return HttpResponseBadRequest("Canal invalido.")
         pedido.canal = canal
         pedido.ifood = canal == Pedido.Canal.IFOOD
-        pedido.save(update_fields=["canal", "ifood"])
+        update_fields = ["canal", "ifood"]
+        if pedido.ifood:
+            pedido.forma_pagamento = Pedido.FormaPagamento.IFOOD
+            update_fields.append("forma_pagamento")
+        elif pedido.forma_pagamento == Pedido.FormaPagamento.IFOOD:
+            pedido.forma_pagamento = Pedido.FormaPagamento.DINHEIRO
+            update_fields.append("forma_pagamento")
+        pedido.save(update_fields=update_fields)
         try:
             reprice_order_items_from_catalog(pedido)
             recalculate_order_totals(pedido)
@@ -4143,8 +4213,8 @@ def atualizar_entrega_pedido(request, pedido_id):
     endereco_formatado = _safe_text(request.POST.get("endereco_formatado"))
     frete_gratis = _post_bool(request.POST.get("frete_gratis"))
     destination_result = _destination_result_from_values(request.POST)
-    endereco_base = f"{rua}, {numero} - {bairro}".strip(" -") if all([rua, numero, bairro]) else (rua or endereco_formatado)
-    endereco = f"{endereco_base}, {cidade} - {estado}" if cidade and estado and endereco_base else endereco_base
+    lote_quadra = _safe_text(request.POST.get("lote_quadra"))
+    endereco = _build_order_address(rua, numero, bairro, cidade, estado, lote_quadra) or endereco_formatado
     common_fields = {
         "tipo_coleta": Pedido.TipoColeta.ENTREGA,
         "rua": rua,
@@ -4155,7 +4225,7 @@ def atualizar_entrega_pedido(request, pedido_id):
         "endereco": endereco or pedido.endereco,
         "endereco_formatado": endereco_formatado or endereco or pedido.endereco_formatado,
         "complemento": _safe_text(request.POST.get("complemento")),
-        "lote_quadra": _safe_text(request.POST.get("lote_quadra")),
+        "lote_quadra": lote_quadra,
         "ponto_referencia": _safe_text(request.POST.get("ponto_referencia")),
     }
     if not destination_result:

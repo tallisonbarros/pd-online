@@ -280,14 +280,16 @@ def excluir_movimentacao_conta(movimentacao, user):
 
 def pedido_deve_gerar_movimentacao_caixa(pedido):
     return (
-        pedido.forma_pagamento == Pedido.FormaPagamento.DINHEIRO
+        pedido.canal != Pedido.Canal.IFOOD
+        and pedido.forma_pagamento == Pedido.FormaPagamento.DINHEIRO
         and pedido.status not in {Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO}
     )
 
 
 def pedido_deve_gerar_movimentacao_conta(pedido):
     return (
-        pedido.forma_pagamento in {Pedido.FormaPagamento.CARTAO, Pedido.FormaPagamento.PIX}
+        pedido.canal != Pedido.Canal.IFOOD
+        and pedido.forma_pagamento in {Pedido.FormaPagamento.CARTAO, Pedido.FormaPagamento.PIX}
         and pedido.status not in {Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO}
     )
 
