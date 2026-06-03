@@ -68,6 +68,61 @@
                         </div>
                     </form>
                 </article>
+
+                <article class="ped-detail-card ajustes-card ajustes-card--wide">
+                    <header class="ped-detail-card-head">
+                        <div>
+                            <p class="ops-kicker">Excecoes</p>
+                            <h2>Dias fechados</h2>
+                        </div>
+                    </header>
+
+                    <form method="post" class="ajustes-form-grid">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create_data_fechada">
+
+                        <label class="field ajustes-field">
+                            <span>Data</span>
+                            <input type="date" name="data_fechada" required>
+                            <small class="field-help">Use para feriados, manutencoes ou pausas pontuais.</small>
+                        </label>
+
+                        <label class="field ajustes-field">
+                            <span>Motivo</span>
+                            <input type="text" name="motivo_fechamento" maxlength="120" placeholder="Feriado">
+                            <small class="field-help">Opcional, apenas para controle interno.</small>
+                        </label>
+
+                        <div class="ajustes-actions ajustes-field ajustes-field--wide">
+                            <button type="submit" class="ped-btn ped-btn-primary">Adicionar dia fechado</button>
+                        </div>
+                    </form>
+
+                    <div class="ajustes-closed-dates">
+                        {% for data_fechada in datas_fechadas %}
+                            <div class="ajustes-closed-date-row {% if not data_fechada.ativo %}is-inactive{% endif %}">
+                                <div>
+                                    <strong>{{ data_fechada.data|date:"d/m/Y" }}</strong>
+                                    {% if data_fechada.motivo %}
+                                        <small>{{ data_fechada.motivo }}</small>
+                                    {% else %}
+                                        <small>Sem motivo informado</small>
+                                    {% endif %}
+                                </div>
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="toggle_data_fechada">
+                                    <input type="hidden" name="data_fechada_id" value="{{ data_fechada.id }}">
+                                    <button type="submit" class="ped-btn ped-btn-ghost">
+                                        {% if data_fechada.ativo %}Desativar{% else %}Reativar{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        {% empty %}
+                            <p class="muted">Nenhum dia fechado cadastrado.</p>
+                        {% endfor %}
+                    </div>
+                </article>
             </section>
         {% elif ajustes_aba == 'frete' %}
         <form method="post" class="ajustes-grid">
@@ -479,6 +534,7 @@
                         </div>
                     </form>
                 </article>
+
             </section>
         {% elif ajustes_aba == 'ifood' %}
             <section class="ajustes-grid">

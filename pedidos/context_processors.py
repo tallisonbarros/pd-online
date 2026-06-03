@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from .models import ConfiguracaoEntrega, Pedido
+from .utils import closed_dates_map, next_open_date
 
 DIRETOR_GROUP_NAME = "Diretor"
 
@@ -16,6 +17,7 @@ def _cart_operational_window(config, now=None):
     if fechamento:
         if current.time() >= fechamento:
             cycle_date = cycle_date + timedelta(days=1)
+        cycle_date = next_open_date(cycle_date, closed_dates=closed_dates_map(cycle_date, days=14))
         expires_at = timezone.make_aware(datetime.combine(cycle_date, fechamento), current.tzinfo)
     return {
         "cycle_key": cycle_date.isoformat(),

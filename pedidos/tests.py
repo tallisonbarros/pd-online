@@ -15,7 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
 from .contabil_services import sync_movimentacao_caixa_pedido
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, normalize_phone, sync_customer_from_order
@@ -622,6 +622,34 @@ class CozinhaAccessTests(TestCase):
         self.assertContains(response, "<b>R$ 74,50</b>", html=True)
         self.assertContains(response, "<small>Banco Cartao</small>", html=True)
         self.assertContains(response, "<b>R$ 42,30</b>", html=True)
+
+    def test_contabil_conta_edit_modal_keeps_movement_bank_selection(self):
+        self.client.force_login(self.diretor_user)
+        banco_padrao = BancoConta.objects.get(codigo="banco-01")
+        banco_movimento = BancoConta.objects.create(nome="Banco Movimento", codigo="banco-movimento", ordem=20)
+        categoria = CategoriaMovimentacaoConta.objects.create(nome="Ajustes")
+        movimento = MovimentacaoConta.objects.create(
+            banco=banco_movimento,
+            categoria=categoria,
+            data_movimento=date(2026, 5, 20),
+            tipo=MovimentacaoConta.Tipo.ENTRADA,
+            nome="Entrada especifica",
+            valor=Decimal("42.30"),
+            criado_por=self.diretor_user,
+        )
+
+        response = self.client.get(f"/controle/contabil/conta/?data=2026-05-20&movimentacao={movimento.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="contabil-conta-edicao-modal"')
+        self.assertContains(response, '<select name="banco">')
+        self.assertContains(
+            response,
+            f'<option value="{banco_movimento.id}" selected>{banco_movimento.nome}</option>',
+            html=True,
+        )
+        self.assertNotContains(response, f'data-default-banco="{banco_movimento.id}"')
+        self.assertContains(response, f'data-default-banco="{banco_padrao.id}"')
 
     def test_card_delivery_order_creates_linked_account_movement(self):
         self.client.force_login(self.diretor_user)
@@ -3222,7 +3250,7 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_completed_orders_admin_shows_closed_orders(self):
         self.client.force_login(self.staff_user)
-        Pedido.objects.create(
+        pedido_antigo = Pedido.objects.create(
             nome_cliente="Cliente Entregue Antigo",
             telefone="64999999999",
             endereco="Rua Teste, 90 - Centro, Rio Verde - GO",
@@ -3238,6 +3266,9 @@ class PedidoDetalheAdminTests(TestCase):
             status=Pedido.Status.FINALIZADO,
             total=Decimal("35.00"),
         )
+        agora = timezone.localtime(timezone.now())
+        Pedido.objects.filter(id=pedido_antigo.id).update(criado_em=agora - timedelta(hours=1))
+        Pedido.objects.filter(id=pedido.id).update(criado_em=agora)
 
         response = self.client.get("/controle/pedidos-concluidos/")
 
@@ -3599,6 +3630,7 @@ class PedidoDetalheAdminTests(TestCase):
 
     def test_order_confirmation_copy_for_counter_confirms_full_order(self):
         self.client.force_login(self.staff_user)
+        prato = Prato.objects.create(nome="Frango Guisado", preco=Decimal("25.00"))
         pedido = Pedido.objects.create(
             nome_cliente="Cliente",
             telefone="",
@@ -3608,7 +3640,17 @@ class PedidoDetalheAdminTests(TestCase):
             canal=Pedido.Canal.BALCAO,
             status=Pedido.Status.EM_PREPARO,
             valor_frete=Decimal("5.00"),
+            cupom_codigo="PROMO9",
+            cupom_desconto=Decimal("9.00"),
             total=Decimal("50.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            prato=prato,
+            nome_prato_snapshot="Frango Guisado",
+            preco_snapshot=Decimal("25.00"),
+            quantidade=1,
+            classificacao_saida=ItemPedido.ClassificacaoSaida.CORTESIA,
         )
         ItemPedido.objects.create(
             pedido=pedido,
@@ -3631,12 +3673,15 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertNotIn("Oi, Cliente!", payload["confirmacao"])
         self.assertIn(f"Pedido #{pedido.numero} confirmado.", payload["confirmacao"])
         self.assertIn("Itens:", payload["confirmacao"])
+        self.assertIn("- 1x Frango Guisado (Cortesia) | R$ 0,00 un.", payload["confirmacao"])
+        self.assertNotIn("- 1x Frango Guisado (Cortesia) | R$ 25,00 un.", payload["confirmacao"])
         self.assertIn("- 2x Frango Guisado | R$ 25,00 un. | R$ 50,00", payload["confirmacao"])
         self.assertIn("- 1x Suco | R$ 8,00 un.", payload["confirmacao"])
         self.assertNotIn("- 1x Suco | R$ 8,00 un. | R$ 8,00", payload["confirmacao"])
         self.assertIn("Retirada no local", payload["confirmacao"])
         self.assertIn("Entrega: R$ 5,00", payload["confirmacao"])
         self.assertIn("Pagamento: Online Pix", payload["confirmacao"])
+        self.assertIn("Cupom PROMO9: - R$ 9,00", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00", payload["confirmacao"])
         self.assertIn("Total: R$ 50,00\nPagamento: AGUARDANDO PAGAMENTO", payload["confirmacao"])
         self.assertIn("Ja vamos iniciar o preparo e te avisamos por aqui quando estiver pronto para retirada.", payload["confirmacao"])
@@ -4043,6 +4088,37 @@ class AjustesAdminTests(TestCase):
         config = ConfiguracaoEntrega.get_solo()
         self.assertEqual(config.horario_abertura.strftime("%H:%M"), "09:00")
         self.assertEqual(config.horario_fechamento.strftime("%H:%M"), "15:30")
+
+    def test_closed_date_can_be_saved_and_toggled_from_ajustes(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=geral",
+            {
+                "action": "create_data_fechada",
+                "data_fechada": "2026-05-12",
+                "motivo_fechamento": "Feriado",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        data_fechada = DataFechada.objects.get(data=date(2026, 5, 12))
+        self.assertTrue(data_fechada.ativo)
+        self.assertEqual(data_fechada.motivo, "Feriado")
+
+        response = self.client.get("/controle/ajustes/?aba=geral")
+        self.assertContains(response, "Dias fechados")
+        self.assertContains(response, "12/05/2026")
+        self.assertContains(response, "Feriado")
+
+        response = self.client.post(
+            "/controle/ajustes/?aba=geral",
+            {"action": "toggle_data_fechada", "data_fechada_id": data_fechada.id},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        data_fechada.refresh_from_db()
+        self.assertFalse(data_fechada.ativo)
 
     def test_saves_origin_and_faixa_updates(self):
         self.client.force_login(self.staff_user)
@@ -4584,6 +4660,43 @@ class CardapioOperationalDayTests(TestCase):
         self.assertContains(response, "Prato Quarta")
         self.assertNotContains(response, "Prato Terca")
 
+    @patch("pedidos.views.timezone.localtime")
+    def test_after_closing_skips_closed_tomorrow_to_next_open_prato_day(self, mock_localtime):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.save()
+        DataFechada.objects.create(data=date(2026, 5, 12), motivo="Feriado")
+        mock_localtime.return_value = self._local_datetime(2026, 5, 11, 14, 30)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<span>PRATO</span>", html=True)
+        self.assertContains(response, "<span>DE</span>", html=True)
+        self.assertContains(response, "<span>QUARTA</span>", html=True)
+        self.assertContains(response, "Prato Quarta")
+        self.assertNotContains(response, "Prato Terca")
+        self.assertContains(response, "Fechado")
+        self.assertContains(response, "Retorna")
+
+    @patch("pedidos.views.timezone.localtime")
+    def test_carrinho_closed_notice_mentions_closed_tomorrow(self, mock_localtime):
+        config = ConfiguracaoEntrega.get_solo()
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 0)
+        config.save()
+        DataFechada.objects.create(data=date(2026, 5, 12), motivo="Feriado")
+        mock_localtime.return_value = self._local_datetime(2026, 5, 11, 14, 30)
+
+        response = self.client.get("/carrinho/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cart-closed-note")
+        self.assertContains(response, "amanh")
+        self.assertContains(response, "estaremos fechados")
+        self.assertContains(response, "quarta")
+        self.assertContains(response, "10:30")
+
     @patch("pedidos.context_processors.timezone.localtime")
     @patch("pedidos.views.timezone.localtime")
     def test_frontend_cart_cycle_moves_after_closing_time(self, mock_view_localtime, mock_context_localtime):
@@ -4596,6 +4709,20 @@ class CardapioOperationalDayTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'cartCycleKey: "2026\\u002D05\\u002D12"')
         self.assertContains(response, 'cartExpiresAt: "2026\\u002D05\\u002D12T14:00:00')
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_frontend_cart_cycle_skips_closed_dates(self, mock_view_localtime, mock_context_localtime):
+        DataFechada.objects.create(data=date(2026, 5, 12), motivo="Feriado")
+        current = self._local_datetime(2026, 5, 11, 14, 30)
+        mock_view_localtime.return_value = current
+        mock_context_localtime.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'cartCycleKey: "2026\\u002D05\\u002D13"')
+        self.assertContains(response, 'cartExpiresAt: "2026\\u002D05\\u002D13T14:00:00')
 
     @patch("pedidos.context_processors.timezone.localtime")
     @patch("pedidos.views.timezone.localtime")

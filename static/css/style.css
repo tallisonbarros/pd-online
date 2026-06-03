@@ -12302,6 +12302,33 @@ fieldset.field {
     grid-column: 1 / -1;
 }
 
+.ajustes-closed-dates {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.ajustes-closed-date-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid #eaded5;
+    border-radius: 12px;
+    background: #fffdfa;
+}
+
+.ajustes-closed-date-row small {
+    display: block;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.ajustes-closed-date-row.is-inactive {
+    opacity: 0.62;
+}
+
 .ajustes-field input,
 .ajustes-frete-row input,
 .ajustes-frete-row select {

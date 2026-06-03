@@ -51,7 +51,7 @@ from .dashboard import get_dashboard_diaria
 from .forms import AdicionalForm, BebidaForm, PratoForm
 from .image_optimization import optimized_menu_image_url
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders, money_decimal as legacy_money_decimal
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -65,6 +65,7 @@ from .order_services import (
     sync_customer_from_order,
     validar_cupom,
 )
+from .utils import closed_dates_map, next_open_date, relative_day_label
 
 RECURRENT_CUSTOMER_EXCLUDED_STATUSES = [Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO]
 
@@ -139,10 +140,15 @@ def _resolve_cardapio_pratos(config=None, now=None):
     current = now or timezone.localtime()
     fechamento = getattr(config, "horario_fechamento", None)
     start_offset = 1 if fechamento and current.time() >= fechamento else 0
+    current_date = current.date()
+    closed_dates = closed_dates_map(current_date + timedelta(days=start_offset), days=14)
     active_pratos = list(Prato.objects.filter(ativo=True))
 
     for offset in range(start_offset, start_offset + 7):
-        weekday_index = (current.weekday() + offset) % 7
+        target_date = current_date + timedelta(days=offset)
+        if target_date in closed_dates:
+            continue
+        weekday_index = target_date.weekday()
         weekday_key = WEEKDAYS[weekday_index]
         pratos = [prato for prato in active_pratos if prato_disponível_no_dia(prato, weekday_key)]
         if pratos:
@@ -152,18 +158,22 @@ def _resolve_cardapio_pratos(config=None, now=None):
                 "weekday_key": weekday_key,
                 "is_today": is_today,
                 "day_offset": offset,
+                "target_date": target_date,
                 "title_lines": ["PRATO", "DO DIA"] if is_today else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
                 "empty_label": "hoje" if is_today else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
             }
 
-    weekday_key = WEEKDAYS[(current.weekday() + start_offset) % 7]
+    target_date = next_open_date(current_date + timedelta(days=start_offset), closed_dates=closed_dates)
+    day_offset = (target_date - current_date).days
+    weekday_key = WEEKDAYS[target_date.weekday()]
     return {
         "pratos": [],
         "weekday_key": weekday_key,
-        "is_today": start_offset == 0,
-        "day_offset": start_offset,
-        "title_lines": ["PRATO", "DO DIA"] if start_offset == 0 else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
-        "empty_label": "hoje" if start_offset == 0 else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
+        "is_today": day_offset == 0,
+        "day_offset": day_offset,
+        "target_date": target_date,
+        "title_lines": ["PRATO", "DO DIA"] if day_offset == 0 else ["PRATO", "DE", WEEKDAY_LABELS[weekday_key]],
+        "empty_label": "hoje" if day_offset == 0 else f"para {WEEKDAY_LABELS[weekday_key].lower()}",
     }
 
 
@@ -175,11 +185,26 @@ def _cardapio_status_tag(config, cardapio_context, now=None):
 
     current = now or timezone.localtime()
     current_time = current.time()
+    current_date = current.date()
     opening_range = f"{abertura.strftime('%H:%M')} às {fechamento.strftime('%H:%M')}"
     is_today = bool(cardapio_context.get("is_today"))
     day_offset = int(cardapio_context.get("day_offset") or 0)
+    target_date = cardapio_context.get("target_date") or (current_date + timedelta(days=day_offset))
     weekday_key = cardapio_context.get("weekday_key")
     weekday_label = WEEKDAY_LABELS.get(weekday_key, "HOJE")
+    closed_dates = closed_dates_map(current_date, days=max(day_offset + 1, 2))
+
+    if current_date in closed_dates:
+        return {
+            "label": f"Fechado {relative_day_label(current_date, current_date)}",
+            "time": f"Retorna {relative_day_label(target_date, current_date)} {opening_range}",
+        }
+    tomorrow = current_date + timedelta(days=1)
+    if current_time >= fechamento and tomorrow in closed_dates and target_date > tomorrow:
+        return {
+            "label": f"Fechado {relative_day_label(tomorrow, current_date)}",
+            "time": f"Retorna {relative_day_label(target_date, current_date)} {opening_range}",
+        }
 
     if is_today and abertura <= current_time < fechamento:
         return {"label": "Aberto agora", "time": f"até {fechamento.strftime('%H:%M')}"}
@@ -198,14 +223,24 @@ def _cart_closed_notice(config=None, now=None):
         return None
     current = now or timezone.localtime()
     current_time = current.time()
-    is_open = abertura <= current_time < fechamento
+    current_date = current.date()
+    closed_dates = closed_dates_map(current_date, days=14)
+    is_open = abertura <= current_time < fechamento and current_date not in closed_dates
     if is_open:
         return None
-    opening_day = "hoje" if current_time < abertura else "amanhã"
+    opening_date = current_date if current_date in closed_dates or current_time < abertura else current_date + timedelta(days=1)
+    closed_reference_date = opening_date if opening_date in closed_dates else None
+    opening_date = next_open_date(opening_date, closed_dates=closed_dates)
+    opening_day = relative_day_label(opening_date, current_date)
+    if closed_reference_date:
+        closed_day = relative_day_label(closed_reference_date, current_date)
+        message = f"Pedido antecipado: {closed_day} estaremos fechados. Nossa equipe revisa {opening_day} às {abertura.strftime('%H:%M')} da manhã."
+    else:
+        message = f"Pedido antecipado: finalize com calma, e nossa equipe revisa {opening_day} às {abertura.strftime('%H:%M')} da manhã."
     return {
         "opening_time": abertura.strftime("%H:%M"),
         "opening_day": opening_day,
-        "message": f"Pedido antecipado: finalize com calma, e nossa equipe revisa {opening_day} às {abertura.strftime('%H:%M')} da manhã.",
+        "message": message,
     }
 
 
@@ -403,6 +438,23 @@ def _pedido_confirmacao_pagamento_line(pedido):
     return f"Pagamento: {pedido.pagamento_copia_status}"
 
 
+def _pedido_confirmacao_item_unit_value(item):
+    if item.quantidade:
+        return _money_line_value(item.subtotal / Decimal(item.quantidade))
+    return _money_line_value(item.subtotal)
+
+
+def _pedido_confirmacao_desconto_lines(pedido):
+    linhas = []
+    if pedido.promocao_desconto and pedido.promocao_desconto > 0:
+        descricao = pedido.promocao_descricao or "Promocao especial"
+        linhas.append(f"{descricao}: - {_money_line_value(pedido.promocao_desconto)}")
+    if pedido.cupom_desconto and pedido.cupom_desconto > 0:
+        descricao = f"Cupom {pedido.cupom_codigo}" if pedido.cupom_codigo else "Cupom"
+        linhas.append(f"{descricao}: - {_money_line_value(pedido.cupom_desconto)}")
+    return linhas
+
+
 def montar_mensagem_confirmacao_pedido(pedido):
     nome_cliente = _safe_text(pedido.nome_cliente)
     saudacao = f"Oi, {nome_cliente}!" if nome_cliente.casefold() not in {"", "cliente"} else "Oi!"
@@ -419,7 +471,7 @@ def montar_mensagem_confirmacao_pedido(pedido):
                 nome_item = f"{nome_item} - {item.variacao_nome_snapshot}"
             if item.classificacao_saida != ItemPedido.ClassificacaoSaida.VENDIDA:
                 nome_item = f"{nome_item} ({item.get_classificacao_saida_display()})"
-            item_line = f"- {item.quantidade}x {nome_item} | {_money_line_value(item.preco_snapshot)} un."
+            item_line = f"- {item.quantidade}x {nome_item} | {_pedido_confirmacao_item_unit_value(item)} un."
             if item.quantidade > 1:
                 item_line = f"{item_line} | {_money_line_value(item.subtotal)}"
             linhas.append(item_line)
@@ -434,6 +486,11 @@ def montar_mensagem_confirmacao_pedido(pedido):
                 "",
                 f"Entrega: {_pedido_frete_line_value(pedido)}",
                 f"Pagamento: {pedido.get_forma_pagamento_display()}",
+            ]
+        )
+        linhas.extend(_pedido_confirmacao_desconto_lines(pedido))
+        linhas.extend(
+            [
                 f"Total: {_money_line_value(pedido.total)}",
                 _pedido_confirmacao_pagamento_line(pedido),
                 "",
@@ -449,11 +506,16 @@ def montar_mensagem_confirmacao_pedido(pedido):
         _pedido_confirmacao_entrega_line(pedido),
         "",
         f"Pagamento: {pedido.get_forma_pagamento_display()}",
-        f"Total: {_money_line_value(pedido.total)}",
-        _pedido_confirmacao_pagamento_line(pedido),
-        "",
-        _pedido_confirmacao_status_final(pedido),
     ]
+    linhas.extend(_pedido_confirmacao_desconto_lines(pedido))
+    linhas.extend(
+        [
+            f"Total: {_money_line_value(pedido.total)}",
+            _pedido_confirmacao_pagamento_line(pedido),
+            "",
+            _pedido_confirmacao_status_final(pedido),
+        ]
+    )
     return "\n".join(linhas)
 
 
@@ -4323,6 +4385,8 @@ def ajustes_admin(request):
         action = _safe_text(request.POST.get("action"))
         action_tabs = {
             "save_geral": "geral",
+            "create_data_fechada": "geral",
+            "toggle_data_fechada": "geral",
             "save_frete": "frete",
             "test_frete": "frete",
             "save_google": "google",
@@ -4370,6 +4434,24 @@ def ajustes_admin(request):
             except ValueError as exc:
                 feedback = str(exc)
                 feedback_kind = "error"
+
+        if action == "create_data_fechada":
+            data_fechada = parse_date(_safe_text(request.POST.get("data_fechada")))
+            if not data_fechada:
+                feedback = "Informe uma data valida para fechar."
+                feedback_kind = "error"
+            else:
+                DataFechada.objects.update_or_create(
+                    data=data_fechada,
+                    defaults={"motivo": _safe_text(request.POST.get("motivo_fechamento")), "ativo": True},
+                )
+                return redirect(f"{request.path}?saved=1&aba=geral")
+
+        if action == "toggle_data_fechada":
+            data_fechada = get_object_or_404(DataFechada, id=request.POST.get("data_fechada_id"))
+            data_fechada.ativo = not data_fechada.ativo
+            data_fechada.save(update_fields=["ativo", "atualizado_em"])
+            return redirect(f"{request.path}?saved=1&aba=geral")
 
         if action == "save_frete":
             try:
@@ -4757,6 +4839,7 @@ def ajustes_admin(request):
             "banco_cartao_id": config.banco_cartao_id,
             "horario_abertura": config.horario_abertura.strftime("%H:%M") if config.horario_abertura else "",
             "horario_fechamento": config.horario_fechamento.strftime("%H:%M") if config.horario_fechamento else "",
+            "datas_fechadas": DataFechada.objects.all().order_by("-data")[:20],
             "ultimo_pedido_auditoria": ultimo_pedido_auditoria,
             "usuarios_admin_rows": usuarios_admin_rows,
             "usuarios_classes": usuarios_classes,

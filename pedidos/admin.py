@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, ConfiguracaoEntrega, Cupom, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, ConfiguracaoEntrega, Cupom, DataFechada, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, Prato, ResumoOperacionalDia, TerminalCaixa
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -245,3 +245,10 @@ class ConfiguracaoEntregaAdmin(admin.ModelAdmin):
     @admin.display(description="Google Maps")
     def google_maps_habilitado(self, obj):
         return "Configurado" if obj.google_maps_api_key_effective else "Fallback"
+
+
+@admin.register(DataFechada)
+class DataFechadaAdmin(admin.ModelAdmin):
+    list_display = ("data", "motivo", "ativo", "atualizado_em")
+    list_filter = ("ativo",)
+    search_fields = ("motivo",)

@@ -818,3 +818,20 @@ class ConfiguracaoEntrega(models.Model):
                 instance.save()
             return instance
         return cls.objects.create(pk=1)
+
+
+class DataFechada(models.Model):
+    data = models.DateField(unique=True)
+    motivo = models.CharField(max_length=120, blank=True)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data"]
+        verbose_name = "Data fechada"
+        verbose_name_plural = "Datas fechadas"
+
+    def __str__(self):
+        motivo = f" - {self.motivo}" if self.motivo else ""
+        return f"{self.data:%d/%m/%Y}{motivo}"

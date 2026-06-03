@@ -161,7 +161,7 @@
                         <input type="hidden" name="movimentacao_id" value="{{ movimentacao_edicao.id }}">
                         <label class="field">
                             <span>Banco</span>
-                            <select name="banco" data-banco-select data-default-banco="{{ movimentacao_edicao.banco.id }}">
+                            <select name="banco">
                                 {% for banco in bancos %}
                                     <option value="{{ banco.id }}" {% if banco.id == movimentacao_edicao.banco.id %}selected{% endif %}>{{ banco.nome }}</option>
                                 {% endfor %}
