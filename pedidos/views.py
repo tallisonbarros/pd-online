@@ -3664,6 +3664,7 @@ def _pedido_admin_summary(pedido):
         "id": pedido.id,
         "numero": pedido.numero,
         "cliente": pedido.nome_cliente,
+        "sem_telefone": not bool(normalize_phone(pedido.telefone)),
         "criado_em": _format_local_datetime(pedido.criado_em, "%d/%m, %H:%M"),
         "canal": pedido.canal,
         "canal_label": pedido.get_canal_display(),

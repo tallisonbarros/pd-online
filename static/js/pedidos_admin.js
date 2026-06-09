@@ -266,6 +266,18 @@
         return `<svg viewBox="0 0 24 24"><path d="${fallbackPath || "M4 2h2v9h2V2h2v9a2 2 0 0 1-2 2v9H6v-9a2 2 0 0 1-2-2V2zm10 0h6v2h-1v18h-2V4h-1v18h-2V2z"}"/></svg>`;
     }
 
+    function buildNoPhoneIcon(pedido) {
+        if (!pedido.sem_telefone) return "";
+        return `
+            <span class="ped-no-phone" role="img" aria-label="Sem telefone" title="Sem telefone">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15.1 14.4a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 .9 1v3.5a1 1 0 0 1-1 1A18 18 0 0 1 3.2 3.9a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 .9 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.2 1l-2.2 2.2a16 16 0 0 0 6.1 6.1z"/>
+                    <path d="m15.5 3.5 5 5m0-5-5 5"/>
+                </svg>
+            </span>
+        `;
+    }
+
     function buildOrderCard(pedido) {
         const pedidoId = escapeHtml(pedido.id);
         const pedidoNumero = escapeHtml(pedido.numero);
@@ -294,7 +306,7 @@
                             ${buildPedidoIcon(pedido)}
                         </div>
                         <div>
-                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
+                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span> ${buildNoPhoneIcon(pedido)}</h2>
                             <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
                         </div>
                     </div>
@@ -366,7 +378,7 @@
                             ${buildPedidoIcon(pedido)}
                         </div>
                         <div>
-                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
+                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span> ${buildNoPhoneIcon(pedido)}</h2>
                             <p class="ped-time">${escapeHtml(pedido.criado_em)}</p>
                         </div>
                     </div>
@@ -432,7 +444,7 @@
                             ${buildPedidoIcon(pedido, iconPath)}
                         </div>
                         <div>
-                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span></h2>
+                            <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span> ${buildNoPhoneIcon(pedido)}</h2>
                             <p class="ped-time">${buildChannelTag(pedido)} <span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
                         </div>
                     </div>

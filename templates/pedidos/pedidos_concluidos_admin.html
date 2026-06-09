@@ -104,7 +104,17 @@
                             <img src="{{ pedido.icone_pedido_url }}" alt="">
                         </div>
                         <div>
-                            <h2>{{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span></h2>
+                            <h2>
+                                {{ pedido.nome_cliente }} <span>#{{ pedido.numero }}</span>
+                                {% if not pedido.telefone %}
+                                    <span class="ped-no-phone" role="img" aria-label="Sem telefone" title="Sem telefone">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                            <path d="M15.1 14.4a1 1 0 0 1 1-.2 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 .9 1v3.5a1 1 0 0 1-1 1A18 18 0 0 1 3.2 3.9a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 .9 11.4 11.4 0 0 0 .6 3.6 1 1 0 0 1-.2 1l-2.2 2.2a16 16 0 0 0 6.1 6.1z"/>
+                                            <path d="m15.5 3.5 5 5m0-5-5 5"/>
+                                        </svg>
+                                    </span>
+                                {% endif %}
+                            </h2>
                             <p class="ped-time">
                                 <span class="ped-channel-tag ped-channel-tag--{{ pedido.canal }}">{{ pedido.get_canal_display }}</span>
                                 <span>{{ pedido.criado_em|date:"d/m, H:i" }}</span>

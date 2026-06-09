@@ -14,6 +14,7 @@
     const currentCartCycleKey = String(config.cartCycleKey || "").trim();
     const cartExpiresAt = String(config.cartExpiresAt || "").trim();
     const serverNow = String(config.serverNow || "").trim();
+    const pageLoadedAtMs = Date.now();
     const serverClockOffsetMs = (() => {
         const serverTime = Date.parse(serverNow);
         return Number.isFinite(serverTime) ? serverTime - Date.now() : 0;
@@ -439,7 +440,13 @@
 
     function cartExpired(meta = readCartMeta()) {
         if (!localStorage.getItem(cartKey)) return false;
-        if (currentCartCycleKey && meta.cycle_key !== currentCartCycleKey) return true;
+        if (currentCartCycleKey && meta.cycle_key !== currentCartCycleKey) {
+            const savedAtMs = Date.parse(meta.saved_at || "");
+            if (Number.isFinite(savedAtMs) && savedAtMs > pageLoadedAtMs) {
+                return false;
+            }
+            return true;
+        }
         const expiresAtMs = Date.parse(meta.expires_at || cartExpiresAt || "");
         return Number.isFinite(expiresAtMs) && operationalNowMs() >= expiresAtMs;
     }
@@ -957,7 +964,12 @@
         }
 
         syncMenuPromo();
-        window.addEventListener("storage", syncMenuPromo);
+        window.addEventListener("storage", (event) => {
+            if (event.key && !String(event.key).startsWith(cartKey)) return;
+            syncMenuPromo();
+            syncCartCount();
+            syncCardQuantityBadges();
+        });
 
         if (revealItems.length) {
             if (!("IntersectionObserver" in window)) {
@@ -1063,12 +1075,17 @@
                 return;
             }
             genericBadge?.classList.add("hidden");
+            const signature = variations.join("\n");
+            if (controls?.dataset.variationsSignature === signature) {
+                return;
+            }
             if (!controls) {
                 controls = document.createElement("div");
                 controls.className = "dish-variation-quick-controls";
                 controls.setAttribute("data-variation-quick-controls", "");
                 genericBadge?.insertAdjacentElement("afterend", controls);
             }
+            controls.dataset.variationsSignature = signature;
             controls.innerHTML = variations
                 .map((variation) => `
                     <div class="dish-variation-quick-row" data-card-variation-row="${escapeHtml(variation)}">

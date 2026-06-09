@@ -3834,6 +3834,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["aprovacao_count"], 1)
         self.assertEqual(payload["pedidos_badge"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [approval.id])
+        self.assertFalse(payload["pedidos"][0]["sem_telefone"])
 
     def test_active_order_api_uses_pickup_stage_labels(self):
         self.client.force_login(self.staff_user)
@@ -3852,6 +3853,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()["pedidos"][0]
         self.assertEqual(payload["id"], pedido.id)
+        self.assertTrue(payload["sem_telefone"])
         self.assertEqual(payload["tipo_coleta"], Pedido.TipoColeta.RETIRADA)
         self.assertEqual(payload["status_label"], "Aguardando coleta")
         self.assertIn(
@@ -3915,6 +3917,7 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual(payload["cancelados_count"], 1)
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_concluidos"]], [done.id])
         self.assertEqual([pedido["id"] for pedido in payload["pedidos_cancelados"]], [canceled.id])
+        self.assertFalse(payload["pedidos_concluidos"][0]["sem_telefone"])
 
     def test_completed_orders_api_marks_recurring_customer(self):
         self.client.force_login(self.staff_user)
