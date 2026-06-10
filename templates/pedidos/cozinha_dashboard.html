@@ -128,12 +128,12 @@
             <div class="modal-content dashboard-export-card">
                 <div class="panel-head management-modal-head">
                     <p class="ops-kicker">Exportar</p>
-                    <h2 id="dashboard-export-title">Pedidos em CSV</h2>
+                    <h2 id="dashboard-export-title">Pedidos e dashboard</h2>
                 </div>
 
                 <form
                     method="get"
-                    action="{% url 'pedidos:exportar_pedidos_csv' %}"
+                    action="{% url 'pedidos:exportar_pedidos_xlsx' %}"
                     class="checkout-form"
                     data-dashboard-export-form
                     data-export-today="{{ hoje|date:'Y-m-d' }}"
@@ -162,7 +162,7 @@
                     </p>
                     <button type="submit" class="primary-button wide">
                         <span aria-hidden="true">&#8595;</span>
-                        Baixar CSV
+                        Baixar Excel
                     </button>
                 </form>
             </div>

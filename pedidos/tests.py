@@ -3,7 +3,7 @@ import json
 
 from decimal import Decimal
 from datetime import date, datetime, time, timedelta
-from io import StringIO
+from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
+from openpyxl import load_workbook
 
 from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
 from .contabil_services import sync_movimentacao_caixa_pedido
@@ -394,7 +395,7 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_dashboard_export_returns_orders_csv(self):
+    def test_dashboard_export_returns_orders_workbook(self):
         self.client.force_login(self.diretor_user)
         pedido_anterior = Pedido.objects.create(
             nome_cliente="Cliente Exportacao",
@@ -432,16 +433,32 @@ class CozinhaAccessTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         self.assertIn("attachment;", response["Content-Disposition"])
-        rows = list(csv.reader(StringIO(response.content.decode("utf-8-sig")), delimiter=";"))
-        self.assertEqual(rows[0][0:4], ["Numero", "Data", "Hora", "Cliente"])
-        exported = next(row for row in rows[1:] if row[0] == str(pedido.numero))
+        workbook = load_workbook(BytesIO(response.content), data_only=True)
+        self.assertEqual(workbook.sheetnames, ["Pedidos", "Dashboard diaria"])
+
+        pedidos_sheet = workbook["Pedidos"]
+        headers = [cell.value for cell in pedidos_sheet[1]]
+        self.assertEqual(headers[0:4], ["Numero", "Data", "Hora", "Cliente"])
+        exported = next(row for row in pedidos_sheet.iter_rows(min_row=2, values_only=True) if row[0] == pedido.numero)
         self.assertEqual(exported[3], "Cliente Exportacao")
         self.assertEqual(exported[5], "Pediu recentemente")
         self.assertEqual(exported[6], "Site")
         self.assertEqual(exported[13], "1x Marmita Frango - Grande")
-        self.assertEqual(exported[19], "35,00")
+        self.assertEqual(exported[19], 35)
+
+        dashboard_sheet = workbook["Dashboard diaria"]
+        dashboard_headers = [cell.value for cell in dashboard_sheet[1]]
+        self.assertIn("Faturamento total", dashboard_headers)
+        self.assertIn("Marmitas produzidas", dashboard_headers)
+        self.assertIn("Resultado operacional", dashboard_headers)
+        dashboard_row = [cell.value for cell in dashboard_sheet[2]]
+        self.assertEqual(dashboard_row[1], 1)
+        self.assertEqual(dashboard_row[4], 1)
 
     def test_contabil_requires_diretor_access(self):
         self.client.force_login(self.gerente_user)

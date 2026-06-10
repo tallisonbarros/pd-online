@@ -2,6 +2,7 @@ import csv
 import json
 import math
 import unicodedata
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from datetime import datetime, timedelta
@@ -27,6 +28,9 @@ from django.utils.dateparse import parse_date, parse_datetime, parse_time
 from django.utils.timesince import timesince
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from .api_serializers import serialize_pedido_api, serialize_pedido_summary_api
 from .contabil_services import (
@@ -2889,7 +2893,7 @@ def cozinha(request):
 
 @staff_member_required(login_url="/admin/login/")
 @require_GET
-def exportar_pedidos_csv(request):
+def exportar_pedidos_xlsx(request):
     if not user_is_diretor(request.user):
         return redirect("pedidos:cozinha_operacao")
 
@@ -2907,37 +2911,33 @@ def exportar_pedidos_csv(request):
         .order_by("criado_em", "id")
     )
 
-    response = HttpResponse(content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = (
-        f'attachment; filename="pedidos_{inicio.isoformat()}_a_{fim.isoformat()}.csv"'
-    )
-    response.write("\ufeff")
-    writer = csv.writer(response, delimiter=";", quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    writer.writerow(
-        [
-            "Numero",
-            "Data",
-            "Hora",
-            "Cliente",
-            "Telefone",
-            "Relacionamento do cliente",
-            "Canal",
-            "Status",
-            "Tipo de coleta",
-            "Forma de pagamento",
-            "Pagamento recebido",
-            "Endereco",
-            "Bairro",
-            "Itens",
-            "Quantidade de itens",
-            "Subtotal dos itens",
-            "Frete",
-            "Desconto promocao",
-            "Desconto cupom",
-            "Total",
-            "Observacao",
-        ]
-    )
+    workbook = Workbook()
+    pedidos_sheet = workbook.active
+    pedidos_sheet.title = "Pedidos"
+    pedidos_headers = [
+        "Numero",
+        "Data",
+        "Hora",
+        "Cliente",
+        "Telefone",
+        "Relacionamento do cliente",
+        "Canal",
+        "Status",
+        "Tipo de coleta",
+        "Forma de pagamento",
+        "Pagamento recebido",
+        "Endereco",
+        "Bairro",
+        "Itens",
+        "Quantidade de itens",
+        "Subtotal dos itens",
+        "Frete",
+        "Desconto promocao",
+        "Desconto cupom",
+        "Total",
+        "Observacao",
+    ]
+    pedidos_sheet.append(pedidos_headers)
 
     def csv_safe(value):
         text = _safe_text(value)
@@ -2958,11 +2958,11 @@ def exportar_pedidos_csv(request):
         quantidade_itens = sum(item.quantidade for item in itens)
         subtotal_itens = sum((item.subtotal for item in itens), Decimal("0.00"))
 
-        writer.writerow(
+        pedidos_sheet.append(
             [
                 pedido.numero or pedido.id,
-                criado_em.strftime("%d/%m/%Y"),
-                criado_em.strftime("%H:%M"),
+                criado_em.date(),
+                criado_em.time().replace(second=0, microsecond=0),
                 csv_safe(pedido.nome_cliente),
                 csv_safe(pedido.telefone),
                 csv_safe(pedido.cliente_recorrente_label if pedido.cliente_recorrente else ""),
@@ -2975,15 +2975,138 @@ def exportar_pedidos_csv(request):
                 csv_safe(pedido.bairro),
                 csv_safe(itens_texto),
                 quantidade_itens,
-                f"{subtotal_itens:.2f}".replace(".", ","),
-                f"{pedido.valor_frete:.2f}".replace(".", ","),
-                f"{pedido.promocao_desconto:.2f}".replace(".", ","),
-                f"{pedido.cupom_desconto:.2f}".replace(".", ","),
-                f"{pedido.total:.2f}".replace(".", ","),
+                subtotal_itens,
+                pedido.valor_frete,
+                pedido.promocao_desconto,
+                pedido.cupom_desconto,
+                pedido.total,
                 csv_safe(pedido.observacao_geral),
             ]
         )
 
+    dashboard_sheet = workbook.create_sheet("Dashboard diaria")
+    dashboard_headers = [
+        "Data",
+        "Pedidos finalizados",
+        "Pedidos recorrentes",
+        "Pedidos balcao",
+        "Pedidos site",
+        "Pedidos iFood",
+        "Faturamento total",
+        "Faturamento iFood",
+        "Taxa iFood (%)",
+        "Taxa iFood (R$)",
+        "Custo entrega",
+        "Marmitas produzidas",
+        "Marmitas saida",
+        "Marmitas vendidas",
+        "Marmitas cortesia",
+        "Marmitas promocao",
+        "Consumo interno",
+        "Marmitas excedentes",
+        "Custo insumos",
+        "Custo por marmita produzida",
+        "Custo por marmita vendida",
+        "Custo total producao",
+        "Custo total operacional",
+        "Resultado operacional",
+    ]
+    dashboard_sheet.append(dashboard_headers)
+
+    data_atual = inicio
+    while data_atual <= fim:
+        dashboard = get_dashboard_diaria(data_atual)
+        canais = {canal["key"]: canal["total"] for canal in dashboard["canais"]}
+        dashboard_sheet.append(
+            [
+                data_atual,
+                dashboard["total_pedidos"],
+                dashboard["pedidos_recorrentes"],
+                canais.get(Pedido.Canal.BALCAO, 0),
+                canais.get(Pedido.Canal.SITE, 0),
+                canais.get(Pedido.Canal.IFOOD, 0),
+                dashboard["faturamento_total"],
+                dashboard["faturamento_ifood"],
+                dashboard["taxa_ifood_percentual"],
+                dashboard["taxa_ifood_valor"],
+                dashboard["custo_entrega"],
+                dashboard["marmitas_produzidas"],
+                dashboard["marmitas_saida"],
+                dashboard["marmitas_vendidas"],
+                dashboard["marmitas_cortesia"],
+                dashboard["marmitas_promocao"],
+                dashboard["consumo_interno"],
+                dashboard["marmitas_excedentes"],
+                dashboard["custo_insumos"],
+                dashboard["custo_unitario_marmita"],
+                dashboard["custo_unitario_marmita_vendida"],
+                dashboard["custo_total_producao"],
+                dashboard["custo_total_operacional"],
+                dashboard["resultado_operacional"],
+            ]
+        )
+        data_atual += timedelta(days=1)
+
+    header_fill = PatternFill("solid", fgColor="4E342E")
+    header_font = Font(color="FFFFFF", bold=True)
+    currency_format = 'R$ #,##0.00'
+
+    for sheet in (pedidos_sheet, dashboard_sheet):
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        sheet.sheet_view.showGridLines = False
+        for cell in sheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        sheet.row_dimensions[1].height = 34
+
+    pedidos_sheet.column_dimensions["A"].width = 11
+    pedidos_sheet.column_dimensions["B"].width = 12
+    pedidos_sheet.column_dimensions["C"].width = 9
+    pedidos_sheet.column_dimensions["D"].width = 26
+    pedidos_sheet.column_dimensions["E"].width = 17
+    pedidos_sheet.column_dimensions["F"].width = 24
+    pedidos_sheet.column_dimensions["G"].width = 14
+    pedidos_sheet.column_dimensions["H"].width = 22
+    pedidos_sheet.column_dimensions["I"].width = 17
+    pedidos_sheet.column_dimensions["J"].width = 22
+    pedidos_sheet.column_dimensions["K"].width = 19
+    pedidos_sheet.column_dimensions["L"].width = 38
+    pedidos_sheet.column_dimensions["M"].width = 20
+    pedidos_sheet.column_dimensions["N"].width = 48
+    pedidos_sheet.column_dimensions["O"].width = 18
+    for column in ("P", "Q", "R", "S", "T"):
+        pedidos_sheet.column_dimensions[column].width = 18
+    pedidos_sheet.column_dimensions["U"].width = 38
+
+    for row in pedidos_sheet.iter_rows(min_row=2):
+        row[1].number_format = "dd/mm/yyyy"
+        row[2].number_format = "hh:mm"
+        for index in range(15, 20):
+            row[index].number_format = currency_format
+        for index in (3, 11, 13, 20):
+            row[index].alignment = Alignment(vertical="top", wrap_text=True)
+
+    for column_index in range(1, len(dashboard_headers) + 1):
+        dashboard_sheet.column_dimensions[get_column_letter(column_index)].width = 20
+    dashboard_sheet.column_dimensions["A"].width = 13
+    for row in dashboard_sheet.iter_rows(min_row=2):
+        row[0].number_format = "dd/mm/yyyy"
+        for index in (6, 7, 9, 10, 18, 19, 20, 21, 22, 23):
+            row[index].number_format = currency_format
+        row[8].number_format = "0.00"
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="pedidos_dashboard_{inicio.isoformat()}_a_{fim.isoformat()}.xlsx"'
+    )
     return response
 
 
