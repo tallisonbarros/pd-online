@@ -2900,7 +2900,7 @@ def exportar_pedidos_csv(request):
     if inicio > fim:
         return HttpResponseBadRequest("A data inicial nao pode ser posterior a data final.")
 
-    pedidos = (
+    pedidos = _marcar_clientes_recorrentes(
         Pedido.objects.filter(criado_em__date__range=(inicio, fim))
         .exclude(status=Pedido.Status.RASCUNHO)
         .prefetch_related("itens")
@@ -2920,6 +2920,7 @@ def exportar_pedidos_csv(request):
             "Hora",
             "Cliente",
             "Telefone",
+            "Relacionamento do cliente",
             "Canal",
             "Status",
             "Tipo de coleta",
@@ -2964,6 +2965,7 @@ def exportar_pedidos_csv(request):
                 criado_em.strftime("%H:%M"),
                 csv_safe(pedido.nome_cliente),
                 csv_safe(pedido.telefone),
+                csv_safe(pedido.cliente_recorrente_label if pedido.cliente_recorrente else ""),
                 csv_safe(pedido.get_canal_display()),
                 csv_safe(pedido.status_label_contextual),
                 csv_safe(pedido.get_tipo_coleta_display()),

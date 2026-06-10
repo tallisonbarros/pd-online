@@ -396,6 +396,17 @@ class CozinhaAccessTests(TestCase):
 
     def test_dashboard_export_returns_orders_csv(self):
         self.client.force_login(self.diretor_user)
+        pedido_anterior = Pedido.objects.create(
+            nome_cliente="Cliente Exportacao",
+            telefone="64999999999",
+            endereco="Rua CSV, 10",
+            bairro="Centro",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.SITE,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("20.00"),
+        )
+        Pedido.objects.filter(id=pedido_anterior.id).update(criado_em=timezone.now() - timedelta(hours=24))
         pedido = Pedido.objects.create(
             nome_cliente="Cliente Exportacao",
             telefone="64999999999",
@@ -427,9 +438,10 @@ class CozinhaAccessTests(TestCase):
         self.assertEqual(rows[0][0:4], ["Numero", "Data", "Hora", "Cliente"])
         exported = next(row for row in rows[1:] if row[0] == str(pedido.numero))
         self.assertEqual(exported[3], "Cliente Exportacao")
-        self.assertEqual(exported[5], "Site")
-        self.assertEqual(exported[12], "1x Marmita Frango - Grande")
-        self.assertEqual(exported[18], "35,00")
+        self.assertEqual(exported[5], "Pediu recentemente")
+        self.assertEqual(exported[6], "Site")
+        self.assertEqual(exported[13], "1x Marmita Frango - Grande")
+        self.assertEqual(exported[19], "35,00")
 
     def test_contabil_requires_diretor_access(self):
         self.client.force_login(self.gerente_user)
