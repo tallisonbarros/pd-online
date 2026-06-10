@@ -119,7 +119,7 @@
                                 <span class="ped-channel-tag ped-channel-tag--{{ pedido.canal }}">{{ pedido.get_canal_display }}</span>
                                 <span>{{ pedido.criado_em|date:"d/m, H:i" }}</span>
                                 {% if pedido.cliente_recorrente %}
-                                    <span class="ped-recurring-tag">{{ pedido.cliente_recorrente_label }}</span>
+                                    <span class="ped-recurring-tag{% if pedido.cliente_recorrente_recente %} ped-recurring-tag--recent{% endif %}">{{ pedido.cliente_recorrente_label }}</span>
                                 {% endif %}
                             </p>
                         </div>
@@ -200,7 +200,7 @@
                                 <span class="ped-channel-tag ped-channel-tag--{{ pedido.canal }}">{{ pedido.get_canal_display }}</span>
                                 <span>{{ pedido.criado_em|date:"d/m, H:i" }}</span>
                                 {% if pedido.cliente_recorrente %}
-                                    <span class="ped-recurring-tag">{{ pedido.cliente_recorrente_label }}</span>
+                                    <span class="ped-recurring-tag{% if pedido.cliente_recorrente_recente %} ped-recurring-tag--recent{% endif %}">{{ pedido.cliente_recorrente_label }}</span>
                                 {% endif %}
                             </p>
                         </div>

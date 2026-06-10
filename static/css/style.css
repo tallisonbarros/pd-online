@@ -5906,6 +5906,22 @@ fieldset.field {
     right: 16px;
 }
 
+.dashboard-action-stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.dashboard-action-stack .ops-logout {
+    min-width: 112px;
+}
+
+.dashboard-export-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+}
+
 .ops-user-chip {
     display: inline-flex;
     align-items: center;
@@ -8304,6 +8320,83 @@ fieldset.field {
     box-shadow: 0 16px 28px rgba(78, 52, 46, 0.22);
 }
 
+.dashboard-export-modal-card {
+    width: min(640px, 100%);
+}
+
+.dashboard-export-card .checkout-form {
+    margin-top: 14px;
+    gap: 14px;
+}
+
+.dashboard-export-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dashboard-export-presets button {
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 1px solid rgba(181, 151, 132, 0.42);
+    border-radius: 8px;
+    background: #fffdfa;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.dashboard-export-presets button:hover,
+.dashboard-export-presets button:focus-visible {
+    border-color: #4e342e;
+    outline: none;
+}
+
+.dashboard-export-presets button.is-active {
+    border-color: #4e342e;
+    background: #4e342e;
+    color: #fff;
+}
+
+.dashboard-export-date-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.dashboard-export-card .field {
+    gap: 7px;
+}
+
+.dashboard-export-card .field span {
+    color: #6f574d;
+    font-size: 0.84rem;
+    font-weight: 800;
+}
+
+.dashboard-export-card .field input {
+    min-height: 48px;
+    border-color: rgba(216, 193, 183, 0.92);
+    border-radius: 8px;
+    background: #fffdfa;
+    font-weight: 700;
+}
+
+.dashboard-export-summary {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 0.82rem;
+    font-weight: 750;
+}
+
+.dashboard-export-card .primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
 .hidden {
     display: none;
 }
@@ -8480,6 +8573,19 @@ fieldset.field {
         position: static;
         right: auto;
         top: auto;
+    }
+
+    .dashboard-action-stack {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-action-stack .ops-logout {
+        width: 100%;
+    }
+
+    .dashboard-export-date-grid {
+        grid-template-columns: 1fr;
     }
 
     .ops-order-total,
@@ -10796,6 +10902,23 @@ fieldset.field {
     border-radius: 999px;
     background: #14936f;
     box-shadow: 0 0 0 3px rgba(20, 147, 111, 0.16);
+}
+.ped-recurring-tag--recent {
+    border-color: #e17a16;
+    background: #fff2df;
+    color: #93450b;
+    box-shadow: 0 6px 14px rgba(225, 122, 22, 0.18);
+}
+.ped-recurring-tag--recent::before {
+    content: "\26A1";
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    color: #e17a16;
+    font-size: 12px;
+    line-height: 1;
+    box-shadow: none;
 }
 .ped-item-line { margin: 8px 0 0; color: #5f4b42; font-size: 16px; }
 .ped-item-line--top {

@@ -2887,6 +2887,104 @@ def cozinha(request):
     )
 
 
+@staff_member_required(login_url="/admin/login/")
+@require_GET
+def exportar_pedidos_csv(request):
+    if not user_is_diretor(request.user):
+        return redirect("pedidos:cozinha_operacao")
+
+    inicio = parse_date(_safe_text(request.GET.get("inicio")))
+    fim = parse_date(_safe_text(request.GET.get("fim")))
+    if not inicio or not fim:
+        return HttpResponseBadRequest("Informe as datas inicial e final.")
+    if inicio > fim:
+        return HttpResponseBadRequest("A data inicial nao pode ser posterior a data final.")
+
+    pedidos = (
+        Pedido.objects.filter(criado_em__date__range=(inicio, fim))
+        .exclude(status=Pedido.Status.RASCUNHO)
+        .prefetch_related("itens")
+        .order_by("criado_em", "id")
+    )
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (
+        f'attachment; filename="pedidos_{inicio.isoformat()}_a_{fim.isoformat()}.csv"'
+    )
+    response.write("\ufeff")
+    writer = csv.writer(response, delimiter=";", quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(
+        [
+            "Numero",
+            "Data",
+            "Hora",
+            "Cliente",
+            "Telefone",
+            "Canal",
+            "Status",
+            "Tipo de coleta",
+            "Forma de pagamento",
+            "Pagamento recebido",
+            "Endereco",
+            "Bairro",
+            "Itens",
+            "Quantidade de itens",
+            "Subtotal dos itens",
+            "Frete",
+            "Desconto promocao",
+            "Desconto cupom",
+            "Total",
+            "Observacao",
+        ]
+    )
+
+    def csv_safe(value):
+        text = _safe_text(value)
+        if text.startswith(("=", "+", "-", "@")):
+            return f"'{text}"
+        return text
+
+    for pedido in pedidos:
+        criado_em = timezone.localtime(pedido.criado_em)
+        itens = list(pedido.itens.all())
+        itens_texto = " | ".join(
+            (
+                f"{item.quantidade}x {item.nome_prato_snapshot}"
+                f"{f' - {item.variacao_nome_snapshot}' if item.variacao_nome_snapshot else ''}"
+            )
+            for item in itens
+        )
+        quantidade_itens = sum(item.quantidade for item in itens)
+        subtotal_itens = sum((item.subtotal for item in itens), Decimal("0.00"))
+
+        writer.writerow(
+            [
+                pedido.numero or pedido.id,
+                criado_em.strftime("%d/%m/%Y"),
+                criado_em.strftime("%H:%M"),
+                csv_safe(pedido.nome_cliente),
+                csv_safe(pedido.telefone),
+                csv_safe(pedido.get_canal_display()),
+                csv_safe(pedido.status_label_contextual),
+                csv_safe(pedido.get_tipo_coleta_display()),
+                csv_safe(pedido.get_forma_pagamento_display()),
+                "Sim" if pedido.pagamento_recebido else "Nao",
+                csv_safe(pedido.endereco_formatado or pedido.endereco),
+                csv_safe(pedido.bairro),
+                csv_safe(itens_texto),
+                quantidade_itens,
+                f"{subtotal_itens:.2f}".replace(".", ","),
+                f"{pedido.valor_frete:.2f}".replace(".", ","),
+                f"{pedido.promocao_desconto:.2f}".replace(".", ","),
+                f"{pedido.cupom_desconto:.2f}".replace(".", ","),
+                f"{pedido.total:.2f}".replace(".", ","),
+                csv_safe(pedido.observacao_geral),
+            ]
+        )
+
+    return response
+
+
 def _contabil_query(data_selecionada, extra=None):
     params = {"data": data_selecionada.isoformat()}
     if extra:
@@ -3391,11 +3489,14 @@ def pedidos_admin(request):
 def pedidos_aprovacao_admin(request):
     base = Pedido.objects.prefetch_related("itens")
     hoje = timezone.localdate()
+    pedidos_aprovacao = _marcar_clientes_recorrentes(
+        base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20]
+    )
     return render(
         request,
         "pedidos/pedidos_aprovacao_admin.html",
         {
-            "pedidos_aprovacao": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20],
+            "pedidos_aprovacao": pedidos_aprovacao,
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
             "aprovacao_count": base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).count(),
             "concluidos_count": base.filter(status=Pedido.Status.FINALIZADO, criado_em__date=hoje).count(),
@@ -3604,20 +3705,15 @@ def _marcar_clientes_recorrentes(pedidos):
     cliente_ids = {pedido.cliente_id for pedido in pedidos if pedido.cliente_id}
     telefones = {normalize_phone(pedido.telefone) for pedido in pedidos}
     telefones.discard("")
-    clientes_na_lista = {}
-    telefones_na_lista = {}
+    clientes_historico = {}
+    telefones_historico = {}
     for pedido in pedidos:
-        if pedido.cliente_id and (
-            pedido.cliente_id not in clientes_na_lista or pedido.criado_em < clientes_na_lista[pedido.cliente_id]
-        ):
-            clientes_na_lista[pedido.cliente_id] = pedido.criado_em
+        if pedido.cliente_id:
+            clientes_historico.setdefault(pedido.cliente_id, []).append(pedido.criado_em)
         telefone_normalizado = normalize_phone(pedido.telefone)
-        if telefone_normalizado and (
-            telefone_normalizado not in telefones_na_lista or pedido.criado_em < telefones_na_lista[telefone_normalizado]
-        ):
-            telefones_na_lista[telefone_normalizado] = pedido.criado_em
+        if telefone_normalizado:
+            telefones_historico.setdefault(telefone_normalizado, []).append(pedido.criado_em)
 
-    clientes_recorrentes = {}
     if cliente_ids:
         clientes_anteriores = (
             Pedido.objects.exclude(status__in=RECURRENT_CUSTOMER_EXCLUDED_STATUSES)
@@ -3626,10 +3722,8 @@ def _marcar_clientes_recorrentes(pedidos):
             .values_list("cliente_id", "criado_em")
         )
         for cliente_id, criado_em in clientes_anteriores:
-            if cliente_id not in clientes_recorrentes or criado_em < clientes_recorrentes[cliente_id]:
-                clientes_recorrentes[cliente_id] = criado_em
+            clientes_historico.setdefault(cliente_id, []).append(criado_em)
 
-    telefones_recorrentes = {}
     if telefones:
         pedidos_anteriores = (
             Pedido.objects.exclude(status__in=RECURRENT_CUSTOMER_EXCLUDED_STATUSES)
@@ -3640,22 +3734,29 @@ def _marcar_clientes_recorrentes(pedidos):
         for telefone, criado_em in pedidos_anteriores:
             telefone_normalizado = normalize_phone(telefone)
             if telefone_normalizado in telefones:
-                if telefone_normalizado not in telefones_recorrentes or criado_em < telefones_recorrentes[telefone_normalizado]:
-                    telefones_recorrentes[telefone_normalizado] = criado_em
+                telefones_historico.setdefault(telefone_normalizado, []).append(criado_em)
 
     for pedido in pedidos:
         telefone_normalizado = normalize_phone(pedido.telefone)
-        cliente_recorrente_em = clientes_recorrentes.get(pedido.cliente_id)
-        telefone_recorrente_em = telefones_recorrentes.get(telefone_normalizado)
-        cliente_na_lista_em = clientes_na_lista.get(pedido.cliente_id)
-        telefone_na_lista_em = telefones_na_lista.get(telefone_normalizado)
-        pedido.cliente_recorrente = bool(
-            (cliente_recorrente_em and cliente_recorrente_em < pedido.criado_em)
-            or (telefone_recorrente_em and telefone_recorrente_em < pedido.criado_em)
-            or (cliente_na_lista_em and cliente_na_lista_em < pedido.criado_em)
-            or (telefone_na_lista_em and telefone_na_lista_em < pedido.criado_em)
+        datas_anteriores = [
+            criado_em
+            for criado_em in (
+                clientes_historico.get(pedido.cliente_id, [])
+                + telefones_historico.get(telefone_normalizado, [])
+            )
+            if criado_em < pedido.criado_em
+        ]
+        pedido_anterior_em = max(datas_anteriores, default=None)
+        pedido.cliente_recorrente = pedido_anterior_em is not None
+        pedido.cliente_recorrente_recente = bool(
+            pedido_anterior_em
+            and pedido.criado_em - pedido_anterior_em <= timedelta(hours=72)
         )
-        pedido.cliente_recorrente_label = "Cliente recorrente"
+        pedido.cliente_recorrente_label = (
+            "Pediu recentemente"
+            if pedido.cliente_recorrente_recente
+            else "Cliente recorrente"
+        )
     return pedidos
 
 
@@ -3669,6 +3770,7 @@ def _pedido_admin_summary(pedido):
         "canal": pedido.canal,
         "canal_label": pedido.get_canal_display(),
         "cliente_recorrente": bool(getattr(pedido, "cliente_recorrente", False)),
+        "cliente_recorrente_recente": bool(getattr(pedido, "cliente_recorrente_recente", False)),
         "cliente_recorrente_label": getattr(pedido, "cliente_recorrente_label", "Cliente recorrente"),
         "item_line": _pedido_primeiro_item_line(pedido),
         "item_lines": _pedido_item_lines(pedido),
@@ -3720,7 +3822,9 @@ def api_pedidos_admin(request):
 
 def _pedidos_aprovacao_payload():
     base = Pedido.objects.prefetch_related("itens")
-    pedidos = base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20]
+    pedidos = _marcar_clientes_recorrentes(
+        base.filter(status=Pedido.Status.AGUARDANDO_APROVACAO).order_by("-criado_em", "-id")[:20]
+    )
     return {
         "pedidos": [_pedido_admin_summary(pedido) for pedido in pedidos],
         **_pedidos_base_counts(base),

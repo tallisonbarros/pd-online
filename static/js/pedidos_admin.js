@@ -247,7 +247,8 @@
     function buildRecurringTag(pedido) {
         if (!pedido.cliente_recorrente) return "";
         const label = pedido.cliente_recorrente_label || "Cliente recorrente";
-        return `<span class="ped-recurring-tag">${escapeHtml(label)}</span>`;
+        const recentClass = pedido.cliente_recorrente_recente ? " ped-recurring-tag--recent" : "";
+        return `<span class="ped-recurring-tag${recentClass}">${escapeHtml(label)}</span>`;
     }
 
     function buildItemList(pedido) {
@@ -379,7 +380,7 @@
                         </div>
                         <div>
                             <h2>${escapeHtml(pedido.cliente)} <span>#${pedidoNumero}</span> ${buildNoPhoneIcon(pedido)}</h2>
-                            <p class="ped-time">${escapeHtml(pedido.criado_em)}</p>
+                            <p class="ped-time"><span>${escapeHtml(pedido.criado_em)}</span> ${buildRecurringTag(pedido)}</p>
                         </div>
                     </div>
                     ${buildItemList(pedido)}

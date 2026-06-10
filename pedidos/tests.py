@@ -371,6 +371,65 @@ class CozinhaAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-label="Navegar por dia"')
+        self.assertContains(response, 'data-open-management-modal="#dashboard-export-modal"')
+        self.assertContains(response, 'id="dashboard-export-modal"')
+
+    def test_dashboard_export_requires_staff_authentication(self):
+        response = self.client.get("/controle/exportar/?inicio=2026-06-01&fim=2026-06-09")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_dashboard_export_redirects_staff_without_diretor_access(self):
+        self.client.force_login(self.gerente_user)
+
+        response = self.client.get("/controle/exportar/?inicio=2026-06-01&fim=2026-06-09")
+
+        self.assertRedirects(response, "/controle/operacao/")
+
+    def test_dashboard_export_validates_date_range(self):
+        self.client.force_login(self.diretor_user)
+
+        response = self.client.get("/controle/exportar/?inicio=2026-06-09&fim=2026-06-01")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_export_returns_orders_csv(self):
+        self.client.force_login(self.diretor_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente Exportacao",
+            telefone="64999999999",
+            endereco="Rua CSV, 10",
+            bairro="Centro",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            canal=Pedido.Canal.SITE,
+            status=Pedido.Status.FINALIZADO,
+            total_sem_desconto=Decimal("30.00"),
+            valor_frete=Decimal("5.00"),
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Marmita Frango",
+            variacao_nome_snapshot="Grande",
+            preco_snapshot=Decimal("30.00"),
+            quantidade=1,
+        )
+
+        response = self.client.get(
+            f"/controle/exportar/?inicio={timezone.localdate():%Y-%m-%d}&fim={timezone.localdate():%Y-%m-%d}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("attachment;", response["Content-Disposition"])
+        rows = list(csv.reader(StringIO(response.content.decode("utf-8-sig")), delimiter=";"))
+        self.assertEqual(rows[0][0:4], ["Numero", "Data", "Hora", "Cliente"])
+        exported = next(row for row in rows[1:] if row[0] == str(pedido.numero))
+        self.assertEqual(exported[3], "Cliente Exportacao")
+        self.assertEqual(exported[5], "Site")
+        self.assertEqual(exported[12], "1x Marmita Frango - Grande")
+        self.assertEqual(exported[18], "35,00")
 
     def test_contabil_requires_diretor_access(self):
         self.client.force_login(self.gerente_user)
@@ -3278,7 +3337,8 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertContains(response, 'data-concluded-badge')
         self.assertContains(response, "Sem itens")
         self.assertContains(response, "<span>Status</span>", html=True)
-        self.assertContains(response, "Cliente recorrente")
+        self.assertContains(response, "Pediu recentemente")
+        self.assertContains(response, "ped-recurring-tag--recent")
         self.assertContains(response, 'data-closed-total')
 
     def test_orders_nav_shows_concluded_badge_outside_completed_page(self):
@@ -3488,9 +3548,11 @@ class PedidoDetalheAdminTests(TestCase):
         payload = self.client.get("/controle/api/pedidos-admin/").json()
 
         self.assertContains(page_response, "ped-recurring-tag")
-        self.assertContains(page_response, "Cliente recorrente")
+        self.assertContains(page_response, "Pediu recentemente")
+        self.assertContains(page_response, "ped-recurring-tag--recent")
         self.assertTrue(payload["pedidos"][0]["cliente_recorrente"])
-        self.assertEqual(payload["pedidos"][0]["cliente_recorrente_label"], "Cliente recorrente")
+        self.assertTrue(payload["pedidos"][0]["cliente_recorrente_recente"])
+        self.assertEqual(payload["pedidos"][0]["cliente_recorrente_label"], "Pediu recentemente")
         self.assertEqual(payload["pedidos"][0]["id"], pedido.id)
 
     def test_pickup_order_card_hides_driver_request_action(self):
@@ -3836,6 +3898,68 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [approval.id])
         self.assertFalse(payload["pedidos"][0]["sem_telefone"])
 
+    def test_recurring_customer_badge_changes_for_order_within_72_hours(self):
+        self.client.force_login(self.staff_user)
+        current_time = timezone.now()
+        previous = Pedido.objects.create(
+            nome_cliente="Cliente Recente",
+            telefone="64988887777",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("30.00"),
+        )
+        current = Pedido.objects.create(
+            nome_cliente="Cliente Recente",
+            telefone="64988887777",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.AGUARDANDO_APROVACAO,
+            total=Decimal("35.00"),
+        )
+        Pedido.objects.filter(pk=previous.pk).update(criado_em=current_time - timedelta(hours=72))
+        Pedido.objects.filter(pk=current.pk).update(criado_em=current_time)
+
+        page_response = self.client.get("/controle/pedidos-aprovacao/")
+        payload = self.client.get("/controle/api/pedidos-aprovacao/").json()["pedidos"][0]
+
+        self.assertContains(page_response, "Pediu recentemente")
+        self.assertContains(page_response, "ped-recurring-tag--recent")
+        self.assertTrue(payload["cliente_recorrente"])
+        self.assertTrue(payload["cliente_recorrente_recente"])
+        self.assertEqual(payload["cliente_recorrente_label"], "Pediu recentemente")
+
+    def test_recurring_customer_badge_stays_green_after_72_hours(self):
+        self.client.force_login(self.staff_user)
+        current_time = timezone.now()
+        previous = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="64977776666",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.FINALIZADO,
+            total=Decimal("30.00"),
+        )
+        current = Pedido.objects.create(
+            nome_cliente="Cliente Recorrente",
+            telefone="64977776666",
+            endereco="Rua Teste, 100 - Centro, Rio Verde - GO",
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        Pedido.objects.filter(pk=previous.pk).update(criado_em=current_time - timedelta(hours=73))
+        Pedido.objects.filter(pk=current.pk).update(criado_em=current_time)
+
+        page_response = self.client.get("/controle/pedidos/")
+        payload = self.client.get("/controle/api/pedidos-admin/").json()["pedidos"][0]
+
+        self.assertContains(page_response, "Cliente recorrente")
+        self.assertNotContains(page_response, "ped-recurring-tag--recent")
+        self.assertTrue(payload["cliente_recorrente"])
+        self.assertFalse(payload["cliente_recorrente_recente"])
+        self.assertEqual(payload["cliente_recorrente_label"], "Cliente recorrente")
+
     def test_active_order_api_uses_pickup_stage_labels(self):
         self.client.force_login(self.staff_user)
         pedido = Pedido.objects.create(
@@ -3947,7 +4071,8 @@ class PedidoDetalheAdminTests(TestCase):
         payload = response.json()
         pedido_payload = next(pedido for pedido in payload["pedidos_concluidos"] if pedido["id"] == done.id)
         self.assertTrue(pedido_payload["cliente_recorrente"])
-        self.assertEqual(pedido_payload["cliente_recorrente_label"], "Cliente recorrente")
+        self.assertTrue(pedido_payload["cliente_recorrente_recente"])
+        self.assertEqual(pedido_payload["cliente_recorrente_label"], "Pediu recentemente")
 
     def test_completed_orders_page_opens_modal_and_shows_only_back_action(self):
         self.client.force_login(self.staff_user)

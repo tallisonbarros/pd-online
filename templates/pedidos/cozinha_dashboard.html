@@ -47,8 +47,12 @@
                     {% endfor %}
                 </nav>
             </div>
-            <div class="ops-session-actions">
+            <div class="ops-session-actions dashboard-action-stack">
                 <button type="button" class="ops-logout dashboard-production-trigger" data-open-management-modal="#dashboard-production-modal">Producao</button>
+                <button type="button" class="ops-logout dashboard-export-trigger" data-open-management-modal="#dashboard-export-modal">
+                    <span aria-hidden="true">&#8595;</span>
+                    Exportar
+                </button>
             </div>
         </header>
 
@@ -117,6 +121,53 @@
             </div>
         </div>
     </div>
+
+    <div id="dashboard-export-modal" class="modal-backdrop hidden management-modal" data-management-modal aria-hidden="true">
+        <div class="modal-card management-modal-card dashboard-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="dashboard-export-title">
+            <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">&times;</button>
+            <div class="modal-content dashboard-export-card">
+                <div class="panel-head management-modal-head">
+                    <p class="ops-kicker">Exportar</p>
+                    <h2 id="dashboard-export-title">Pedidos em CSV</h2>
+                </div>
+
+                <form
+                    method="get"
+                    action="{% url 'pedidos:exportar_pedidos_csv' %}"
+                    class="checkout-form"
+                    data-dashboard-export-form
+                    data-export-today="{{ hoje|date:'Y-m-d' }}"
+                >
+                    <div class="dashboard-export-presets" aria-label="Periodos rapidos">
+                        <button type="button" data-export-period="today">Hoje</button>
+                        <button type="button" data-export-period="yesterday">Ontem</button>
+                        <button type="button" data-export-period="last7">Ultimos 7 dias</button>
+                        <button type="button" data-export-period="month">Este mes</button>
+                        <button type="button" data-export-period="previous-month">Mes anterior</button>
+                    </div>
+
+                    <div class="dashboard-export-date-grid">
+                        <label class="field">
+                            <span>Data inicial</span>
+                            <input type="date" name="inicio" value="{{ data_selecionada|date:'Y-m-d' }}" required data-export-start>
+                        </label>
+                        <label class="field">
+                            <span>Data final</span>
+                            <input type="date" name="fim" value="{{ data_selecionada|date:'Y-m-d' }}" required data-export-end>
+                        </label>
+                    </div>
+
+                    <p class="dashboard-export-summary" data-export-summary>
+                        Periodo selecionado: {{ data_selecionada|date:"d/m/Y" }}
+                    </p>
+                    <button type="submit" class="primary-button wide">
+                        <span aria-hidden="true">&#8595;</span>
+                        Baixar CSV
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -138,5 +189,74 @@
                 if (input.value) form.submit();
             });
         });
+
+        const exportForm = document.querySelector("[data-dashboard-export-form]");
+        const exportStart = exportForm?.querySelector("[data-export-start]");
+        const exportEnd = exportForm?.querySelector("[data-export-end]");
+        const exportSummary = exportForm?.querySelector("[data-export-summary]");
+
+        function formatExportDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatExportLabel(value) {
+            if (!value) return "";
+            const [year, month, day] = value.split("-");
+            return `${day}/${month}/${year}`;
+        }
+
+        function updateExportSummary() {
+            if (!exportSummary || !exportStart?.value || !exportEnd?.value) return;
+            const startLabel = formatExportLabel(exportStart.value);
+            const endLabel = formatExportLabel(exportEnd.value);
+            exportSummary.textContent = startLabel === endLabel
+                ? `Periodo selecionado: ${startLabel}`
+                : `Periodo selecionado: ${startLabel} a ${endLabel}`;
+        }
+
+        function setExportPeriod(period) {
+            if (!exportStart || !exportEnd) return;
+            const serverToday = exportForm.dataset.exportToday.split("-").map(Number);
+            const today = new Date(serverToday[0], serverToday[1] - 1, serverToday[2], 12);
+            let start = new Date(today);
+            let end = new Date(today);
+
+            if (period === "yesterday") {
+                start.setDate(start.getDate() - 1);
+                end = new Date(start);
+            } else if (period === "last7") {
+                start.setDate(start.getDate() - 6);
+            } else if (period === "month") {
+                start = new Date(today.getFullYear(), today.getMonth(), 1, 12);
+            } else if (period === "previous-month") {
+                start = new Date(today.getFullYear(), today.getMonth() - 1, 1, 12);
+                end = new Date(today.getFullYear(), today.getMonth(), 0, 12);
+            }
+
+            exportStart.value = formatExportDate(start);
+            exportEnd.value = formatExportDate(end);
+            exportForm.querySelectorAll("[data-export-period]").forEach((button) => {
+                button.classList.toggle("is-active", button.dataset.exportPeriod === period);
+            });
+            updateExportSummary();
+        }
+
+        exportForm?.querySelectorAll("[data-export-period]").forEach((button) => {
+            button.addEventListener("click", () => {
+                setExportPeriod(button.dataset.exportPeriod);
+            });
+        });
+        function handleManualExportDate() {
+            exportForm?.querySelectorAll("[data-export-period]").forEach((button) => {
+                button.classList.remove("is-active");
+            });
+            updateExportSummary();
+        }
+
+        exportStart?.addEventListener("change", handleManualExportDate);
+        exportEnd?.addEventListener("change", handleManualExportDate);
     </script>
 {% endblock %}
