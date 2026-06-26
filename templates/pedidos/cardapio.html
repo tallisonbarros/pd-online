@@ -108,7 +108,7 @@
         <section class="menu-grid bebidas-grid">
             {% for adicional in adicionais %}
                 <article
-                    class="dish-card reveal-on-scroll"
+                    class="dish-card menu-secondary-card reveal-on-scroll"
                     data-prato-card
                     data-prato='{"tipo":"adicional","id":{{ adicional.id }},"nome":"{{ adicional.nome|escapejs }}","descricao":"{{ adicional.descricao|default_if_none:''|escapejs }}","preco": "{{ adicional.preco_cardapio }}","preco_formatado":"{% if adicional.preco_site_resolvido %}R$ {{ adicional.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ adicional.imagem_cardapio_url|escapejs }}"}'
                 >
@@ -128,18 +128,18 @@
                             <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ adicional.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% endif %}
                     </div>
-                    <div class="dish-body">
-                        <div>
+                    <div class="dish-body menu-secondary-body">
+                        <div class="menu-secondary-copy">
                             <h2>{{ adicional.nome }}</h2>
                             {% if adicional.descricao %}
                                 <p>{{ adicional.descricao }}</p>
                             {% endif %}
                         </div>
-                    </div>
-                    <div class="dish-qty-badge dish-qty-badge--footer" aria-label="Controle de quantidade do adicional">
-                        <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                        <strong data-card-qty-value>0</strong>
-                        <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                        <div class="dish-qty-badge dish-qty-badge--footer menu-secondary-qty" aria-label="Controle de quantidade do adicional">
+                            <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                            <strong data-card-qty-value>0</strong>
+                            <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                        </div>
                     </div>
                 </article>
             {% empty %}
@@ -158,7 +158,7 @@
         <section class="menu-grid bebidas-grid">
             {% for bebida in bebidas %}
                 <article
-                    class="dish-card reveal-on-scroll"
+                    class="dish-card menu-secondary-card reveal-on-scroll"
                     data-prato-card
                     data-prato='{"tipo":"bebida","id":{{ bebida.id }},"nome":"{{ bebida.nome|escapejs }}","descricao":"{{ bebida.descricao|default_if_none:''|escapejs }}","preco": "{{ bebida.preco_cardapio }}","preco_formatado":"{% if bebida.preco_site_resolvido %}R$ {{ bebida.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ bebida.imagem_cardapio_url|escapejs }}"}'
                 >
@@ -178,18 +178,18 @@
                             <img src="{% static 'img/placeholder-prato.svg' %}" alt="{{ bebida.nome }}" width="960" height="720" loading="lazy" decoding="async">
                         {% endif %}
                     </div>
-                    <div class="dish-body">
-                        <div>
+                    <div class="dish-body menu-secondary-body">
+                        <div class="menu-secondary-copy">
                             <h2>{{ bebida.nome }}</h2>
                             {% if bebida.descricao %}
                                 <p>{{ bebida.descricao }}</p>
                             {% endif %}
                         </div>
-                    </div>
-                    <div class="dish-qty-badge dish-qty-badge--footer" aria-label="Controle de quantidade da bebida">
-                        <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
-                        <strong data-card-qty-value>0</strong>
-                        <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                        <div class="dish-qty-badge dish-qty-badge--footer menu-secondary-qty" aria-label="Controle de quantidade da bebida">
+                            <button type="button" data-card-qty-change="-1" aria-label="Diminuir quantidade">-</button>
+                            <strong data-card-qty-value>0</strong>
+                            <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
+                        </div>
                     </div>
                 </article>
             {% empty %}
