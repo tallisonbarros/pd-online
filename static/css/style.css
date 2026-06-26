@@ -894,7 +894,8 @@ textarea {
 }
 
 [data-page="cardapio"] {
-    padding-bottom: 140px;
+    --menu-floating-scroll-runway: 0px;
+    padding-bottom: calc(140px + var(--menu-floating-scroll-runway));
 }
 
 .menu-intro {
@@ -13442,6 +13443,87 @@ fieldset.field {
     }
 }
 
+[data-page="cardapio"] .menu-floating-panel-shell {
+    --menu-floating-panel-scale: 1;
+    --menu-floating-panel-progress: 0;
+    --menu-floating-panel-top: 12px;
+    --menu-floating-panel-left: 0px;
+    --menu-floating-panel-width: auto;
+    --menu-floating-panel-base-height: auto;
+    position: relative;
+    z-index: 32;
+    height: var(--menu-floating-panel-height, auto);
+    margin-top: 18px;
+    display: flow-root;
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell .menu-feature-band {
+    margin-top: 0;
+    transform-origin: top left;
+    transition: none;
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating {
+    z-index: 90;
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-band {
+    position: fixed;
+    top: var(--menu-floating-panel-top);
+    left: var(--menu-floating-panel-left);
+    width: var(--menu-floating-panel-width);
+    height: var(--menu-floating-panel-base-height);
+    max-width: none;
+    aspect-ratio: auto;
+    margin: 0;
+    z-index: 90;
+    transform: translate3d(0, 0, 0) scale(var(--menu-floating-panel-scale));
+    transform-origin: top left;
+    will-change: left, transform;
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-shape,
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-card-wrap,
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-title,
+[data-page="cardapio"] .menu-floating-panel-shell.has-floated .menu-feature-shape,
+[data-page="cardapio"] .menu-floating-panel-shell.has-floated .menu-feature-card-wrap,
+[data-page="cardapio"] .menu-floating-panel-shell.has-floated .menu-feature-title {
+    animation: none;
+}
+
+[data-page="cardapio"] [data-menu-scroll-collapse] {
+    --menu-scroll-collapse-progress: 0;
+    --menu-scroll-collapse-opacity: 1;
+    --menu-scroll-collapse-margin-bottom: 18px;
+    --menu-scroll-collapse-padding-top: 2px;
+    --menu-scroll-collapse-padding-bottom: 10px;
+    --menu-scroll-collapse-offset: 0px;
+    --menu-scroll-collapse-scale: 1;
+    --menu-scroll-collapse-blur: 0px;
+    max-height: var(--menu-scroll-collapse-height, 78px);
+    opacity: var(--menu-scroll-collapse-opacity);
+    margin-bottom: var(--menu-scroll-collapse-margin-bottom);
+    padding-top: var(--menu-scroll-collapse-padding-top);
+    padding-bottom: var(--menu-scroll-collapse-padding-bottom);
+    overflow: hidden;
+    transform: translateY(var(--menu-scroll-collapse-offset)) scaleY(var(--menu-scroll-collapse-scale));
+    transform-origin: top center;
+    filter: blur(var(--menu-scroll-collapse-blur));
+    pointer-events: auto;
+    transition: none;
+    will-change: max-height, opacity, margin, padding, transform, filter;
+}
+
+[data-page="cardapio"] [data-menu-scroll-collapse].is-collapsed {
+    max-height: 0;
+    pointer-events: none;
+}
+
+[data-page="cardapio"] [data-menu-scroll-collapse].reveal-on-scroll.is-visible {
+    opacity: var(--menu-scroll-collapse-opacity);
+    transform: translateY(var(--menu-scroll-collapse-offset)) scaleY(var(--menu-scroll-collapse-scale));
+}
+
 [data-page="cardapio"] .dish-qty-badge--footer {
     min-height: 40px;
     padding: 7px 12px;
@@ -14079,6 +14161,24 @@ fieldset.field {
 .layout.public-layout.order-closed-page {
     width: min(560px, calc(100% - 32px));
     padding: 32px 0;
+}
+
+/* Cardapio vertical app-like shell */
+[data-page="cardapio"].layout.public-layout {
+    width: min(500px, calc(100% - 28px));
+}
+
+@media (min-width: 720px) {
+    [data-page="cardapio"].layout.public-layout {
+        width: min(500px, calc(100% - 40px));
+    }
+}
+
+[data-page="cardapio"] .bebidas-grid {
+    grid-template-columns: repeat(auto-fit, minmax(112px, 117px));
+    justify-content: center;
+    justify-items: stretch;
+    gap: 8px;
 }
 
 /* Cardapio secondary item cards */

@@ -27,7 +27,8 @@
         {% endif %}
     </header>
 
-    <section class="menu-feature-band" aria-labelledby="menu-feature-title">
+    <div class="menu-floating-panel-shell" data-menu-floating-panel-shell>
+    <section class="menu-feature-band" data-menu-floating-panel aria-labelledby="menu-feature-title">
         <img class="menu-feature-shape" src="{% static 'img/Barra.svg' %}" onerror="this.onerror=null;this.src='{% static 'img/menu-feature-shape-base-cardapio.svg' %}'" alt="" aria-hidden="true">
         <div class="menu-feature-title">
             <h1 id="menu-feature-title">
@@ -80,8 +81,9 @@
             {% endwith %}
         </div>
     </section>
+    </div>
 
-    <section class="quality-signature reveal-on-scroll" aria-label="Marmitas seladas e feitas no dia">
+    <section class="quality-signature reveal-on-scroll" data-menu-scroll-collapse aria-label="Marmitas seladas e feitas no dia">
         <div class="quality-marquee" aria-hidden="true">
             <div class="quality-marquee-track">
                 <img src="{% static 'img/optimized/icon_marmita_selada.webp' %}" alt="" width="160" height="160" loading="lazy" decoding="async">

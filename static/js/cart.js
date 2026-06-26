@@ -990,6 +990,186 @@
             }
         }
 
+        function initFloatingMenuPanel() {
+            const shell = document.querySelector("[data-menu-floating-panel-shell]");
+            const panel = shell?.querySelector("[data-menu-floating-panel]");
+            if (!(shell instanceof HTMLElement) || !(panel instanceof HTMLElement)) return;
+            const collapseSections = Array.from(document.querySelectorAll("[data-menu-scroll-collapse]"))
+                .filter((section) => section instanceof HTMLElement);
+
+            let metrics = null;
+            let collapseMetrics = [];
+            let updateFrame = 0;
+            let measureFrame = 0;
+            const minScale = 0.6;
+            const flowRunwayRatio = 0.78;
+
+            const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(value, max));
+            const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+
+            function viewportHeight() {
+                return window.visualViewport?.height || window.innerHeight || 1;
+            }
+
+            function floatingTopOffset() {
+                return Math.round(Math.max(10, Math.min(22, viewportHeight() * 0.025)));
+            }
+
+            function transitionDistance() {
+                return Math.round(Math.max(280, Math.min(360, viewportHeight() * 0.44)));
+            }
+
+            function smoothStep(progress) {
+                const nextProgress = clamp(progress);
+                return nextProgress * nextProgress * (3 - (2 * nextProgress));
+            }
+
+            function compactLeftEdge() {
+                const cardapioPage = shell.closest('[data-page="cardapio"]');
+                const cardapioRect = cardapioPage instanceof HTMLElement
+                    ? cardapioPage.getBoundingClientRect()
+                    : shell.getBoundingClientRect();
+                return Math.max(0, Math.round(cardapioRect.left));
+            }
+
+            function setShellMetric(name, value) {
+                shell.style.setProperty(name, value);
+            }
+
+            function setCollapseSectionProgress(section, state, progress) {
+                const nextProgress = clamp(progress);
+                const remaining = 1 - nextProgress;
+                const opacity = clamp(1 - Math.max(0, nextProgress - 0.08) / 0.72);
+
+                section.style.setProperty("--menu-scroll-collapse-progress", nextProgress.toFixed(4));
+                section.style.setProperty("--menu-scroll-collapse-height", `${Math.max(0, Math.round(state.height * remaining))}px`);
+                section.style.setProperty("--menu-scroll-collapse-opacity", opacity.toFixed(4));
+                section.style.setProperty("--menu-scroll-collapse-margin-bottom", `${Math.max(0, Math.round(state.marginBottom * remaining))}px`);
+                section.style.setProperty("--menu-scroll-collapse-padding-top", `${Math.max(0, Math.round(state.paddingTop * remaining))}px`);
+                section.style.setProperty("--menu-scroll-collapse-padding-bottom", `${Math.max(0, Math.round(state.paddingBottom * remaining))}px`);
+                section.style.setProperty("--menu-scroll-collapse-offset", `${Math.round(-16 * nextProgress)}px`);
+                section.style.setProperty("--menu-scroll-collapse-scale", (1 - (0.18 * nextProgress)).toFixed(4));
+                section.style.setProperty("--menu-scroll-collapse-blur", `${(3 * nextProgress).toFixed(2)}px`);
+                section.classList.toggle("is-collapsed", nextProgress >= 0.995);
+            }
+
+            function measureCollapseSections() {
+                collapseMetrics = collapseSections.map((section) => {
+                    section.classList.remove("is-collapsed");
+                    section.style.setProperty("--menu-scroll-collapse-progress", "0");
+                    section.style.removeProperty("--menu-scroll-collapse-height");
+                    section.style.removeProperty("--menu-scroll-collapse-opacity");
+                    section.style.removeProperty("--menu-scroll-collapse-margin-bottom");
+                    section.style.removeProperty("--menu-scroll-collapse-padding-top");
+                    section.style.removeProperty("--menu-scroll-collapse-padding-bottom");
+                    section.style.removeProperty("--menu-scroll-collapse-offset");
+                    section.style.removeProperty("--menu-scroll-collapse-scale");
+                    section.style.removeProperty("--menu-scroll-collapse-blur");
+
+                    const computed = window.getComputedStyle(section);
+                    const state = {
+                        section,
+                        height: Math.ceil(section.scrollHeight),
+                        marginBottom: Number.parseFloat(computed.marginBottom) || 0,
+                        paddingTop: Number.parseFloat(computed.paddingTop) || 0,
+                        paddingBottom: Number.parseFloat(computed.paddingBottom) || 0,
+                    };
+                    setCollapseSectionProgress(section, state, 0);
+                    return state;
+                });
+            }
+
+            function measureFloatingPanel() {
+                const wasFloating = shell.classList.contains("is-floating");
+                if (wasFloating) {
+                    shell.classList.remove("is-floating");
+                }
+                measureCollapseSections();
+
+                const rect = panel.getBoundingClientRect();
+                const scrollY = window.scrollY || window.pageYOffset || 0;
+                const topOffset = floatingTopOffset();
+                const naturalTop = scrollY + rect.top;
+                const startY = naturalTop - topOffset;
+                const shrinkDistance = transitionDistance();
+
+                metrics = {
+                    naturalTop,
+                    topOffset,
+                    shrinkDistance,
+                    flowRunway: Math.round(shrinkDistance * flowRunwayRatio),
+                    width: rect.width,
+                    height: rect.height,
+                };
+
+                setShellMetric("--menu-floating-panel-height", `${Math.ceil(rect.height)}px`);
+                setShellMetric("--menu-floating-panel-width", `${Math.ceil(rect.width)}px`);
+                setShellMetric("--menu-floating-panel-base-height", `${Math.ceil(rect.height)}px`);
+                setShellMetric("--menu-floating-panel-top", `${topOffset}px`);
+
+                if (wasFloating) {
+                    shell.classList.add("is-floating");
+                }
+
+                updateFloatingPanel();
+            }
+
+            function updateFloatingPanel() {
+                updateFrame = 0;
+                if (!metrics) return;
+
+                const scrollY = window.scrollY || window.pageYOffset || 0;
+                const startY = metrics.naturalTop - metrics.topOffset;
+                const rawProgress = (scrollY - startY) / metrics.shrinkDistance;
+                const progress = reducedMotion() ? (rawProgress > 0 ? 1 : 0) : clamp(rawProgress);
+                const isFloating = scrollY >= startY;
+                const scale = 1 - ((1 - minScale) * progress);
+                const shellRect = shell.getBoundingClientRect();
+                const naturalLeft = Math.max(0, Math.round(shellRect.left));
+                const compactLeft = Math.min(naturalLeft, compactLeftEdge());
+                const slideProgress = smoothStep(progress);
+                const floatingLeft = Math.round(naturalLeft + ((compactLeft - naturalLeft) * slideProgress));
+                const flowHeight = metrics.height + (metrics.flowRunway * progress);
+
+                setShellMetric("--menu-floating-panel-left", `${floatingLeft}px`);
+                setShellMetric("--menu-floating-panel-height", `${Math.ceil(flowHeight)}px`);
+                setShellMetric("--menu-floating-panel-progress", progress.toFixed(4));
+                setShellMetric("--menu-floating-panel-scale", scale.toFixed(4));
+
+                if (isFloating) {
+                    shell.classList.add("has-floated");
+                }
+                shell.classList.toggle("is-floating", isFloating);
+
+                const collapseProgress = isFloating ? clamp(progress * 1.35) : 0;
+                collapseMetrics.forEach((state) => {
+                    setCollapseSectionProgress(state.section, state, collapseProgress);
+                });
+            }
+
+            function scheduleFloatingPanelUpdate() {
+                if (updateFrame) return;
+                updateFrame = window.requestAnimationFrame(updateFloatingPanel);
+            }
+
+            function scheduleFloatingPanelMeasure() {
+                if (measureFrame) return;
+                measureFrame = window.requestAnimationFrame(() => {
+                    measureFrame = 0;
+                    measureFloatingPanel();
+                });
+            }
+
+            measureFloatingPanel();
+            window.addEventListener("scroll", scheduleFloatingPanelUpdate, { passive: true });
+            window.addEventListener("resize", scheduleFloatingPanelMeasure);
+            window.addEventListener("orientationchange", scheduleFloatingPanelMeasure);
+            window.visualViewport?.addEventListener("resize", scheduleFloatingPanelMeasure);
+            window.setTimeout(scheduleFloatingPanelMeasure, 350);
+        }
+
+        initFloatingMenuPanel();
+
         const modal = document.getElementById("pedido-modal");
         if (!modal) return;
 
@@ -1086,6 +1266,9 @@
                 genericBadge?.insertAdjacentElement("afterend", controls);
             }
             controls.dataset.variationsSignature = signature;
+            controls.dataset.variationCount = String(variations.length);
+            controls.classList.toggle("is-single", variations.length === 1);
+            controls.classList.toggle("is-multi", variations.length > 1);
             controls.innerHTML = variations
                 .map((variation) => `
                     <div class="dish-variation-quick-row" data-card-variation-row="${escapeHtml(variation)}">
