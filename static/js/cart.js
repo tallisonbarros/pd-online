@@ -995,7 +995,6 @@
             const panel = shell?.querySelector("[data-menu-floating-panel]");
             if (!(shell instanceof HTMLElement) || !(panel instanceof HTMLElement)) return;
             const pageRoot = shell.closest('[data-page="cardapio"]');
-            const floatingContent = document.querySelector("[data-menu-floating-content]");
             const collapseSections = Array.from(document.querySelectorAll("[data-menu-scroll-collapse]"))
                 .filter((section) => section instanceof HTMLElement);
 
@@ -1005,9 +1004,7 @@
             let measureFrame = 0;
             let isFloatingState = shell.classList.contains("is-floating");
             const minScale = 0.6;
-            const flowRunwayRatio = 0.78;
             const shellStyleState = new Map();
-            const contentStyleState = new Map();
             const reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
             const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(value, max));
@@ -1045,10 +1042,6 @@
 
             function setShellMetric(name, value) {
                 setElementMetric(shell, shellStyleState, name, value);
-            }
-
-            function setContentMetric(name, value) {
-                setElementMetric(floatingContent, contentStyleState, name, value);
             }
 
             function setCollapseMetric(state, name, value) {
@@ -1102,13 +1095,11 @@
                 const shrinkDistance = transitionDistance();
                 const naturalLeft = Math.max(0, Math.round(rect.left));
                 const compactLeft = Math.min(naturalLeft, compactLeftEdge());
-                const flowRunway = Math.round(shrinkDistance * flowRunwayRatio);
 
                 metrics = {
                     naturalTop,
                     topOffset,
                     shrinkDistance,
-                    flowRunway,
                     naturalLeft,
                     compactLeft,
                     width: rect.width,
@@ -1120,7 +1111,6 @@
                 setShellMetric("--menu-floating-panel-base-height", `${Math.ceil(rect.height)}px`);
                 setShellMetric("--menu-floating-panel-top", `${topOffset}px`);
                 setShellMetric("--menu-floating-panel-x", `${naturalLeft}px`);
-                setContentMetric("--menu-floating-content-offset", "0px");
                 if (pageRoot instanceof HTMLElement) {
                     pageRoot.style.setProperty("--menu-floating-scroll-runway", `${shrinkDistance + Math.ceil(rect.height * minScale)}px`);
                 }
@@ -1145,12 +1135,10 @@
                 const scale = 1 - ((1 - minScale) * progress);
                 const slideProgress = smoothStep(progress);
                 const floatingLeft = Math.round(metrics.naturalLeft + ((metrics.compactLeft - metrics.naturalLeft) * slideProgress));
-                const contentOffset = Math.round(metrics.flowRunway * progress);
 
                 setShellMetric("--menu-floating-panel-x", `${floatingLeft}px`);
                 setShellMetric("--menu-floating-panel-progress", progress.toFixed(4));
                 setShellMetric("--menu-floating-panel-scale", scale.toFixed(4));
-                setContentMetric("--menu-floating-content-offset", `${contentOffset}px`);
 
                 if (isFloating) {
                     shell.classList.add("has-floated");

@@ -13458,10 +13458,8 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .menu-floating-content {
-    --menu-floating-content-offset: 0px;
     position: relative;
     z-index: 1;
-    transform: translate3d(0, var(--menu-floating-content-offset), 0);
 }
 
 [data-page="cardapio"] .menu-floating-scroll-runway {
@@ -13477,10 +13475,6 @@ fieldset.field {
 
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating {
     z-index: 90;
-}
-
-[data-page="cardapio"] .menu-floating-panel-shell.is-floating + .menu-floating-content {
-    will-change: transform;
 }
 
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-band {
