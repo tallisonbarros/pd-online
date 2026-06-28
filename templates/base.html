@@ -7,7 +7,7 @@
     <title>{% block title %}PRATO-DELIVERY{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
     <link rel="apple-touch-icon" href="{% static 'img/favicon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={% now 'U' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>

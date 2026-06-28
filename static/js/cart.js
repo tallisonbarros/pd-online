@@ -1003,11 +1003,15 @@
             let collapseMetrics = [];
             let updateFrame = 0;
             let measureFrame = 0;
+            let isFloatingState = shell.classList.contains("is-floating");
             const minScale = 0.6;
             const flowRunwayRatio = 0.78;
+            const shellStyleState = new Map();
+            const contentStyleState = new Map();
+            const reducedMotionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
             const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(value, max));
-            const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+            const reducedMotion = () => reducedMotionQuery?.matches === true;
 
             function viewportHeight() {
                 return window.visualViewport?.height || window.innerHeight || 1;
@@ -1033,26 +1037,36 @@
                 return Math.max(0, Math.round(cardapioRect.left));
             }
 
+            function setElementMetric(element, state, name, value) {
+                if (!(element instanceof HTMLElement) || state.get(name) === value) return;
+                element.style.setProperty(name, value);
+                state.set(name, value);
+            }
+
             function setShellMetric(name, value) {
-                shell.style.setProperty(name, value);
+                setElementMetric(shell, shellStyleState, name, value);
             }
 
             function setContentMetric(name, value) {
-                if (floatingContent instanceof HTMLElement) {
-                    floatingContent.style.setProperty(name, value);
-                }
+                setElementMetric(floatingContent, contentStyleState, name, value);
             }
 
-            function setCollapseSectionProgress(section, progress) {
+            function setCollapseMetric(state, name, value) {
+                setElementMetric(state.section, state.styleState, name, value);
+            }
+
+            function setCollapseSectionProgress(state, progress) {
+                const section = state.section;
                 const nextProgress = clamp(progress);
                 const opacity = clamp(1 - Math.max(0, nextProgress - 0.08) / 0.72);
                 const shouldCollapse = nextProgress >= 0.995;
 
-                section.style.setProperty("--menu-scroll-collapse-progress", nextProgress.toFixed(4));
-                section.style.setProperty("--menu-scroll-collapse-opacity", opacity.toFixed(4));
-                section.style.setProperty("--menu-scroll-collapse-offset", `${Math.round(-16 * nextProgress)}px`);
-                section.style.setProperty("--menu-scroll-collapse-scale", (1 - (0.18 * nextProgress)).toFixed(4));
-                if (section.classList.contains("is-collapsed") !== shouldCollapse) {
+                setCollapseMetric(state, "--menu-scroll-collapse-progress", nextProgress.toFixed(3));
+                setCollapseMetric(state, "--menu-scroll-collapse-opacity", opacity.toFixed(3));
+                setCollapseMetric(state, "--menu-scroll-collapse-offset", `${Math.round(-16 * nextProgress)}px`);
+                setCollapseMetric(state, "--menu-scroll-collapse-scale", (1 - (0.18 * nextProgress)).toFixed(3));
+                if (state.collapsed !== shouldCollapse) {
+                    state.collapsed = shouldCollapse;
                     section.classList.toggle("is-collapsed", shouldCollapse);
                     section.setAttribute("aria-hidden", shouldCollapse ? "true" : "false");
                 }
@@ -1060,15 +1074,16 @@
 
             function measureCollapseSections() {
                 collapseMetrics = collapseSections.map((section) => {
+                    const state = {
+                        section,
+                        styleState: new Map(),
+                        collapsed: false,
+                    };
                     section.classList.remove("is-collapsed");
                     section.setAttribute("aria-hidden", "false");
-                    section.style.setProperty("--menu-scroll-collapse-progress", "0");
-                    section.style.removeProperty("--menu-scroll-collapse-opacity");
-                    section.style.removeProperty("--menu-scroll-collapse-offset");
-                    section.style.removeProperty("--menu-scroll-collapse-scale");
 
-                    setCollapseSectionProgress(section, 0);
-                    return { section };
+                    setCollapseSectionProgress(state, 0);
+                    return state;
                 });
             }
 
@@ -1113,6 +1128,7 @@
                 if (wasFloating) {
                     shell.classList.add("is-floating");
                 }
+                isFloatingState = wasFloating;
 
                 updateFloatingPanel();
             }
@@ -1139,11 +1155,14 @@
                 if (isFloating) {
                     shell.classList.add("has-floated");
                 }
-                shell.classList.toggle("is-floating", isFloating);
+                if (isFloatingState !== isFloating) {
+                    shell.classList.toggle("is-floating", isFloating);
+                    isFloatingState = isFloating;
+                }
 
                 const collapseProgress = isFloating ? clamp(progress * 1.35) : 0;
                 collapseMetrics.forEach((state) => {
-                    setCollapseSectionProgress(state.section, collapseProgress);
+                    setCollapseSectionProgress(state, collapseProgress);
                 });
             }
 

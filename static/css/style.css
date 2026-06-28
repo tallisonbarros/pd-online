@@ -13462,7 +13462,6 @@ fieldset.field {
     position: relative;
     z-index: 1;
     transform: translate3d(0, var(--menu-floating-content-offset), 0);
-    will-change: transform;
 }
 
 [data-page="cardapio"] .menu-floating-scroll-runway {
@@ -13478,6 +13477,10 @@ fieldset.field {
 
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating {
     z-index: 90;
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating + .menu-floating-content {
+    will-change: transform;
 }
 
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-band {
@@ -13520,16 +13523,18 @@ fieldset.field {
 }
 
 [data-page="cardapio"] [data-menu-scroll-collapse].is-collapsed {
-    max-height: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    visibility: hidden;
     pointer-events: none;
 }
 
 [data-page="cardapio"] [data-menu-scroll-collapse].reveal-on-scroll.is-visible {
     opacity: var(--menu-scroll-collapse-opacity);
     transform: translateY(var(--menu-scroll-collapse-offset)) scaleY(var(--menu-scroll-collapse-scale));
+}
+
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating + .menu-floating-content .quality-marquee-track,
+[data-page="cardapio"] [data-menu-scroll-collapse].is-collapsed .quality-marquee-track {
+    animation-play-state: paused;
 }
 
 [data-page="cardapio"] .dish-qty-badge--footer {
