@@ -994,6 +994,8 @@
             const shell = document.querySelector("[data-menu-floating-panel-shell]");
             const panel = shell?.querySelector("[data-menu-floating-panel]");
             if (!(shell instanceof HTMLElement) || !(panel instanceof HTMLElement)) return;
+            const pageRoot = shell.closest('[data-page="cardapio"]');
+            const floatingContent = document.querySelector("[data-menu-floating-content]");
             const collapseSections = Array.from(document.querySelectorAll("[data-menu-scroll-collapse]"))
                 .filter((section) => section instanceof HTMLElement);
 
@@ -1025,9 +1027,8 @@
             }
 
             function compactLeftEdge() {
-                const cardapioPage = shell.closest('[data-page="cardapio"]');
-                const cardapioRect = cardapioPage instanceof HTMLElement
-                    ? cardapioPage.getBoundingClientRect()
+                const cardapioRect = pageRoot instanceof HTMLElement
+                    ? pageRoot.getBoundingClientRect()
                     : shell.getBoundingClientRect();
                 return Math.max(0, Math.round(cardapioRect.left));
             }
@@ -1036,46 +1037,38 @@
                 shell.style.setProperty(name, value);
             }
 
-            function setCollapseSectionProgress(section, state, progress) {
+            function setContentMetric(name, value) {
+                if (floatingContent instanceof HTMLElement) {
+                    floatingContent.style.setProperty(name, value);
+                }
+            }
+
+            function setCollapseSectionProgress(section, progress) {
                 const nextProgress = clamp(progress);
-                const remaining = 1 - nextProgress;
                 const opacity = clamp(1 - Math.max(0, nextProgress - 0.08) / 0.72);
+                const shouldCollapse = nextProgress >= 0.995;
 
                 section.style.setProperty("--menu-scroll-collapse-progress", nextProgress.toFixed(4));
-                section.style.setProperty("--menu-scroll-collapse-height", `${Math.max(0, Math.round(state.height * remaining))}px`);
                 section.style.setProperty("--menu-scroll-collapse-opacity", opacity.toFixed(4));
-                section.style.setProperty("--menu-scroll-collapse-margin-bottom", `${Math.max(0, Math.round(state.marginBottom * remaining))}px`);
-                section.style.setProperty("--menu-scroll-collapse-padding-top", `${Math.max(0, Math.round(state.paddingTop * remaining))}px`);
-                section.style.setProperty("--menu-scroll-collapse-padding-bottom", `${Math.max(0, Math.round(state.paddingBottom * remaining))}px`);
                 section.style.setProperty("--menu-scroll-collapse-offset", `${Math.round(-16 * nextProgress)}px`);
                 section.style.setProperty("--menu-scroll-collapse-scale", (1 - (0.18 * nextProgress)).toFixed(4));
-                section.style.setProperty("--menu-scroll-collapse-blur", `${(3 * nextProgress).toFixed(2)}px`);
-                section.classList.toggle("is-collapsed", nextProgress >= 0.995);
+                if (section.classList.contains("is-collapsed") !== shouldCollapse) {
+                    section.classList.toggle("is-collapsed", shouldCollapse);
+                    section.setAttribute("aria-hidden", shouldCollapse ? "true" : "false");
+                }
             }
 
             function measureCollapseSections() {
                 collapseMetrics = collapseSections.map((section) => {
                     section.classList.remove("is-collapsed");
+                    section.setAttribute("aria-hidden", "false");
                     section.style.setProperty("--menu-scroll-collapse-progress", "0");
-                    section.style.removeProperty("--menu-scroll-collapse-height");
                     section.style.removeProperty("--menu-scroll-collapse-opacity");
-                    section.style.removeProperty("--menu-scroll-collapse-margin-bottom");
-                    section.style.removeProperty("--menu-scroll-collapse-padding-top");
-                    section.style.removeProperty("--menu-scroll-collapse-padding-bottom");
                     section.style.removeProperty("--menu-scroll-collapse-offset");
                     section.style.removeProperty("--menu-scroll-collapse-scale");
-                    section.style.removeProperty("--menu-scroll-collapse-blur");
 
-                    const computed = window.getComputedStyle(section);
-                    const state = {
-                        section,
-                        height: Math.ceil(section.scrollHeight),
-                        marginBottom: Number.parseFloat(computed.marginBottom) || 0,
-                        paddingTop: Number.parseFloat(computed.paddingTop) || 0,
-                        paddingBottom: Number.parseFloat(computed.paddingBottom) || 0,
-                    };
-                    setCollapseSectionProgress(section, state, 0);
-                    return state;
+                    setCollapseSectionProgress(section, 0);
+                    return { section };
                 });
             }
 
@@ -1092,12 +1085,17 @@
                 const naturalTop = scrollY + rect.top;
                 const startY = naturalTop - topOffset;
                 const shrinkDistance = transitionDistance();
+                const naturalLeft = Math.max(0, Math.round(rect.left));
+                const compactLeft = Math.min(naturalLeft, compactLeftEdge());
+                const flowRunway = Math.round(shrinkDistance * flowRunwayRatio);
 
                 metrics = {
                     naturalTop,
                     topOffset,
                     shrinkDistance,
-                    flowRunway: Math.round(shrinkDistance * flowRunwayRatio),
+                    flowRunway,
+                    naturalLeft,
+                    compactLeft,
                     width: rect.width,
                     height: rect.height,
                 };
@@ -1106,6 +1104,11 @@
                 setShellMetric("--menu-floating-panel-width", `${Math.ceil(rect.width)}px`);
                 setShellMetric("--menu-floating-panel-base-height", `${Math.ceil(rect.height)}px`);
                 setShellMetric("--menu-floating-panel-top", `${topOffset}px`);
+                setShellMetric("--menu-floating-panel-x", `${naturalLeft}px`);
+                setContentMetric("--menu-floating-content-offset", "0px");
+                if (pageRoot instanceof HTMLElement) {
+                    pageRoot.style.setProperty("--menu-floating-scroll-runway", `${shrinkDistance + Math.ceil(rect.height * minScale)}px`);
+                }
 
                 if (wasFloating) {
                     shell.classList.add("is-floating");
@@ -1124,17 +1127,14 @@
                 const progress = reducedMotion() ? (rawProgress > 0 ? 1 : 0) : clamp(rawProgress);
                 const isFloating = scrollY >= startY;
                 const scale = 1 - ((1 - minScale) * progress);
-                const shellRect = shell.getBoundingClientRect();
-                const naturalLeft = Math.max(0, Math.round(shellRect.left));
-                const compactLeft = Math.min(naturalLeft, compactLeftEdge());
                 const slideProgress = smoothStep(progress);
-                const floatingLeft = Math.round(naturalLeft + ((compactLeft - naturalLeft) * slideProgress));
-                const flowHeight = metrics.height + (metrics.flowRunway * progress);
+                const floatingLeft = Math.round(metrics.naturalLeft + ((metrics.compactLeft - metrics.naturalLeft) * slideProgress));
+                const contentOffset = Math.round(metrics.flowRunway * progress);
 
-                setShellMetric("--menu-floating-panel-left", `${floatingLeft}px`);
-                setShellMetric("--menu-floating-panel-height", `${Math.ceil(flowHeight)}px`);
+                setShellMetric("--menu-floating-panel-x", `${floatingLeft}px`);
                 setShellMetric("--menu-floating-panel-progress", progress.toFixed(4));
                 setShellMetric("--menu-floating-panel-scale", scale.toFixed(4));
+                setContentMetric("--menu-floating-content-offset", `${contentOffset}px`);
 
                 if (isFloating) {
                     shell.classList.add("has-floated");
@@ -1143,7 +1143,7 @@
 
                 const collapseProgress = isFloating ? clamp(progress * 1.35) : 0;
                 collapseMetrics.forEach((state) => {
-                    setCollapseSectionProgress(state.section, state, collapseProgress);
+                    setCollapseSectionProgress(state.section, collapseProgress);
                 });
             }
 

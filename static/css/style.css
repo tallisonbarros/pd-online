@@ -895,7 +895,7 @@ textarea {
 
 [data-page="cardapio"] {
     --menu-floating-scroll-runway: 0px;
-    padding-bottom: calc(140px + var(--menu-floating-scroll-runway));
+    padding-bottom: 140px;
 }
 
 .menu-intro {
@@ -13447,7 +13447,7 @@ fieldset.field {
     --menu-floating-panel-scale: 1;
     --menu-floating-panel-progress: 0;
     --menu-floating-panel-top: 12px;
-    --menu-floating-panel-left: 0px;
+    --menu-floating-panel-x: 0px;
     --menu-floating-panel-width: auto;
     --menu-floating-panel-base-height: auto;
     position: relative;
@@ -13455,6 +13455,19 @@ fieldset.field {
     height: var(--menu-floating-panel-height, auto);
     margin-top: 18px;
     display: flow-root;
+}
+
+[data-page="cardapio"] .menu-floating-content {
+    --menu-floating-content-offset: 0px;
+    position: relative;
+    z-index: 1;
+    transform: translate3d(0, var(--menu-floating-content-offset), 0);
+    will-change: transform;
+}
+
+[data-page="cardapio"] .menu-floating-scroll-runway {
+    height: var(--menu-floating-scroll-runway, 0px);
+    pointer-events: none;
 }
 
 [data-page="cardapio"] .menu-floating-panel-shell .menu-feature-band {
@@ -13470,16 +13483,16 @@ fieldset.field {
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-band {
     position: fixed;
     top: var(--menu-floating-panel-top);
-    left: var(--menu-floating-panel-left);
+    left: 0;
     width: var(--menu-floating-panel-width);
     height: var(--menu-floating-panel-base-height);
     max-width: none;
     aspect-ratio: auto;
     margin: 0;
     z-index: 90;
-    transform: translate3d(0, 0, 0) scale(var(--menu-floating-panel-scale));
+    transform: translate3d(var(--menu-floating-panel-x), 0, 0) scale(var(--menu-floating-panel-scale));
     transform-origin: top left;
-    will-change: left, transform;
+    will-change: transform;
 }
 
 [data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-shape,
@@ -13494,28 +13507,23 @@ fieldset.field {
 [data-page="cardapio"] [data-menu-scroll-collapse] {
     --menu-scroll-collapse-progress: 0;
     --menu-scroll-collapse-opacity: 1;
-    --menu-scroll-collapse-margin-bottom: 18px;
-    --menu-scroll-collapse-padding-top: 2px;
-    --menu-scroll-collapse-padding-bottom: 10px;
     --menu-scroll-collapse-offset: 0px;
     --menu-scroll-collapse-scale: 1;
-    --menu-scroll-collapse-blur: 0px;
-    max-height: var(--menu-scroll-collapse-height, 78px);
+    max-height: 78px;
     opacity: var(--menu-scroll-collapse-opacity);
-    margin-bottom: var(--menu-scroll-collapse-margin-bottom);
-    padding-top: var(--menu-scroll-collapse-padding-top);
-    padding-bottom: var(--menu-scroll-collapse-padding-bottom);
     overflow: hidden;
     transform: translateY(var(--menu-scroll-collapse-offset)) scaleY(var(--menu-scroll-collapse-scale));
     transform-origin: top center;
-    filter: blur(var(--menu-scroll-collapse-blur));
     pointer-events: auto;
     transition: none;
-    will-change: max-height, opacity, margin, padding, transform, filter;
+    will-change: opacity, transform;
 }
 
 [data-page="cardapio"] [data-menu-scroll-collapse].is-collapsed {
     max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     pointer-events: none;
 }
 
@@ -13546,7 +13554,8 @@ fieldset.field {
 }
 
 [data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer button[data-card-qty-change="1"]:active,
-[data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer.is-qty-active button[data-card-qty-change="1"] {
+[data-page="cardapio"] .menu-feature-card-wrap .dish-qty-badge--footer.is-qty-active button[data-card-qty-change="1"],
+[data-page="cardapio"] .menu-floating-panel-shell.is-floating .menu-feature-card-wrap .dish-qty-badge--footer button[data-card-qty-change="1"] {
     animation: none;
 }
 
