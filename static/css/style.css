@@ -4849,6 +4849,10 @@ fieldset.field {
     animation: fadeInScaleFast var(--anim-fast) var(--ease-out) both;
 }
 
+#pedido-modal.modal-backdrop {
+    z-index: 140;
+}
+
 .modal-backdrop.hidden {
     display: none;
 }
