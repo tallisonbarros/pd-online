@@ -31,14 +31,20 @@
                 <div id="checkout-items" class="checkout-items"></div>
                 <div class="cart-promo-progress" data-cart-meal-promo-progress aria-label="Progresso da promoção">
                     <div class="meal-promo-progress-head">
-                        <span data-cart-meal-promo-count>0/4 marmitas</span>
-                        <strong data-cart-meal-promo-message>Faltam 4 para liberar 1 grátis</strong>
+                        <span data-cart-meal-promo-count>0/4 iguais</span>
+                        <strong data-cart-meal-promo-message>Faltam 4 iguais para liberar 1 grátis</strong>
                     </div>
                     <div class="meal-promo-track" aria-hidden="true">
                         <span data-cart-meal-promo-fill></span>
                     </div>
-                    <small class="meal-promo-auto-note">Desconto aplicado automaticamente</small>
+                    <small class="meal-promo-auto-note">Crédito liberado por 4 marmitas iguais</small>
                     <small data-cart-meal-promo-next></small>
+                </div>
+                <div class="cart-free-meal-claim hidden" data-cart-free-meal-claim aria-label="Resgatar marmita grátis">
+                    <div class="cart-free-meal-copy">
+                        <strong data-cart-free-meal-title>1 marmita grátis disponível</strong>
+                        <small data-cart-free-meal-help>Adicione uma marmita agora pelo + do item ou pelo cardápio.</small>
+                    </div>
                 </div>
                 <div class="cart-coupon-inline" aria-label="Cupom de desconto">
                     <input type="text" id="cart-coupon-code" placeholder="Cupom">
@@ -134,4 +140,5 @@
         </div>
     </div>
 </div>
+{{ pratos_lookup_json|json_script:"checkout-pratos-lookup" }}
 {% endblock %}

@@ -692,7 +692,15 @@ def checkout(request):
 @never_cache
 def carrinho(request):
     config = ConfiguracaoEntrega.get_solo()
-    return render(request, "pedidos/carrinho.html", {"cart_closed_notice": _cart_closed_notice(config)})
+    pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.filter(ativo=True)}
+    return render(
+        request,
+        "pedidos/carrinho.html",
+        {
+            "cart_closed_notice": _cart_closed_notice(config),
+            "pratos_lookup_json": pratos_lookup,
+        },
+    )
 
 
 @require_POST

@@ -2862,6 +2862,37 @@ body.modal-open {
     font-size: 0.6rem;
 }
 
+.cart-free-meal-claim {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid rgba(86, 129, 94, 0.2);
+    border-radius: 8px;
+    background: rgba(242, 249, 239, 0.78);
+}
+
+.cart-free-meal-claim.hidden {
+    display: none;
+}
+
+.cart-free-meal-copy {
+    display: grid;
+    gap: 2px;
+}
+
+.cart-free-meal-copy strong {
+    color: var(--text);
+    font-size: 0.86rem;
+    line-height: 1.15;
+}
+
+.cart-free-meal-copy small {
+    color: #667a5d;
+    font-size: 0.68rem;
+    line-height: 1.25;
+}
+
 .cart-coupon-inline input {
     min-width: 0;
     border: 1px solid #e3d8d1;

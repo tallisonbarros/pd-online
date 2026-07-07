@@ -107,10 +107,48 @@
         variationKeys: ["frango", "fraldinha"],
     };
 
+    function itemOutputClassification(item) {
+        if (cartItemType(item) !== "prato") return "vendida";
+        const value = String(item?.classificacao_saida || item?.classificacao || "").trim().toLowerCase();
+        return value === "promocao" ? "promocao" : "vendida";
+    }
+
+    function isPromotionalMeal(item) {
+        return cartItemType(item) === "prato" && itemOutputClassification(item) === "promocao";
+    }
+
+    function lineItemSubtotal(item) {
+        if (isPromotionalMeal(item)) return 0;
+        return parsePrice(item?.preco) * Number(item?.quantidade || 0);
+    }
+
+    function cartPayableTotal(cart) {
+        return (Array.isArray(cart) ? cart : []).reduce((sum, item) => sum + lineItemSubtotal(item), 0);
+    }
+
+    function mealPromoCreditKey(item) {
+        if (cartItemType(item) !== "prato" || isPromotionalMeal(item)) return "";
+        const variationKey = normalizeText(item.variacao || item.variacao_nome);
+        if (variationKey) return `variacao:${variationKey}`;
+        const itemId = cartItemId(item);
+        return itemId ? `prato:${itemId}` : "";
+    }
+
+    function freeMealClaimCount(cart) {
+        return (Array.isArray(cart) ? cart : [])
+            .filter(isPromotionalMeal)
+            .reduce((total, item) => total + Math.max(0, Number(item.quantidade || 0)), 0);
+    }
+
+    function paidMealItems(cart) {
+        return (Array.isArray(cart) ? cart : []).filter((item) => cartItemType(item) === "prato" && !isPromotionalMeal(item));
+    }
+
     function calculatePairedVariationPromo(cart) {
         const pairsByDish = {};
         (Array.isArray(cart) ? cart : []).forEach((item) => {
             if (cartItemType(item) !== "prato") return;
+            if (isPromotionalMeal(item)) return;
             const nameKey = normalizeText(item.nome);
             const dishKey = pairedVariationPromo.dishKeys.find((candidate) => nameKey.includes(candidate));
             if (!dishKey) return;
@@ -133,51 +171,71 @@
     }
 
     function calculateMealPromo(cart) {
-        const mealItems = (Array.isArray(cart) ? cart : []).filter((item) => cartItemType(item) === "prato");
+        const mealItems = paidMealItems(cart);
         const mealCount = mealItems.reduce((total, item) => total + Number(item.quantidade || 0), 0);
-        const freeMeals = Math.floor(mealCount / 5);
-        const cycleCount = mealCount % 5;
-        const progressCount = freeMeals > 0 && cycleCount === 0 ? 4 : Math.min(cycleCount, 4);
-        const remaining = Math.max(4 - progressCount, 0);
+        const quantitiesByCreditKey = {};
+        mealItems.forEach((item) => {
+            const creditKey = mealPromoCreditKey(item);
+            if (!creditKey) return;
+            quantitiesByCreditKey[creditKey] = (quantitiesByCreditKey[creditKey] || 0) + Math.max(0, Number(item.quantidade || 0));
+        });
+        const creditQuantities = Object.values(quantitiesByCreditKey);
+        const earnedFreeMeals = creditQuantities.reduce((total, quantity) => total + Math.floor(quantity / 4), 0);
+        const claimedFreeMeals = freeMealClaimCount(cart);
+        const availableFreeMeals = Math.max(earnedFreeMeals - claimedFreeMeals, 0);
+        const cycleCount = creditQuantities.length ? Math.max(...creditQuantities.map((quantity) => quantity % 4)) : 0;
+        const progressCount = availableFreeMeals > 0 ? 4 : Math.min(cycleCount, 4);
+        const remaining = availableFreeMeals > 0 ? 0 : Math.max(4 - progressCount, 0);
         const pairedPromo = calculatePairedVariationPromo(cart);
-        const mealPrices = mealItems.map((item) => parsePrice(item.preco)).filter((price) => price > 0);
-        const unitPrice = mealPrices.length ? Math.min(...mealPrices) : 0;
-        const freeMealDiscount = freeMeals > 0 ? unitPrice * freeMeals : 0;
         const labels = [];
-        if (freeMeals > 0) {
-            labels.push(freeMeals === 1 ? "5ª marmita grátis" : `${freeMeals} marmitas grátis`);
-        }
         if (pairedPromo.pairs > 0) {
             labels.push(pairedPromo.label);
         }
         return {
-            freeMeals,
+            freeMeals: claimedFreeMeals,
+            earnedFreeMeals,
+            availableFreeMeals,
             pairedVariationPairs: pairedPromo.pairs,
-            discount: freeMealDiscount + pairedPromo.discount,
+            discount: pairedPromo.discount,
             mealCount,
             progressCount,
             remaining,
-            readyForFreeMeal: freeMeals > 0 ? progressCount >= 4 && cycleCount !== 0 : progressCount >= 4,
+            readyForFreeMeal: availableFreeMeals > 0,
             label: labels.join(" + "),
         };
+    }
+
+    function enforceMealPromoClaims(cart) {
+        const normalizedCart = Array.isArray(cart) ? cart : [];
+        const promo = calculateMealPromo(normalizedCart);
+        let excessFreeMeals = Math.max(0, Number(promo.freeMeals || 0) - Number(promo.earnedFreeMeals || 0));
+        if (excessFreeMeals <= 0) return normalizedCart;
+
+        const nextCart = normalizedCart.map((item) => ({ ...item }));
+        for (let index = nextCart.length - 1; index >= 0 && excessFreeMeals > 0; index -= 1) {
+            if (!isPromotionalMeal(nextCart[index])) continue;
+            const quantity = Math.max(0, Number(nextCart[index].quantidade || 0));
+            const removed = Math.min(quantity, excessFreeMeals);
+            nextCart[index].quantidade = quantity - removed;
+            excessFreeMeals -= removed;
+        }
+        return nextCart.filter((item) => Number(item.quantidade || 0) > 0);
     }
 
     function mealPromoMessage(promo, options = {}) {
         const remaining = Number(promo?.remaining || 0);
         const freeMeals = Number(promo?.freeMeals || 0);
-        if (promo?.readyForFreeMeal) {
-            return freeMeals > 0 ? "Adicione sua próxima marmita grátis agora" : "Adicione sua marmita grátis agora";
+        const availableFreeMeals = Number(promo?.availableFreeMeals || 0);
+        if (availableFreeMeals > 0) {
+            return availableFreeMeals === 1 ? "1 marmita grátis disponível" : `${availableFreeMeals} marmitas grátis disponíveis`;
         }
-        if (freeMeals <= 0) {
-            return remaining === 1 ? "Falta 1 marmita para liberar 1 grátis" : `Faltam ${remaining} marmitas para liberar 1 grátis`;
+        if (freeMeals > 0 && options.nextCycle) {
+            return remaining === 1 ? "Mais 1 igual libera outra grátis" : `Mais ${remaining} iguais liberam outra grátis`;
         }
-        if (Number(promo?.progressCount || 0) >= 4) {
+        if (freeMeals > 0) {
             return freeMeals === 1 ? "Promoção aplicada: 1 marmita grátis" : `Promoção aplicada: ${freeMeals} marmitas grátis`;
         }
-        if (options.nextCycle) {
-            return remaining === 1 ? "Mais 1 para liberar outra grátis" : `Mais ${remaining} para liberar outra grátis`;
-        }
-        return freeMeals === 1 ? "Promoção aplicada: 1 marmita grátis" : `Promoção aplicada: ${freeMeals} marmitas grátis`;
+        return remaining === 1 ? "Falta 1 igual para liberar 1 grátis" : `Faltam ${remaining} iguais para liberar 1 grátis`;
     }
 
     function syncMealPromoProgress(container, promo, options = {}) {
@@ -188,12 +246,12 @@
         const messageNode = container.querySelector("[data-meal-promo-message], [data-cart-meal-promo-message]");
         const fillNode = container.querySelector("[data-meal-promo-fill], [data-cart-meal-promo-fill]");
         const nextNode = container.querySelector("[data-cart-meal-promo-next]");
-        if (countNode) countNode.textContent = `${progressCount}/4 marmitas`;
+        if (countNode) countNode.textContent = `${progressCount}/4 iguais`;
         if (messageNode) messageNode.textContent = mealPromoMessage(promo, options);
         if (fillNode) fillNode.style.width = `${percent}%`;
         if (nextNode) {
-            const freeMeals = Number(promo?.freeMeals || 0);
-            nextNode.textContent = freeMeals > 0 && progressCount >= 4 && !promo?.readyForFreeMeal ? "Próxima: mais 4 marmitas liberam outra." : "";
+            const availableFreeMeals = Number(promo?.availableFreeMeals || 0);
+            nextNode.textContent = availableFreeMeals > 0 ? "Adicione uma marmita agora pelo +." : "";
         }
         container.classList.toggle("is-applied", Number(promo?.freeMeals || 0) > 0);
         container.classList.toggle("is-complete", progressCount >= 4);
@@ -333,7 +391,8 @@
 
     function cartItemKey(item) {
         const variationKey = cartItemType(item) === "prato" ? normalizeText(item?.variacao || item?.variacao_nome) : "";
-        return `${cartItemType(item)}:${cartItemId(item)}:${variationKey}`;
+        const outputKey = cartItemType(item) === "prato" ? itemOutputClassification(item) : "vendida";
+        return `${cartItemType(item)}:${cartItemId(item)}:${variationKey}:${outputKey}`;
     }
 
     function cartItemBaseKey(item) {
@@ -357,6 +416,7 @@
         const normalizedItem = normalizeCatalogCartFields(item);
         const lookupItem =
             checkoutLookup[cartItemKey(normalizedItem)] ||
+            checkoutLookup[cartItemBaseKey(normalizedItem)] ||
             checkoutLookup[String(normalizedItem.prato_id)] ||
             {};
         return {
@@ -366,6 +426,7 @@
             quantidade: Math.max(1, Number(normalizedItem.quantidade || 1)),
             variacao: normalizeVariationName(normalizedItem.variacao || normalizedItem.variacao_nome),
             observacao: String(normalizedItem.observacao || "").trim(),
+            classificacao_saida: itemOutputClassification(normalizedItem),
             imagem: String(normalizedItem.imagem || lookupItem.imagem || placeholderImage),
         };
     }
@@ -385,6 +446,94 @@
             }
         }
         return merged;
+    }
+
+    function addOrMergeCartLine(cart, incomingItem) {
+        const normalizedIncomingItem = enrichCartItem(incomingItem);
+        if (!normalizedIncomingItem.observacao) {
+            const existing = cart.find((entry) => cartItemKey(entry) === cartItemKey(normalizedIncomingItem) && !entry.observacao);
+            if (existing) {
+                existing.quantidade = Number(existing.quantidade || 0) + Number(normalizedIncomingItem.quantidade || 0);
+            } else {
+                cart.push(normalizedIncomingItem);
+            }
+        } else {
+            cart.push(normalizedIncomingItem);
+        }
+        return normalizedIncomingItem;
+    }
+
+    function addCartItemUsingFreeCredits(cart, incomingItem, options = {}) {
+        const normalizedIncomingItem = enrichCartItem(incomingItem);
+        const quantity = Math.max(1, Number(normalizedIncomingItem.quantidade || 1));
+        if (cartItemType(normalizedIncomingItem) !== "prato") {
+            return {
+                item: addOrMergeCartLine(cart, { ...normalizedIncomingItem, quantidade: quantity }),
+                added: quantity,
+                promotionalQuantity: 0,
+                paidQuantity: quantity,
+            };
+        }
+
+        const availableFreeMeals = Math.max(0, Number(calculateMealPromo(cart).availableFreeMeals || 0));
+        if (options.forcePromo || isPromotionalMeal(normalizedIncomingItem)) {
+            const promotionalQuantity = Math.min(quantity, availableFreeMeals);
+            if (promotionalQuantity > 0) {
+                addOrMergeCartLine(cart, {
+                    ...normalizedIncomingItem,
+                    quantidade: promotionalQuantity,
+                    classificacao_saida: "promocao",
+                });
+            }
+            return {
+                item: normalizedIncomingItem,
+                added: promotionalQuantity,
+                promotionalQuantity,
+                paidQuantity: 0,
+            };
+        }
+
+        const promotionalQuantity = Math.min(quantity, availableFreeMeals);
+        const paidQuantity = quantity - promotionalQuantity;
+        if (promotionalQuantity > 0) {
+            addOrMergeCartLine(cart, {
+                ...normalizedIncomingItem,
+                quantidade: promotionalQuantity,
+                classificacao_saida: "promocao",
+            });
+        }
+        if (paidQuantity > 0) {
+            addOrMergeCartLine(cart, {
+                ...normalizedIncomingItem,
+                quantidade: paidQuantity,
+                classificacao_saida: "vendida",
+            });
+        }
+        return {
+            item: normalizedIncomingItem,
+            added: quantity,
+            promotionalQuantity,
+            paidQuantity,
+        };
+    }
+
+    function cartItemMatchesDish(item, dish) {
+        return cartItemBaseKey(item) === cartItemBaseKey(normalizeCatalogCartFields(dish));
+    }
+
+    function cartItemMatchesDishVariation(item, dish, variation) {
+        return cartItemMatchesDish(item, dish) && normalizeText(item.variacao || item.variacao_nome) === normalizeText(variation);
+    }
+
+    function findRemovableCartItemIndex(cart, predicate) {
+        const promotionalSimpleIndex = cart.findIndex((item) => predicate(item) && !item.observacao && isPromotionalMeal(item));
+        if (promotionalSimpleIndex >= 0) return promotionalSimpleIndex;
+        const paidSimpleIndex = cart.findIndex((item) => predicate(item) && !item.observacao);
+        if (paidSimpleIndex >= 0) return paidSimpleIndex;
+        for (let index = cart.length - 1; index >= 0; index -= 1) {
+            if (predicate(cart[index])) return index;
+        }
+        return -1;
     }
 
     function normalizeCart(cart) {
@@ -463,14 +612,14 @@
     function getCart() {
         if (ensureCartIsCurrent({ notify: true })) return [];
         try {
-            return normalizeCart(JSON.parse(localStorage.getItem(cartKey) || "[]"));
+            return enforceMealPromoClaims(normalizeCart(JSON.parse(localStorage.getItem(cartKey) || "[]")));
         } catch (error) {
             return [];
         }
     }
 
     function saveCart(cart) {
-        const normalizedCart = normalizeCart(cart);
+        const normalizedCart = enforceMealPromoClaims(normalizeCart(cart));
         if (normalizedCart.length) {
             writeCartMeta();
             localStorage.setItem(cartKey, JSON.stringify(normalizedCart));
@@ -503,7 +652,7 @@
         const cart = Array.isArray(cartOverride) ? normalizeCart(cartOverride) : getCart();
         return {
             count: cart.reduce((total, item) => total + Number(item.quantidade || 0), 0),
-            total: cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0),
+            total: cartPayableTotal(cart),
         };
     }
 
@@ -736,7 +885,7 @@
     }
 
     function buildWhatsappCartMessage(cart) {
-        const itemsTotal = cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+        const itemsTotal = cartPayableTotal(cart);
         const mealPromo = calculateMealPromo(cart);
         const mealPromoDiscount = Math.min(mealPromo.discount, itemsTotal);
         const lines = [
@@ -747,10 +896,11 @@
 
         cart.forEach((item) => {
             const quantity = Math.max(1, Number(item.quantidade || 1));
-            const itemTotal = parsePrice(item.preco) * quantity;
+            const itemTotal = lineItemSubtotal(item);
             const variation = normalizeVariationName(item.variacao || item.variacao_nome);
             const itemName = variation ? `${item.nome} - ${variation}` : item.nome;
-            lines.push(`- ${quantity}x ${itemName} | ${money(itemTotal)}`);
+            const promoSuffix = isPromotionalMeal(item) ? " (grátis)" : "";
+            lines.push(`- ${quantity}x ${itemName}${promoSuffix} | ${money(itemTotal)}`);
             if (item.observacao) {
                 lines.push(`  Obs: ${item.observacao}`);
             }
@@ -898,12 +1048,25 @@
     }
 
     function buildCartItemMarkup(item, index) {
+        const quantity = Math.max(1, Number(item.quantidade || 1));
         const variationMarkup = item.variacao
             ? `<small class="checkout-item-variation">${escapeHtml(item.variacao)}</small>`
+            : "";
+        const promoMarkup = isPromotionalMeal(item)
+            ? `<small class="checkout-item-variation">${quantity > 1 ? `${quantity} grátis` : "Grátis"}</small>`
             : "";
         const noteMarkup = item.observacao
             ? `<div class="checkout-item-note-wrap"><p class="checkout-item-note">Obs: ${escapeHtml(item.observacao)}</p></div>`
             : "";
+        const quantityControlMarkup = isPromotionalMeal(item)
+            ? ""
+            : `
+                            <div class="checkout-item-qty-control" aria-label="Controle de quantidade">
+                                <button type="button" class="qty-btn" data-qty-change="${index}" data-delta="-1" aria-label="Diminuir quantidade">-</button>
+                                <strong class="qty-value">${quantity}</strong>
+                                <button type="button" class="qty-btn" data-qty-change="${index}" data-delta="1" aria-label="Aumentar quantidade">+</button>
+                            </div>
+            `;
         return `
             <article class="checkout-item">
                 <div class="checkout-item-main">
@@ -915,15 +1078,12 @@
                             <div>
                                 <strong class="checkout-item-title">${escapeHtml(item.nome)}</strong>
                                 ${variationMarkup}
+                                ${promoMarkup}
                             </div>
-                            <strong class="checkout-item-price">${money(parsePrice(item.preco) * Number(item.quantidade))}</strong>
+                            <strong class="checkout-item-price">${money(lineItemSubtotal(item))}</strong>
                         </div>
                         <div class="checkout-item-bottom">
-                            <div class="checkout-item-qty-control" aria-label="Controle de quantidade">
-                                <button type="button" class="qty-btn" data-qty-change="${index}" data-delta="-1" aria-label="Diminuir quantidade">-</button>
-                                <strong class="qty-value">${item.quantidade}</strong>
-                                <button type="button" class="qty-btn" data-qty-change="${index}" data-delta="1" aria-label="Aumentar quantidade">+</button>
-                            </div>
+                            ${quantityControlMarkup}
                             <div class="checkout-item-actions">
                                 <button type="button" class="icon-button" data-remove-item="${index}" aria-label="Remover item">
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1194,27 +1354,19 @@
         let selectedVariation = "";
 
         function addDishToCart(incomingItem) {
-            const normalizedIncomingItem = enrichCartItem(incomingItem);
             const cart = getCart();
-            if (!incomingItem.observacao) {
-                const existing = cart.find((entry) => cartItemKey(entry) === cartItemKey(normalizedIncomingItem) && !entry.observacao);
-                if (existing) {
-                    existing.quantidade = Number(existing.quantidade || 0) + Number(normalizedIncomingItem.quantidade || 0);
-                } else {
-                    cart.push(normalizedIncomingItem);
-                }
-            } else {
-                cart.push(normalizedIncomingItem);
-            }
+            const addResult = addCartItemUsingFreeCredits(cart, incomingItem);
+            const normalizedIncomingItem = addResult.item;
             saveCart(cart);
             syncMenuPromo();
             trackMetricEvent("add_to_cart", {
                 item_type: cartItemType(normalizedIncomingItem),
                 item_id: normalizedIncomingItem.item_id || normalizedIncomingItem.prato_id || normalizedIncomingItem.adicional_id || normalizedIncomingItem.bebida_id || "",
-                cart_items_count: Number(normalizedIncomingItem.quantidade || 1),
+                cart_items_count: Number(addResult.added || normalizedIncomingItem.quantidade || 1),
                 metadata: {
                     origem: "cardapio",
                     variacao: normalizedIncomingItem.variacao || "",
+                    promocao: addResult.promotionalQuantity > 0 ? "sim" : "nao",
                 },
             });
         }
@@ -1239,16 +1391,14 @@
         }
 
         function getCartQuantityForDish(dish) {
-            const key = cartItemBaseKey(normalizeCatalogCartFields(dish));
             return getCart()
-                .filter((item) => cartItemBaseKey(item) === key)
+                .filter((item) => cartItemMatchesDish(item, dish))
                 .reduce((total, item) => total + Number(item.quantidade || 0), 0);
         }
 
         function getCartQuantityForDishVariation(dish, variation) {
-            const target = cartItemKey({ ...normalizeCatalogCartFields(dish), variacao: variation });
             return getCart()
-                .filter((item) => cartItemKey(item) === target)
+                .filter((item) => cartItemMatchesDishVariation(item, dish, variation))
                 .reduce((total, item) => total + Number(item.quantidade || 0), 0);
         }
 
@@ -1342,7 +1492,6 @@
         }
 
         function incrementCardVariationCartItem(dish, variation, delta) {
-            const targetKey = cartItemKey({ ...normalizeCatalogCartFields(dish), variacao: variation });
             const cart = getCart();
             if (delta > 0) {
                 addDishToCart(buildCardCartItem(dish, delta, variation));
@@ -1350,15 +1499,7 @@
                 return true;
             }
 
-            const simpleIndex = cart.findIndex((item) => cartItemKey(item) === targetKey && !item.observacao);
-            let fallbackIndex = -1;
-            for (let index = cart.length - 1; index >= 0; index -= 1) {
-                if (cartItemKey(cart[index]) === targetKey) {
-                    fallbackIndex = index;
-                    break;
-                }
-            }
-            const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
+            const index = findRemovableCartItemIndex(cart, (item) => cartItemMatchesDishVariation(item, dish, variation));
             if (index < 0) return false;
 
             const removedItem = cart[index];
@@ -1382,7 +1523,6 @@
 
         function incrementCardCartItem(dish, delta) {
             const normalizedDish = normalizeCatalogCartFields(dish);
-            const key = cartItemBaseKey(normalizedDish);
             const cart = getCart();
 
             if (delta > 0) {
@@ -1395,15 +1535,7 @@
                 return true;
             }
 
-            const simpleIndex = cart.findIndex((item) => cartItemBaseKey(item) === key && !item.observacao);
-            let fallbackIndex = -1;
-            for (let index = cart.length - 1; index >= 0; index -= 1) {
-                if (cartItemBaseKey(cart[index]) === key) {
-                    fallbackIndex = index;
-                    break;
-                }
-            }
-            const index = simpleIndex >= 0 ? simpleIndex : fallbackIndex;
+            const index = findRemovableCartItemIndex(cart, (item) => cartItemMatchesDish(item, normalizedDish));
             if (index < 0) return false;
 
             const removedItem = cart[index];
@@ -3344,7 +3476,7 @@
         }
 
         function currentItemsTotal() {
-            return getCart().reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+            return cartPayableTotal(getCart());
         }
 
         function currentMealPromoDiscount() {
@@ -3567,7 +3699,24 @@
                     const delta = Number(this.getAttribute("data-delta"));
                     const updatedCart = getCart();
                     if (!updatedCart[index]) return;
-                    updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
+                    const changedItem = updatedCart[index];
+                    if (delta > 0) {
+                        const addResult = addCartItemUsingFreeCredits(
+                            updatedCart,
+                            { ...changedItem, quantidade: 1 },
+                            { forcePromo: isPromotionalMeal(changedItem) }
+                        );
+                        if (isPromotionalMeal(changedItem) && addResult.added <= 0) {
+                            showUiNotice("Adicione 4 marmitas iguais para liberar outra grátis.");
+                        }
+                    } else {
+                        const nextQuantity = Number(updatedCart[index].quantidade || 1) + delta;
+                        if (nextQuantity <= 0) {
+                            updatedCart.splice(index, 1);
+                        } else {
+                            updatedCart[index].quantidade = nextQuantity;
+                        }
+                    }
                     saveCart(updatedCart);
                     render();
                 });
@@ -3802,6 +3951,8 @@
         const cartMealPromoLabel = document.getElementById("cart-meal-promo-label");
         const cartMealPromoValue = document.getElementById("cart-meal-promo-value");
         const cartMealPromoProgress = document.querySelector("[data-cart-meal-promo-progress]");
+        const cartFreeMealClaim = document.querySelector("[data-cart-free-meal-claim]");
+        const cartFreeMealTitle = document.querySelector("[data-cart-free-meal-title]");
         const myOrdersUrl = window.PRATO_CONFIG?.myOrdersUrl || "/meus-pedidos/";
         if (!itemsContainer || !itemsSubtotalElement || !goDeliveryLink) return;
         let cartAppliedCoupon = null;
@@ -3862,7 +4013,7 @@
         }
 
         function cartItemsTotal() {
-            return getCart().reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+            return cartPayableTotal(getCart());
         }
 
         function cartMealPromoDiscount() {
@@ -3872,6 +4023,16 @@
         function getCartCouponDiscount() {
             const rawDiscount = cartAppliedCoupon ? Math.max(Number(cartAppliedCoupon.desconto || 0), 0) : 0;
             return Math.min(rawDiscount, Math.max(cartItemsTotal() - cartMealPromoDiscount(), 0));
+        }
+
+        function syncFreeMealClaimUi(promo) {
+            const availableFreeMeals = Number(promo?.availableFreeMeals || 0);
+            cartFreeMealClaim?.classList.toggle("hidden", availableFreeMeals <= 0);
+            if (cartFreeMealTitle) {
+                cartFreeMealTitle.textContent = availableFreeMeals === 1
+                    ? "1 marmita grátis disponível"
+                    : `${availableFreeMeals} marmitas grátis disponíveis`;
+            }
         }
 
         function syncCartCouponUi(message = "") {
@@ -3940,11 +4101,12 @@
                 return;
             }
             itemsContainer.innerHTML = cart.map(buildCartItemMarkup).join("");
-            const itemsTotal = cart.reduce((sum, item) => sum + parsePrice(item.preco) * Number(item.quantidade || 0), 0);
+            const itemsTotal = cartPayableTotal(cart);
             const mealPromo = calculateMealPromo(cart);
             const mealPromoDiscount = Math.min(mealPromo.discount, itemsTotal);
             const couponDiscount = Math.min(getCartCouponDiscount(), Math.max(itemsTotal - mealPromoDiscount, 0));
             syncMealPromoProgress(cartMealPromoProgress, mealPromo, { nextCycle: true });
+            syncFreeMealClaimUi(mealPromo);
             if (cartMealPromoRow && cartMealPromoValue) {
                 cartMealPromoRow.classList.toggle("hidden", mealPromoDiscount <= 0);
                 if (cartMealPromoLabel) cartMealPromoLabel.textContent = mealPromo.label || "Promoção especial";
@@ -3965,7 +4127,24 @@
                 const updatedCart = getCart();
                 if (!updatedCart[index]) return;
                 const changedItem = updatedCart[index];
-                updatedCart[index].quantidade = Math.max(1, Number(updatedCart[index].quantidade || 1) + delta);
+                let addResult = null;
+                if (delta > 0) {
+                    addResult = addCartItemUsingFreeCredits(
+                        updatedCart,
+                        { ...changedItem, quantidade: 1 },
+                        { forcePromo: isPromotionalMeal(changedItem) }
+                    );
+                    if (isPromotionalMeal(changedItem) && addResult.added <= 0) {
+                        showUiNotice("Adicione 4 marmitas iguais para liberar outra grátis.");
+                    }
+                } else {
+                    const nextQuantity = Number(updatedCart[index].quantidade || 1) + delta;
+                    if (nextQuantity <= 0) {
+                        updatedCart.splice(index, 1);
+                    } else {
+                        updatedCart[index].quantidade = nextQuantity;
+                    }
+                }
                 saveCart(updatedCart);
                 render();
                 if (getCheckoutCouponCode()) applyCartCoupon(getCheckoutCouponCode(), { silent: true });
@@ -3975,6 +4154,13 @@
                         item_id: changedItem.item_id || changedItem.prato_id || changedItem.adicional_id || changedItem.bebida_id || "",
                         cart_items_count: 1,
                         metadata: { origem: "carrinho" },
+                    });
+                } else if (addResult?.added > 0) {
+                    trackMetricEvent("add_to_cart", {
+                        item_type: cartItemType(changedItem),
+                        item_id: changedItem.item_id || changedItem.prato_id || changedItem.adicional_id || changedItem.bebida_id || "",
+                        cart_items_count: Number(addResult.added || 1),
+                        metadata: { origem: "carrinho", promocao: addResult.promotionalQuantity > 0 ? "sim" : "nao" },
                     });
                 }
                 return;

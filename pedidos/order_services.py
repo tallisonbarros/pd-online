@@ -45,6 +45,13 @@ def normalize_classificacao_saida(value):
     return value if value in valid else ItemPedido.ClassificacaoSaida.VENDIDA
 
 
+def normalize_payload_classificacao_saida(value, allow_cortesia=False):
+    classificacao = normalize_classificacao_saida(value)
+    if classificacao == ItemPedido.ClassificacaoSaida.CORTESIA and not allow_cortesia:
+        raise ValueError("Cortesia nao pode ser solicitada pelo carrinho.")
+    return classificacao
+
+
 def clear_order_items_prefetch(pedido):
     if hasattr(pedido, "_prefetched_objects_cache"):
         pedido._prefetched_objects_cache.pop("itens", None)
@@ -258,7 +265,7 @@ def inherit_customer_from_known_tokens(pedido, tokens):
     return None
 
 
-def create_order_items_from_payload(pedido, itens_payload, clear_existing=False):
+def create_order_items_from_payload(pedido, itens_payload, clear_existing=False, allow_cortesia=False):
     if clear_existing:
         pedido.itens.all().delete()
 
@@ -327,7 +334,7 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False)
 
         preco = catalog_price(catalog_item, pedido.canal, pedido.ifood)
         classificacao_saida = (
-            normalize_classificacao_saida(item.get("classificacao_saida"))
+            normalize_payload_classificacao_saida(item.get("classificacao_saida"), allow_cortesia=allow_cortesia)
             if tipo == "prato"
             else ItemPedido.ClassificacaoSaida.VENDIDA
         )
@@ -358,89 +365,73 @@ def reprice_order_items_from_catalog(pedido):
         item.save(update_fields=["preco_snapshot", "classificacao_saida", "subtotal"])
 
 
+def _promo_marmita_credit_key(item):
+    variacao_key = normalize_text_key(item.variacao_nome_snapshot)
+    if variacao_key:
+        return f"variacao:{variacao_key}"
+    if item.prato_id:
+        return f"prato:{item.prato_id}"
+    return ""
+
+
+def calcular_creditos_marmitas_gratis(itens):
+    quantidades_por_grupo = {}
+    for item in itens:
+        if not item.prato_id:
+            continue
+        if item.classificacao_saida != ItemPedido.ClassificacaoSaida.VENDIDA:
+            continue
+        grupo_key = _promo_marmita_credit_key(item)
+        if not grupo_key:
+            continue
+        quantidades_por_grupo[grupo_key] = quantidades_por_grupo.get(grupo_key, 0) + max(item.quantidade, 0)
+    return sum(quantidade // 4 for quantidade in quantidades_por_grupo.values())
+
+
 def calcular_promocao_marmitas(pedido):
     itens_prato = [item for item in pedido.itens.all() if item.prato_id]
-    quantidade_pratos = sum(max(item.quantidade, 0) for item in itens_prato)
-    marmitas_gratis = quantidade_pratos // 5
+    creditos = calcular_creditos_marmitas_gratis(itens_prato)
+    marmitas_gratis = sum(
+        max(item.quantidade, 0)
+        for item in itens_prato
+        if item.classificacao_saida == ItemPedido.ClassificacaoSaida.PROMOCAO
+    )
     if marmitas_gratis <= 0:
-        return {"descricao": "", "discount": Decimal("0.00")}
-    precos = [item.preco_snapshot for item in itens_prato if item.preco_snapshot and item.preco_snapshot > 0]
-    if not precos:
-        return {"descricao": "", "discount": Decimal("0.00")}
-    desconto = (min(precos) * marmitas_gratis).quantize(Decimal("0.01"))
+        return {"descricao": "", "discount": Decimal("0.00"), "creditos": creditos, "quantidade": 0}
     descricao = "5ª marmita grátis" if marmitas_gratis == 1 else f"{marmitas_gratis} marmitas grátis"
-    return {"descricao": descricao, "discount": desconto}
+    return {"descricao": descricao, "discount": Decimal("0.00"), "creditos": creditos, "quantidade": marmitas_gratis}
 
 
 def normalizar_promocao_marmitas(pedido):
-    itens_prato = [
-        item
-        for item in pedido.itens.select_related("prato").all()
-        if item.prato_id and item.classificacao_saida != ItemPedido.ClassificacaoSaida.CORTESIA
-    ]
-    quantidade_pratos = sum(max(item.quantidade, 0) for item in itens_prato)
-    marmitas_gratis = quantidade_pratos // 5
+    itens_prato = [item for item in pedido.itens.select_related("prato").all() if item.prato_id]
     if not itens_prato:
-        return {"descricao": "", "valor": Decimal("0.00"), "quantidade": 0}
+        return {"descricao": "", "valor": Decimal("0.00"), "quantidade": 0, "creditos": 0}
 
-    grupos = [
-        {
-            "prato": item.prato,
-            "nome_prato_snapshot": item.nome_prato_snapshot,
-            "variacao_nome_snapshot": item.variacao_nome_snapshot,
-            "preco_snapshot": item.preco_snapshot,
-            "quantidade": max(item.quantidade, 0),
-            "observacao": item.observacao,
-            "promocao": 0,
-        }
+    creditos = calcular_creditos_marmitas_gratis(itens_prato)
+    itens_promocao = [
+        item
         for item in itens_prato
+        if item.classificacao_saida == ItemPedido.ClassificacaoSaida.PROMOCAO
     ]
-    pedido.itens.filter(prato_id__isnull=False).exclude(
-        classificacao_saida=ItemPedido.ClassificacaoSaida.CORTESIA
-    ).delete()
+    marmitas_gratis = sum(max(item.quantidade, 0) for item in itens_promocao)
+    if marmitas_gratis > creditos:
+        raise ValueError("A quantidade de marmitas gratis excede os creditos disponiveis.")
 
-    if marmitas_gratis > 0:
-        restantes = marmitas_gratis
-        for grupo in sorted(grupos, key=lambda item: (item["preco_snapshot"] or Decimal("0.00"), item["nome_prato_snapshot"])):
-            if restantes <= 0:
-                break
-            quantidade_promocao = min(grupo["quantidade"], restantes)
-            grupo["promocao"] = quantidade_promocao
-            restantes -= quantidade_promocao
-
-    valor_promocional = Decimal("0.00")
-    for grupo in grupos:
-        quantidade_vendida = grupo["quantidade"] - grupo["promocao"]
-        if quantidade_vendida > 0:
-            ItemPedido.objects.create(
-                pedido=pedido,
-                prato=grupo["prato"],
-                nome_prato_snapshot=grupo["nome_prato_snapshot"],
-                variacao_nome_snapshot=grupo["variacao_nome_snapshot"],
-                preco_snapshot=grupo["preco_snapshot"],
-                quantidade=quantidade_vendida,
-                observacao=grupo["observacao"],
-                classificacao_saida=ItemPedido.ClassificacaoSaida.VENDIDA,
-            )
-        if grupo["promocao"] > 0:
-            valor_promocional += (grupo["preco_snapshot"] or Decimal("0.00")) * grupo["promocao"]
-            ItemPedido.objects.create(
-                pedido=pedido,
-                prato=grupo["prato"],
-                nome_prato_snapshot=grupo["nome_prato_snapshot"],
-                variacao_nome_snapshot=grupo["variacao_nome_snapshot"],
-                preco_snapshot=grupo["preco_snapshot"],
-                quantidade=grupo["promocao"],
-                observacao=grupo["observacao"],
-                classificacao_saida=ItemPedido.ClassificacaoSaida.PROMOCAO,
-            )
-
+    valor_promocional = sum(
+        ((item.preco_snapshot or Decimal("0.00")) * max(item.quantidade, 0) for item in itens_promocao),
+        Decimal("0.00"),
+    )
     descricao = ""
     if marmitas_gratis == 1:
         descricao = "5ª marmita grátis"
     elif marmitas_gratis > 1:
         descricao = f"{marmitas_gratis} marmitas grátis"
-    return {"descricao": descricao, "valor": valor_promocional.quantize(Decimal("0.01")), "quantidade": marmitas_gratis}
+    return {
+        "descricao": descricao,
+        "valor": valor_promocional.quantize(Decimal("0.01")),
+        "quantidade": marmitas_gratis,
+        "creditos": creditos,
+    }
 
 
 def calcular_promocao_dupla_variacoes(pedido):
@@ -555,7 +546,7 @@ def recalculate_order_totals(pedido, cupom_codigo=None):
 
 
 def replace_order_items(pedido, itens_payload):
-    create_order_items_from_payload(pedido, itens_payload, clear_existing=True)
+    create_order_items_from_payload(pedido, itens_payload, clear_existing=True, allow_cortesia=True)
     return recalculate_order_totals(pedido)
 
 

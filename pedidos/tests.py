@@ -5391,7 +5391,7 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Pedido.objects.get().enviar_talheres)
 
-    def test_pickup_order_applies_fifth_meal_promotion(self):
+    def test_pickup_order_does_not_apply_fifth_meal_promotion_automatically(self):
         response = self.client.post(
             "/pedido/retirada/",
             {
@@ -5405,18 +5405,17 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(response.status_code, 302)
         pedido = Pedido.objects.get()
         self.assertEqual(pedido.total_sem_desconto, Decimal("124.50"))
-        self.assertEqual(pedido.promocao_descricao, "5ª marmita grátis")
+        self.assertEqual(pedido.promocao_descricao, "")
         self.assertEqual(pedido.promocao_desconto, Decimal("0.00"))
-        self.assertEqual(pedido.total, Decimal("99.60"))
+        self.assertEqual(pedido.total, Decimal("124.50"))
         self.assertEqual(
             list(pedido.itens.order_by("classificacao_saida").values_list("classificacao_saida", "quantidade", "subtotal")),
             [
-                (ItemPedido.ClassificacaoSaida.PROMOCAO, 1, Decimal("0.00")),
-                (ItemPedido.ClassificacaoSaida.VENDIDA, 4, Decimal("99.60")),
+                (ItemPedido.ClassificacaoSaida.VENDIDA, 5, Decimal("124.50")),
             ],
         )
         success_response = self.client.get(response.url)
-        self.assertContains(success_response, "5ª marmita grátis")
+        self.assertNotContains(success_response, "5ª marmita grátis")
 
     def test_pickup_order_applies_frango_fraldinha_pair_promotion(self):
         prato = Prato.objects.create(
@@ -5481,6 +5480,180 @@ class CriarPedidoFreteTests(TestCase):
         self.assertEqual(pedido.promocao_descricao, "Dupla frango + fraldinha")
         self.assertEqual(pedido.promocao_desconto, Decimal("5.10"))
         self.assertEqual(pedido.total, Decimal("69.90"))
+
+    def test_pickup_order_does_not_grant_free_meal_from_summed_variations(self):
+        prato = Prato.objects.create(
+            nome="Estrogonofe",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 2, "preco": "25.00", "variacao": "Frango"},
+                        {"prato_id": prato.id, "quantidade": 3, "preco": "25.00", "variacao": "Fraldinha"},
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.itens.filter(classificacao_saida=ItemPedido.ClassificacaoSaida.PROMOCAO).count(), 0)
+        self.assertEqual(pedido.promocao_descricao, "2 duplas frango + fraldinha")
+        self.assertEqual(pedido.promocao_desconto, Decimal("10.20"))
+        self.assertEqual(pedido.total, Decimal("114.80"))
+
+    def test_pickup_order_accepts_free_meal_credit_from_four_same_variations(self):
+        prato = Prato.objects.create(
+            nome="Estrogonofe",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 4, "preco": "25.00", "variacao": "Fraldinha"},
+                        {"prato_id": prato.id, "quantidade": 1, "preco": "25.00", "variacao": "Frango"},
+                        {
+                            "prato_id": prato.id,
+                            "quantidade": 1,
+                            "preco": "25.00",
+                            "variacao": "Frango",
+                            "classificacao_saida": ItemPedido.ClassificacaoSaida.PROMOCAO,
+                        },
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.total_sem_desconto, Decimal("150.00"))
+        self.assertEqual(pedido.promocao_descricao, "5ª marmita grátis + Dupla frango + fraldinha")
+        self.assertEqual(pedido.promocao_desconto, Decimal("5.10"))
+        self.assertEqual(pedido.total, Decimal("119.90"))
+        self.assertEqual(
+            list(pedido.itens.order_by("classificacao_saida", "variacao_nome_snapshot").values_list("classificacao_saida", "quantidade", "variacao_nome_snapshot", "subtotal")),
+            [
+                (ItemPedido.ClassificacaoSaida.PROMOCAO, 1, "Frango", Decimal("0.00")),
+                (ItemPedido.ClassificacaoSaida.VENDIDA, 4, "Fraldinha", Decimal("100.00")),
+                (ItemPedido.ClassificacaoSaida.VENDIDA, 1, "Frango", Decimal("25.00")),
+            ],
+        )
+
+    def test_pickup_order_allows_two_free_meals_from_two_variation_blocks(self):
+        prato = Prato.objects.create(
+            nome="Estrogonofe",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 4, "preco": "25.00", "variacao": "Frango"},
+                        {"prato_id": prato.id, "quantidade": 4, "preco": "25.00", "variacao": "Fraldinha"},
+                        {
+                            "prato_id": prato.id,
+                            "quantidade": 2,
+                            "preco": "25.00",
+                            "variacao": "Frango",
+                            "classificacao_saida": ItemPedido.ClassificacaoSaida.PROMOCAO,
+                        },
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pedido = Pedido.objects.get()
+        self.assertEqual(pedido.promocao_descricao, "2 marmitas grátis + 4 duplas frango + fraldinha")
+        self.assertEqual(pedido.promocao_desconto, Decimal("20.40"))
+        self.assertEqual(pedido.total_sem_desconto, Decimal("250.00"))
+        self.assertEqual(pedido.total, Decimal("179.60"))
+        self.assertEqual(
+            sum(item.quantidade for item in pedido.itens.filter(classificacao_saida=ItemPedido.ClassificacaoSaida.PROMOCAO)),
+            2,
+        )
+
+    def test_pickup_order_rejects_free_meals_above_available_credits(self):
+        prato = Prato.objects.create(
+            nome="Estrogonofe",
+            preco=Decimal("25.00"),
+            variacoes="Frango\nFraldinha",
+            ativo=True,
+        )
+
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {"prato_id": prato.id, "quantidade": 4, "preco": "25.00", "variacao": "Frango"},
+                        {"prato_id": prato.id, "quantidade": 4, "preco": "25.00", "variacao": "Fraldinha"},
+                        {
+                            "prato_id": prato.id,
+                            "quantidade": 3,
+                            "preco": "25.00",
+                            "variacao": "Frango",
+                            "classificacao_saida": ItemPedido.ClassificacaoSaida.PROMOCAO,
+                        },
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "marmitas gratis excede os creditos", status_code=400)
+        self.assertFalse(Pedido.objects.exists())
+
+    def test_pickup_order_rejects_public_courtesy_item_payload(self):
+        response = self.client.post(
+            "/pedido/retirada/",
+            {
+                "carrinho_payload": json.dumps(
+                    [
+                        {
+                            "prato_id": self.prato.id,
+                            "quantidade": 1,
+                            "preco": "24.90",
+                            "classificacao_saida": ItemPedido.ClassificacaoSaida.CORTESIA,
+                        },
+                    ]
+                ),
+                "nome_cliente": "Cliente Retirada",
+                "observacao_geral": "",
+                "enviar_talheres": "sim",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Cortesia nao pode ser solicitada pelo carrinho.", status_code=400)
+        self.assertFalse(Pedido.objects.exists())
 
     @override_settings(RESTAURANT_WHATSAPP="556488887777")
     def test_pickup_order_creation_uses_whatsapp_env_fallback(self):
