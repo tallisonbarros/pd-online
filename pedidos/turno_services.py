@@ -223,12 +223,24 @@ def resolve_turno_publico(now=None, create_availability=True):
         and fim
     )
     is_open = bool(scheduled and inicio <= current.time() < fim and itens_disponiveis)
+    owns_menu_context = bool(
+        scheduled
+        and current.time() < fim
+        and (
+            is_open
+            or (
+                principal.horario_fim
+                and current.time() >= principal.horario_fim
+            )
+        )
+    )
+    accepting_orders = bool(owns_menu_context and itens_disponiveis)
     delivery_allowed = bool(
-        is_open
+        accepting_orders
         and disponibilidade.permite_entrega_efetivo
         and (not limite_entrega or current.time() < limite_entrega)
     )
-    pickup_allowed = bool(is_open and disponibilidade.permite_retirada_efetivo)
+    pickup_allowed = bool(accepting_orders and disponibilidade.permite_retirada_efetivo)
 
     state = "inactive"
     if scheduled:
@@ -254,6 +266,8 @@ def resolve_turno_publico(now=None, create_availability=True):
         "state": state,
         "scheduled": scheduled,
         "is_open": is_open,
+        "owns_menu_context": owns_menu_context,
+        "accepting_orders": accepting_orders,
         "delivery_allowed": delivery_allowed,
         "pickup_allowed": pickup_allowed,
         "inicio": inicio,
@@ -268,7 +282,7 @@ def resolve_turno_publico(now=None, create_availability=True):
 def cart_window_for_turno(config=None, now=None):
     current = now or timezone.localtime()
     context = resolve_turno_publico(current)
-    if context["is_open"]:
+    if context["accepting_orders"]:
         disponibilidade = context["disponibilidade"]
         disponibilidade_revision = disponibilidade.atualizado_em.strftime("%Y%m%d%H%M%S%f")
         turno_revision = context["prato_pronto"].atualizado_em.strftime("%Y%m%d%H%M%S%f")
@@ -308,7 +322,7 @@ def cart_window_for_turno(config=None, now=None):
 
 def validar_turno_para_pedido(tipo_coleta, now=None):
     context = resolve_turno_publico(now)
-    if not context["is_open"]:
+    if not context["accepting_orders"]:
         return context["principal"], None
     if tipo_coleta == Pedido.TipoColeta.ENTREGA and not context["delivery_allowed"]:
         raise ValueError("O horario de entregas do Prato Pronto encerrou. Escolha retirada no local.")

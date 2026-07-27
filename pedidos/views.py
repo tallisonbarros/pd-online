@@ -212,27 +212,17 @@ def _cardapio_status_tag(config, cardapio_context, turno_context=None, now=None)
             ),
         }
 
-    if (
-        turno_context
-        and turno_context.get("state") == "scheduled"
-        and turno_context.get("inicio")
-    ):
+    if turno_context and turno_context.get("owns_menu_context") and turno_context.get("inicio"):
         inicio_prato_pronto = turno_context["inicio"]
-        target_date = cardapio_context.get("target_date")
-        proxima_abertura_regular = (
-            (target_date, abertura)
-            if target_date and abertura
-            else None
-        )
-        proxima_abertura_prato_pronto = (current_date, inicio_prato_pronto)
-        if (
-            proxima_abertura_regular is None
-            or proxima_abertura_prato_pronto < proxima_abertura_regular
-        ):
-            return {
-                "label": "Prato Pronto às",
-                "time": inicio_prato_pronto.strftime("%H:%M"),
-            }
+        fim_prato_pronto = turno_context.get("fim")
+        return {
+            "label": "Prato Pronto",
+            "time": (
+                f"{inicio_prato_pronto.strftime('%H:%M')} às {fim_prato_pronto.strftime('%H:%M')}"
+                if fim_prato_pronto
+                else inicio_prato_pronto.strftime("%H:%M")
+            ),
+        }
 
     if not abertura or not fechamento:
         return None
@@ -692,8 +682,13 @@ def cardapio(request):
     turno_context = resolve_turno_publico(current)
     cardapio_context = regular_context
     disponibilidade_itens = {}
-    if turno_context["is_open"]:
-        itens_turno = turno_context["itens_disponiveis"]
+    prato_pronto_contextual = turno_context["owns_menu_context"]
+    if prato_pronto_contextual:
+        itens_turno = (
+            turno_context["itens_disponiveis"]
+            if turno_context["accepting_orders"]
+            else turno_context["itens"]
+        )
         pratos = [item.prato for item in itens_turno]
         disponibilidade_itens = {item.prato_id: item for item in itens_turno}
         cardapio_context = {
@@ -728,9 +723,9 @@ def cardapio(request):
         item.imagem_cardapio_url = payload["imagem"]
         item.preco_cardapio = payload["preco"]
     turno_banner = None
-    if turno_context["is_open"]:
+    if prato_pronto_contextual:
         turno_banner = {
-            "state": "open",
+            "state": "open" if turno_context["is_open"] else "scheduled",
             "label": "Prato Pronto",
             "orientation": (
                 "Marmitas seladas e refrigeradas, feitas no dia. "
@@ -760,11 +755,11 @@ def cardapio(request):
               "horario_abertura": config.horario_abertura,
               "horario_fechamento": config.horario_fechamento,
               "whatsapp_cardapio_url": whatsapp_cardapio_url,
-              "turno_prato_pronto_aberto": turno_context["is_open"],
+              "turno_prato_pronto_aberto": turno_context["accepting_orders"],
               "turno_prato_pronto_banner": turno_banner,
               "permite_promocao_marmita": (
                   turno_context["prato_pronto"].permite_promocao
-                  if turno_context["is_open"]
+                  if prato_pronto_contextual
                   else True
               ),
         },
@@ -792,7 +787,7 @@ def checkout(request):
             "pix_chave": config.pix_chave,
             "is_atendente": user_is_atendente(request.user),
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
-            "turno_prato_pronto_aberto": turno_context["is_open"],
+            "turno_prato_pronto_aberto": turno_context["accepting_orders"],
         },
     )
 
@@ -806,9 +801,9 @@ def carrinho(request):
         request,
         "pedidos/carrinho.html",
         {
-            "cart_closed_notice": None if turno_context["is_open"] else _cart_closed_notice(config),
+            "cart_closed_notice": None if turno_context["accepting_orders"] else _cart_closed_notice(config),
             "pratos_lookup_json": pratos_lookup,
-            "turno_prato_pronto_aberto": turno_context["is_open"],
+            "turno_prato_pronto_aberto": turno_context["accepting_orders"],
         },
     )
 

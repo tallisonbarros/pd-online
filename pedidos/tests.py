@@ -5919,9 +5919,12 @@ class TurnoPratoProntoTests(TestCase):
 
         response = self.client.get("/")
 
-        self.assertContains(response, "Prato Pronto às")
-        self.assertContains(response, '<span class="menu-status-time">18:00</span>', html=True)
-        self.assertNotContains(response, "turno-prato-pronto-banner")
+        self.assertContains(response, '<span class="menu-status-label">Prato Pronto</span>', html=True)
+        self.assertContains(response, '<span class="menu-status-time">18:00 às 20:00</span>', html=True)
+        self.assertContains(response, "turno-prato-pronto-banner")
+        self.assertContains(response, "Prato Pronto Frango")
+        self.assertContains(response, f'"disponibilidade_turno_item_id":{self.item_turno.id}')
+        self.assertContains(response, "promotionEnabled: false")
 
     @patch("pedidos.context_processors.timezone.localtime")
     @patch("pedidos.views.timezone.localtime")
@@ -5934,8 +5937,58 @@ class TurnoPratoProntoTests(TestCase):
 
         self.assertContains(response, "Aberto agora")
         self.assertContains(response, "até 14:00")
-        self.assertNotContains(response, "Prato Pronto às")
+        self.assertNotContains(response, '<span class="menu-status-label">Prato Pronto</span>', html=True)
         self.assertNotContains(response, "turno-prato-pronto-banner")
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_menu_returns_to_next_regular_day_only_after_prato_pronto_ends(
+        self,
+        mock_view_time,
+        mock_context_time,
+    ):
+        Prato.objects.create(
+            nome="Prato regular de domingo",
+            preco=Decimal("29.90"),
+            ativo=True,
+            dias_disponiveis="dom",
+        )
+        current = timezone.make_aware(datetime(2026, 7, 25, 20, 15))
+        mock_view_time.return_value = current
+        mock_context_time.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertContains(response, "Prato regular de domingo")
+        self.assertNotContains(response, "Prato Pronto Frango")
+        self.assertNotContains(response, "turno-prato-pronto-banner")
+
+    def test_pickup_before_opening_is_registered_as_prato_pronto(self):
+        before_opening = timezone.make_aware(datetime(2026, 7, 25, 16, 0))
+        with patch("pedidos.turno_services.timezone.localtime", return_value=before_opening):
+            context = resolve_turno_publico(before_opening)
+            self.assertTrue(context["accepting_orders"])
+            self.assertTrue(context["delivery_allowed"])
+            self.assertTrue(context["pickup_allowed"])
+            response = self.client.post(
+                "/pedido/retirada/",
+                {
+                    "carrinho_payload": self._pickup_payload(),
+                    "nome_cliente": "Cliente Prato Pronto antecipado",
+                    "checkout_key": "prato-pronto-antecipado",
+                },
+                HTTP_ACCEPT="application/json",
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.get(nome_cliente="Cliente Prato Pronto antecipado")
+        self.assertEqual(pedido.turno.codigo, TurnoAtendimento.Codigo.PRATO_PRONTO)
+        self.assertEqual(pedido.disponibilidade_turno, self.disponibilidade)
+        self.assertEqual(
+            pedido.itens.get().nome_prato_snapshot,
+            "Prato Pronto Frango - Prato Pronto",
+        )
 
     def test_cart_reuses_the_responsive_prato_pronto_intro(self):
         with patch(
