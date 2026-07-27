@@ -14,6 +14,10 @@
     const currentCartCycleKey = String(config.cartCycleKey || "").trim();
     const cartExpiresAt = String(config.cartExpiresAt || "").trim();
     const serverNow = String(config.serverNow || "").trim();
+    const promotionEnabled = config.promotionEnabled !== false;
+    const couponEnabled = config.couponEnabled !== false;
+    const deliveryEnabled = config.deliveryEnabled !== false;
+    const pickupEnabled = config.pickupEnabled !== false;
     const pageLoadedAtMs = Date.now();
     const serverClockOffsetMs = (() => {
         const serverTime = Date.parse(serverNow);
@@ -171,6 +175,20 @@
     }
 
     function calculateMealPromo(cart) {
+        if (!promotionEnabled) {
+            return {
+                freeMeals: 0,
+                earnedFreeMeals: 0,
+                availableFreeMeals: 0,
+                pairedVariationPairs: 0,
+                discount: 0,
+                mealCount: 0,
+                progressCount: 0,
+                remaining: 4,
+                readyForFreeMeal: false,
+                label: "",
+            };
+        }
         const mealItems = paidMealItems(cart);
         const mealCount = mealItems.reduce((total, item) => total + Number(item.quantidade || 0), 0);
         const quantitiesByCreditKey = {};
@@ -207,6 +225,13 @@
 
     function enforceMealPromoClaims(cart) {
         const normalizedCart = Array.isArray(cart) ? cart : [];
+        if (!promotionEnabled) {
+            return normalizedCart.map((item) => (
+                isPromotionalMeal(item)
+                    ? { ...item, classificacao_saida: "vendida" }
+                    : item
+            ));
+        }
         const promo = calculateMealPromo(normalizedCart);
         let excessFreeMeals = Math.max(0, Number(promo.freeMeals || 0) - Number(promo.earnedFreeMeals || 0));
         if (excessFreeMeals <= 0) return normalizedCart;
@@ -754,6 +779,7 @@
     }
 
     function getCheckoutCouponCode() {
+        if (!couponEnabled) return "";
         try {
             return String(localStorage.getItem(checkoutCouponKey) || "").trim().toUpperCase();
         } catch (error) {
@@ -762,6 +788,10 @@
     }
 
     function saveCheckoutCouponCode(code) {
+        if (!couponEnabled) {
+            localStorage.removeItem(checkoutCouponKey);
+            return;
+        }
         try {
             const normalized = String(code || "").trim().toUpperCase();
             if (normalized) {
@@ -1381,6 +1411,7 @@
                 prato_id: dishType === "prato" ? dish.id : undefined,
                 adicional_id: dishType === "adicional" ? dish.id : undefined,
                 bebida_id: dishType === "bebida" ? dish.id : undefined,
+                disponibilidade_turno_item_id: dish.disponibilidade_turno_item_id || undefined,
                 nome: dish.nome,
                 preco: parsePrice(dish.preco),
                 quantidade: Math.max(1, Number(quantityToAdd || 1)),
@@ -1580,6 +1611,7 @@
                 prato_id: currentType === "prato" ? currentDish.id : undefined,
                 adicional_id: currentType === "adicional" ? currentDish.id : undefined,
                 bebida_id: currentType === "bebida" ? currentDish.id : undefined,
+                disponibilidade_turno_item_id: currentDish.disponibilidade_turno_item_id || undefined,
                 nome: currentDish.nome,
                 preco: parsePrice(currentDish.preco),
                 quantidade: Math.max(1, Number(quantityToAdd || 1)),
@@ -3408,6 +3440,12 @@
         const backToItemsButton = document.getElementById("checkout-back-to-items");
         const stageTriggers = Array.from(document.querySelectorAll("[data-checkout-stage-trigger]"));
         if (!payloadInput || !form) return;
+        if (!deliveryEnabled) {
+            window.location.href = window.PRATO_CONFIG?.checkoutUrl || "/carrinho/";
+            return;
+        }
+        if (!promotionEnabled) mealPromoReview?.classList.add("hidden");
+        if (!couponEnabled) couponReview?.classList.add("hidden");
 
         let selectedShippingFee = Number.parseFloat(shippingValueInput?.value || "0") || 0;
         let appliedCoupon = null;
@@ -3493,6 +3531,7 @@
         }
 
         async function applyCoupon(codeOverride = "") {
+            if (!couponEnabled) return;
             const code = String(codeOverride || getCheckoutCouponCode() || "").trim();
             if (!code) {
                 clearCoupon("Informe um cupom.");
@@ -3957,6 +3996,19 @@
         if (!itemsContainer || !itemsSubtotalElement || !goDeliveryLink) return;
         let cartAppliedCoupon = null;
 
+        if (!couponEnabled) {
+            cartCouponInput?.closest(".cart-coupon-inline")?.classList.add("hidden");
+            cartCouponDiscountRow?.classList.add("hidden");
+            saveCheckoutCouponCode("");
+        }
+        if (!promotionEnabled) {
+            cartMealPromoProgress?.classList.add("hidden");
+            cartFreeMealClaim?.classList.add("hidden");
+            cartMealPromoRow?.classList.add("hidden");
+        }
+        if (!deliveryEnabled) goDeliveryLink.classList.add("hidden");
+        if (!pickupEnabled) goPickupButton?.classList.add("hidden");
+
         function readDraftFromPage() {
             return {
                 nome: nameInput?.value || "",
@@ -4045,6 +4097,7 @@
         }
 
         async function applyCartCoupon(codeOverride = "", options = {}) {
+            if (!couponEnabled) return;
             const code = String(codeOverride || cartCouponInput?.value || "").trim();
             if (!code) {
                 cartAppliedCoupon = null;
@@ -4114,9 +4167,9 @@
             }
             itemsSubtotalElement.textContent = money(Math.max(itemsTotal - mealPromoDiscount - couponDiscount, 0));
             syncCartCouponUi(cartCouponFeedback?.textContent || "");
-            goDeliveryLink.classList.toggle("is-disabled", !cart.length);
-            goDeliveryLink.setAttribute("aria-disabled", cart.length ? "false" : "true");
-            if (goPickupButton) goPickupButton.disabled = !cart.length;
+            goDeliveryLink.classList.toggle("is-disabled", !cart.length || !deliveryEnabled);
+            goDeliveryLink.setAttribute("aria-disabled", cart.length && deliveryEnabled ? "false" : "true");
+            if (goPickupButton) goPickupButton.disabled = !cart.length || !pickupEnabled;
         }
 
         itemsContainer.addEventListener("click", (event) => {

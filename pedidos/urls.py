@@ -35,6 +35,12 @@ urlpatterns = [
     path("controle/metricas/", views.metricas_acesso, name="metricas_acesso"),
     path("controle/api/metricas/", views.api_metricas_acesso, name="api_metricas_acesso"),
     path("controle/operacao/", views.cozinha_pedidos, name="cozinha_operacao"),
+    path("controle/prato-pronto/", views.prato_pronto_operacao, name="prato_pronto_operacao"),
+    path(
+        "controle/quentinhas/",
+        views.prato_pronto_operacao,
+        name="prato_pronto_operacao_legacy",
+    ),
     path("controle/pedidos/", views.pedidos_admin, name="cozinha_pedidos"),
     path("controle/pedidos-aprovacao/", views.pedidos_aprovacao_admin, name="pedidos_aprovacao_admin"),
     path("controle/pedidos-concluidos/", views.pedidos_concluidos_admin, name="pedidos_concluidos_admin"),

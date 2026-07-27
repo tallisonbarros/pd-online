@@ -27,6 +27,10 @@
         {% endif %}
     </header>
 
+    {% if turno_prato_pronto_banner %}
+        {% include "pedidos/_prato_pronto_intro.html" %}
+    {% endif %}
+
     <div class="menu-floating-panel-shell" data-menu-floating-panel-shell>
     <section class="menu-feature-band" data-menu-floating-panel aria-labelledby="menu-feature-title">
         <img class="menu-feature-shape" src="{% static 'img/Barra.svg' %}" onerror="this.onerror=null;this.src='{% static 'img/menu-feature-shape-base-cardapio.svg' %}'" alt="" aria-hidden="true">
@@ -38,22 +42,26 @@
             </h1>
         </div>
         <div class="menu-feature-card-wrap">
-            {% with prato=pratos.0 %}
-                {% if prato %}
+            {% if pratos %}
+            <div class="menu-feature-card-list {% if pratos|length > 1 %}has-multiple{% endif %}">
+                {% for prato in pratos %}
                 <article
                     class="dish-card"
                     data-prato-card
-                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco": "{{ prato.preco_cardapio }}","preco_formatado":"{% if prato.preco_site_resolvido %}R$ {{ prato.preco_site_resolvido|floatformat:2 }}{% endif %}","imagem":"{{ prato.imagem_cardapio_url|escapejs }}"}'
+                    data-prato='{"tipo":"prato","id":{{ prato.id }},"nome":"{{ prato.nome|escapejs }}","descricao":"{{ prato.descricao|default_if_none:''|escapejs }}","variacoes":"{{ prato.variacoes|default_if_none:''|escapejs }}","preco": "{{ prato.preco_cardapio }}","preco_formatado":"{{ prato.preco_cardapio_formatado }}","imagem":"{{ prato.imagem_cardapio_url|escapejs }}"{% if prato.disponibilidade_turno_item_id %},"disponibilidade_turno_item_id":{{ prato.disponibilidade_turno_item_id }}{% endif %}}'
                 >
                     <div class="dish-media">
                         <div class="dish-top-badges">
                             <div class="dish-price-badge">
-                                {% if prato.preco_site_resolvido %}
-                                    <strong>R$ {{ prato.preco_site_resolvido|floatformat:2 }}</strong>
+                                {% if prato.preco_cardapio %}
+                                    <strong>{{ prato.preco_cardapio_formatado }}</strong>
                                 {% else %}
                                     <span>Consulte</span>
                                 {% endif %}
                             </div>
+                            {% if prato.quantidade_restante != None %}
+                                <div class="dish-stock-badge">{{ prato.quantidade_restante }} disponiveis</div>
+                            {% endif %}
                         </div>
                         {% if prato.imagem %}
                             <img src="{{ prato.imagem_cardapio_url }}" alt="{{ prato.nome }}" width="960" height="720" decoding="async" fetchpriority="high">
@@ -72,13 +80,14 @@
                         <button type="button" data-card-qty-change="1" aria-label="Aumentar quantidade">+</button>
                     </div>
                 </article>
-                {% else %}
+                {% endfor %}
+            </div>
+            {% else %}
                 <div class="empty-state">
                     <h2>Nenhum prato disponível {{ cardapio_empty_label }}.</h2>
                     <p>Cadastre novos pratos em <code>/admin/</code> para publicar o cardápio.</p>
                 </div>
-                {% endif %}
-            {% endwith %}
+            {% endif %}
         </div>
     </section>
     </div>
@@ -204,6 +213,7 @@
         </section>
     </section>
 
+    {% if permite_promocao_marmita %}
     <section class="menu-promo-card reveal-on-scroll" aria-labelledby="menu-promo-title">
         <div class="menu-promo-copy">
             <p class="menu-promo-kicker">Promoção especial</p>
@@ -220,6 +230,7 @@
             </div>
         </div>
     </section>
+    {% endif %}
     </div>
     <div class="menu-floating-scroll-runway" data-menu-floating-scroll-runway aria-hidden="true"></div>
 </main>

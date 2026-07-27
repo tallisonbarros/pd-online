@@ -3,7 +3,13 @@ from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 
-from .models import ConfiguracaoEntrega, Pedido, ResumoOperacionalDia
+from .models import (
+    ConfiguracaoEntrega,
+    DisponibilidadeTurnoItem,
+    Pedido,
+    ResumoOperacionalDia,
+    TurnoAtendimento,
+)
 from .order_services import normalize_phone
 
 
@@ -35,7 +41,11 @@ def _recurring_order_count(pedidos_do_dia, data):
 
 def get_dashboard_diaria(data):
     operacional, _created = ResumoOperacionalDia.objects.get_or_create(data=data)
-    pedidos_do_dia = list(_finished_orders_for_day(data).order_by("criado_em", "id"))
+    pedidos_do_dia = list(
+        _finished_orders_for_day(data)
+        .select_related("turno")
+        .order_by("criado_em", "id")
+    )
     por_canal_raw = (
         _finished_orders_for_day(data)
         .values("canal")
@@ -61,6 +71,39 @@ def get_dashboard_diaria(data):
         (pedido.total or Decimal("0.00") for pedido in pedidos_do_dia if pedido.canal == Pedido.Canal.IFOOD),
         Decimal("0.00"),
     ).quantize(Decimal("0.01"))
+    pedidos_prato_pronto_qs = _finished_orders_for_day(data).filter(
+        turno__codigo=TurnoAtendimento.Codigo.PRATO_PRONTO
+    )
+    pedidos_prato_pronto = pedidos_prato_pronto_qs.count()
+    faturamento_prato_pronto = sum(
+        (
+            pedido.total or Decimal("0.00")
+            for pedido in pedidos_do_dia
+            if pedido.turno_id
+            and pedido.turno.codigo == TurnoAtendimento.Codigo.PRATO_PRONTO
+        ),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+    pratos_prontos_vendidos = int(
+        pedidos_prato_pronto_qs.aggregate(
+            total=Sum("itens__quantidade", filter=Q(itens__prato__isnull=False))
+        ).get("total")
+        or 0
+    )
+    estoque_prato_pronto_rows = list(
+        DisponibilidadeTurnoItem.objects.filter(
+            disponibilidade__data=data,
+            disponibilidade__turno__codigo=TurnoAtendimento.Codigo.PRATO_PRONTO,
+            ativo=True,
+            quantidade_disponivel__isnull=False,
+        )
+    )
+    estoque_prato_pronto_inicial = sum(
+        item.quantidade_disponivel or 0 for item in estoque_prato_pronto_rows
+    )
+    estoque_prato_pronto_restante = sum(
+        item.quantidade_restante or 0 for item in estoque_prato_pronto_rows
+    )
     taxa_ifood_percentual = ConfiguracaoEntrega.get_solo().taxa_ifood_percentual
     taxa_ifood_valor = (faturamento_ifood * taxa_ifood_percentual / Decimal("100")).quantize(Decimal("0.01"))
     custo_entrega = sum((pedido.valor_frete or Decimal("0.00") for pedido in pedidos_do_dia), Decimal("0.00")).quantize(Decimal("0.01"))
@@ -102,6 +145,11 @@ def get_dashboard_diaria(data):
         "total_pedidos": total_pedidos,
         "faturamento_total": faturamento_total,
         "faturamento_ifood": faturamento_ifood,
+        "pedidos_prato_pronto": pedidos_prato_pronto,
+        "faturamento_prato_pronto": faturamento_prato_pronto,
+        "pratos_prontos_vendidos": pratos_prontos_vendidos,
+        "estoque_prato_pronto_inicial": estoque_prato_pronto_inicial,
+        "estoque_prato_pronto_restante": estoque_prato_pronto_restante,
         "taxa_ifood_percentual": taxa_ifood_percentual,
         "taxa_ifood_valor": taxa_ifood_valor,
         "custo_entrega": custo_entrega,
@@ -161,6 +209,16 @@ def get_dashboard_diaria(data):
                     {"label": "Vendidas", "value": marmitas_vendidas},
                     {"label": "Consumo interno", "value": operacional.consumo_interno},
                     {"label": "Excedente", "value": marmitas_excedentes},
+                ],
+            },
+            {
+                "label": "Turno Prato Pronto",
+                "value": f"R$ {faturamento_prato_pronto:.2f}".replace(".", ","),
+                "details": [
+                    {"label": "Pedidos", "value": pedidos_prato_pronto},
+                    {"label": "Pratos", "value": pratos_prontos_vendidos},
+                    {"label": "Disponibilizados", "value": estoque_prato_pronto_inicial},
+                    {"label": "Restantes", "value": estoque_prato_pronto_restante},
                 ],
             },
             {

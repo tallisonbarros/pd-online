@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Prato Pronto | PRATO-DELIVERY{% endblock %}
+
+{% block content %}
+<div class="ops-shell ops-shell--cozinha">
+    {% include "pedidos/_ops_sidebar.html" with active="prato_pronto" %}
+
+    <main class="ops-main pronto-admin-page" data-page="prato-pronto-operacao">
+        <header class="ops-page-head pronto-admin-head">
+            <div class="pronto-title-line">
+                <h1>Prato Pronto</h1>
+                <span class="pronto-status {% if turno_context.is_open %}is-active{% endif %}">
+                    {% if turno_context.is_open %}Aberto
+                    {% elif turno_context.state == "scheduled" %}Programado
+                    {% elif turno_context.state == "paused" %}Adiado hoje
+                    {% else %}Fechado{% endif %}
+                </span>
+                <span class="pronto-head-summary">
+                    {{ turno.horario_inicio|time:"H:i" }}–{{ turno.horario_fim|time:"H:i" }}
+                    · Entrega e retirada
+                    · {{ pratos_rows|length }} prato{{ pratos_rows|length|pluralize:"s" }}
+                </span>
+            </div>
+            <div class="pronto-head-actions">
+                <button type="button" class="ped-btn ped-btn-ghost" data-open-management-modal="#pronto-general-modal">
+                    Configurar
+                </button>
+            </div>
+        </header>
+
+        {% if feedback %}
+            <div class="ajustes-feedback pronto-feedback is-{{ feedback_kind }}" role="status">{{ feedback }}</div>
+        {% endif %}
+
+        <section class="pronto-catalog-head">
+            <h2>Pratos</h2>
+        </section>
+
+        <section class="pronto-card-grid">
+            <a class="pronto-add-card" href="?new=1" aria-label="Adicionar Prato Pronto">
+                <span>+</span>
+                <strong>Adicionar prato</strong>
+                <small>Criar novo ou copiar um existente</small>
+            </a>
+
+            {% for row in pratos_rows %}
+                <article class="pronto-dish-card {% if not row.config.ativo %}is-inactive{% endif %}">
+                    <div class="pronto-dish-image">
+                        {% if row.prato.imagem %}
+                            <img src="{{ row.prato.imagem.url }}" alt="{{ row.prato.nome }}">
+                        {% else %}
+                            <img src="{% static 'img/placeholder-prato.svg' %}" alt="">
+                        {% endif %}
+                        <span class="pronto-dish-state">
+                            {% if row.config.ativo %}Ativo{% else %}Inativo{% endif %}
+                        </span>
+                    </div>
+                    <div class="pronto-dish-body">
+                        <div class="pronto-dish-title">
+                            <div>
+                                <h3>{{ row.prato.nome }}</h3>
+                                <span>{{ row.recurrence_label }}</span>
+                            </div>
+                            <strong>R$ {{ row.preco_display|floatformat:2 }}</strong>
+                        </div>
+
+                        <form method="post" class="pronto-stock-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_stock">
+                            <input type="hidden" name="turno_prato_id" value="{{ row.config.id }}">
+                            <label>
+                                <span>Estoque de hoje</span>
+                                <input
+                                    type="number"
+                                    name="quantidade_disponivel"
+                                    min="{{ row.reservado }}"
+                                    step="1"
+                                    value="{{ row.estoque_today }}"
+                                    placeholder="Sem limite"
+                                    {% if not row.config.ativo or not row.scheduled_today %}disabled{% endif %}
+                                >
+                            </label>
+                            <button type="submit" {% if not row.config.ativo or not row.scheduled_today %}disabled{% endif %}>Salvar</button>
+                        </form>
+                        <small class="pronto-stock-note">
+                            {% if not row.scheduled_today %}
+                                Não programado para hoje.
+                            {% elif row.restante != None %}
+                                {{ row.restante }} restante(s) · {{ row.reservado }} reservado(s).
+                            {% else %}
+                                Vazio significa vendas sem limite.
+                            {% endif %}
+                        </small>
+
+                        <div class="pronto-dish-actions">
+                            <a class="ped-btn ped-btn-ghost" href="?edit={{ row.config.id }}">Editar</a>
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="toggle_dish">
+                                <input type="hidden" name="turno_prato_id" value="{{ row.config.id }}">
+                                <button type="submit" class="ped-btn ped-btn-ghost">
+                                    {% if row.config.ativo %}Desativar{% else %}Ativar{% endif %}
+                                </button>
+                            </form>
+                            <form method="post" data-confirm-delete>
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete_dish">
+                                <input type="hidden" name="turno_prato_id" value="{{ row.config.id }}">
+                                <button type="submit" class="ped-btn ped-btn-ghost pronto-delete-button">Excluir</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+    </main>
+</div>
+
+<div class="modal-backdrop hidden management-modal" id="pronto-general-modal" data-management-modal {% if open_general_modal %}data-auto-open="true"{% endif %} aria-hidden="true">
+    <section class="modal-card management-modal-card pronto-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="pronto-general-title">
+        <header class="management-modal-head">
+            <div>
+                <p class="ops-kicker">Configuração geral</p>
+                <h2 id="pronto-general-title">Quando o Prato Pronto funciona</h2>
+            </div>
+            <button type="button" class="modal-close" data-close-management-modal aria-label="Fechar">×</button>
+        </header>
+        <form method="post" class="pronto-modal-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_general">
+
+            <label class="toggle-row pronto-open-toggle">
+                <input type="checkbox" name="ativo" {% if turno.ativo %}checked{% endif %}>
+                <span>
+                    <strong>Abrir atendimento</strong>
+                    <small>Quando ligado, abre automaticamente nos dias e horários definidos.</small>
+                </span>
+            </label>
+
+            <fieldset class="turno-weekdays">
+                <legend>Dias recorrentes</legend>
+                <div>
+                    {% for day_code, day_label in weekday_choices %}
+                        <label>
+                            <input type="checkbox" name="dias_semana" value="{{ day_code }}" {% if day_code in turno_days %}checked{% endif %}>
+                            <span>{{ day_label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <div class="pronto-time-grid">
+                <label class="field">
+                    <span>Abre às</span>
+                    <input type="time" name="horario_inicio" value="{{ turno.horario_inicio|time:'H:i' }}" required>
+                </label>
+                <label class="field">
+                    <span>Fecha às</span>
+                    <input type="time" name="horario_fim" value="{{ turno.horario_fim|time:'H:i' }}" required>
+                </label>
+            </div>
+            <p class="pronto-modal-help">Entrega e retirada ficam disponíveis durante todo esse horário.</p>
+
+            {% if turno_context.is_open or turno_context.state == "scheduled" or turno_context.state == "paused" %}
+                <section class="pronto-today-controls">
+                    <div>
+                        <strong>Atendimento de hoje</strong>
+                        <small>Estas ações afetam somente hoje. A recorrência continua normal.</small>
+                    </div>
+                    <div class="pronto-today-buttons">
+                        {% if turno_context.is_open %}
+                            <button
+                                type="submit"
+                                name="action"
+                                value="close_now"
+                                class="ped-btn ped-btn-ghost pronto-delete-button"
+                                formnovalidate
+                                data-confirm-message="Encerrar o atendimento do Prato Pronto agora?"
+                            >Fechar agora</button>
+                        {% elif turno_context.state == "scheduled" %}
+                            <button
+                                type="submit"
+                                name="action"
+                                value="postpone_today"
+                                class="ped-btn ped-btn-ghost"
+                                formnovalidate
+                                data-confirm-message="Cancelar a abertura do Prato Pronto prevista para hoje?"
+                            >Adiar turno hoje</button>
+                        {% elif turno_context.state == "paused" %}
+                            <button
+                                type="submit"
+                                name="action"
+                                value="resume_today"
+                                class="ped-btn ped-btn-ghost"
+                                formnovalidate
+                            >Retomar hoje</button>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endif %}
+
+            <footer class="management-modal-actions">
+                <button type="button" class="ped-btn ped-btn-ghost" data-close-management-modal>Cancelar</button>
+                <button type="submit" class="ped-btn ped-btn-primary">Salvar configurações</button>
+            </footer>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop hidden management-modal" id="pronto-dish-modal" data-management-modal {% if open_dish_modal %}data-auto-open="true"{% endif %} aria-hidden="true">
+    <section class="modal-card management-modal-card pronto-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="pronto-dish-title">
+        <header class="management-modal-head">
+            <div>
+                <p class="ops-kicker">{% if edit_row %}Editar{% else %}Novo{% endif %} Prato Pronto</p>
+                <h2 id="pronto-dish-title">{% if edit_row %}{{ edit_row.prato.nome }}{% else %}Adicionar prato{% endif %}</h2>
+            </div>
+            <a class="modal-close pronto-modal-close-link" href="{% url 'pedidos:prato_pronto_operacao' %}" aria-label="Fechar">×</a>
+        </header>
+
+        <form method="post" enctype="multipart/form-data" class="pronto-modal-form" id="pronto-dish-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_dish">
+            <input type="hidden" name="turno_prato_id" value="{% if edit_row %}{{ edit_row.id }}{% endif %}">
+
+            {% if not edit_row %}
+                <label class="field pronto-copy-field">
+                    <span>Copiar um prato existente <small>(opcional)</small></span>
+                    <select name="copiar_de" id="pronto-copy-source">
+                        <option value="">Começar do zero</option>
+                        {% for prato in copy_catalog %}
+                            <option value="{{ prato.id }}">Copiar {{ prato.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Carrega nome, descrição, opções e preço para você ajustar sem alterar o prato original.</small>
+                    <div class="pronto-copy-preview" id="pronto-copy-preview" hidden>
+                        <img id="pronto-copy-preview-image" src="" alt="">
+                        <span id="pronto-copy-preview-text">Esta imagem também será copiada.</span>
+                    </div>
+                </label>
+            {% endif %}
+
+            {% for error in dish_form.non_field_errors %}
+                <p class="form-error">{{ error }}</p>
+            {% endfor %}
+
+            <label class="field">
+                <span>Nome</span>
+                {{ dish_form.nome }}
+                {% for error in dish_form.nome.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+            </label>
+            <label class="field">
+                <span>Descrição</span>
+                {{ dish_form.descricao }}
+                {% for error in dish_form.descricao.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+            </label>
+            <label class="field">
+                <span>Opções ou variações</span>
+                {{ dish_form.variacoes }}
+                {% for error in dish_form.variacoes.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+            </label>
+            <div class="pronto-form-grid">
+                <label class="field">
+                    <span>Preço</span>
+                    {{ dish_form.preco_prato_pronto }}
+                    {% for error in dish_form.preco_prato_pronto.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+                </label>
+                <label class="field">
+                    <span>Imagem</span>
+                    {{ dish_form.imagem }}
+                    {% for error in dish_form.imagem.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+                </label>
+            </div>
+
+            <fieldset class="turno-weekdays pronto-dish-days">
+                <legend>Este prato aparece em quais dias?</legend>
+                <div>{{ dish_form.recorrencia }}</div>
+                {% for error in dish_form.recorrencia.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+            </fieldset>
+
+            <label class="toggle-row">
+                {{ dish_form.ativo_prato_pronto }}
+                <span>
+                    <strong>Prato ativo</strong>
+                    <small>Você pode desativar sem apagar o cadastro.</small>
+                </span>
+            </label>
+
+            <footer class="management-modal-actions">
+                <a class="ped-btn ped-btn-ghost" href="{% url 'pedidos:prato_pronto_operacao' %}">Cancelar</a>
+                <button type="submit" class="ped-btn ped-btn-primary">Salvar prato</button>
+            </footer>
+        </form>
+    </section>
+</div>
+
+{{ copy_catalog|json_script:"pronto-copy-catalog" }}
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script src="{% static 'js/management_modal.js' %}"></script>
+    <script src="{% static 'js/prato_pronto_admin.js' %}"></script>
+{% endblock %}

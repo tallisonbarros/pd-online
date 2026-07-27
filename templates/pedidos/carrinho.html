@@ -17,6 +17,9 @@
     <section class="checkout-stage-shell">
         <section id="checkout-stage-items" class="checkout-stage-panel">
             <a class="cart-back-link" href="{% url 'pedidos:cardapio' %}">Voltar ao cardápio</a>
+            {% if turno_prato_pronto_aberto %}
+                {% include "pedidos/_prato_pronto_intro.html" %}
+            {% endif %}
             {% if cart_closed_notice %}
                 <p class="cart-closed-note">
                     <span aria-hidden="true">⏱</span>

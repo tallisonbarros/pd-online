@@ -606,11 +606,20 @@
         if (!response.ok) return;
         const payload = await response.json();
         const canal = content?.querySelector("[data-inline-edit][data-field='canal']")?.dataset.value || "balcao";
-        select.innerHTML = (payload.items || []).map((item) => {
+        const optionMarkup = (item) => {
             const variations = encodeURIComponent(JSON.stringify(item.variacoes || []));
             const price = item[`preco_${canal}`] || item.preco;
-            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(price)}" data-price-ifood="${escapeHtml(item.preco_ifood)}" data-variations="${variations}">${escapeHtml(item.nome)} - R$ ${escapeHtml(price).replace(".", ",")}</option>`;
-        }).join("");
+            return `<option value="${item.tipo}:${item.id}" data-name="${escapeHtml(item.nome)}" data-price="${escapeHtml(price)}" data-price-ifood="${escapeHtml(item.preco_ifood)}" data-variations="${variations}" data-disponibilidade-turno-item-id="${escapeHtml(item.disponibilidade_turno_item_id || "")}">${escapeHtml(item.nome)} - R$ ${escapeHtml(price).replace(".", ",")}</option>`;
+        };
+        const catalogItems = payload.items || [];
+        const regularItems = catalogItems.filter((item) => item.tipo === "prato");
+        const readyItems = catalogItems.filter((item) => item.tipo === "prato_pronto");
+        const extraItems = catalogItems.filter((item) => !["prato", "prato_pronto"].includes(item.tipo));
+        select.innerHTML = [
+            regularItems.length ? `<optgroup label="Pratos">${regularItems.map(optionMarkup).join("")}</optgroup>` : "",
+            readyItems.length ? `<optgroup label="Prato Pronto">${readyItems.map(optionMarkup).join("")}</optgroup>` : "",
+            extraItems.length ? `<optgroup label="Bebidas e adicionais">${extraItems.map(optionMarkup).join("")}</optgroup>` : "",
+        ].join("");
         select.dataset.loaded = "true";
         renderEditorShortcuts(form, payload.items || [], canal, payload.pratos_context || {});
         updateVariationSelect(form);
@@ -732,10 +741,11 @@
                 data-variacao="${escapeHtml(item.variacao)}"
                 data-quantidade="${escapeHtml(item.quantidade)}"
                 data-observacao="${escapeHtml(item.observacao)}"
+                data-disponibilidade-turno-item-id="${escapeHtml(item.disponibilidade_turno_item_id || "")}"
                 data-classificacao-saida="${escapeHtml(item.classificacao_saida || "vendida")}"
             >
                 <span>${escapeHtml(item.quantidade)}x ${escapeHtml(item.nome)}${item.variacao ? ` - ${escapeHtml(item.variacao)}` : ""}${itemClassificacaoBadge(item.classificacao_saida)}</span>
-                ${item.tipo === "prato" && item.classificacao_saida !== "promocao" ? `
+                ${["prato", "prato_pronto"].includes(item.tipo) && item.classificacao_saida !== "promocao" ? `
                     <button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="${item.classificacao_saida === "cortesia" ? "true" : "false"}">
                         ${item.classificacao_saida === "cortesia" ? "Cortesia" : "Venda"}
                     </button>
@@ -816,10 +826,11 @@
         row.dataset.quantidade = String(qty);
         row.dataset.observacao = "";
         row.dataset.preco = option.dataset.price || "0";
+        row.dataset.disponibilidadeTurnoItemId = option.dataset.disponibilidadeTurnoItemId || "";
         row.dataset.classificacaoSaida = "vendida";
         row.innerHTML = `
             <span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span>
-            ${tipo === "prato" ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
+            ${["prato", "prato_pronto"].includes(tipo) ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
             <button type="button" data-editor-remove-item>Remover</button>
         `;
         form.querySelector("[data-editor-items]")?.appendChild(row);
@@ -830,25 +841,27 @@
         const node = form.querySelector("[data-editor-shortcuts]");
         if (!node) return;
         const pratos = items.filter((item) => item.tipo === "prato");
-        if (!pratos.length) {
+        const pratosProntos = context.prato_pronto_open
+            ? items.filter((item) => item.tipo === "prato_pronto")
+            : [];
+        if (!pratos.length && !pratosProntos.length) {
             node.hidden = true;
             node.innerHTML = "";
             return;
         }
-        node.hidden = false;
-        node.innerHTML = `
-            <span class="ped-editor-shortcuts-title">${escapeHtml(context.label || "Pratos do dia")}</span>
+        const shortcutGrid = (shortcutItems, isPratoPronto = false) => `
             <div class="ped-editor-shortcuts-grid">
-                ${pratos.map((item) => {
+                ${shortcutItems.map((item) => {
                     const variations = Array.isArray(item.variacoes) ? item.variacoes : [];
                     const price = item[`preco_${canal}`] || item.preco || "";
+                    const shortcutClass = `ped-editor-shortcut${isPratoPronto ? " is-prato-pronto" : ""}`;
                     const buttons = variations.length ? variations.map((variation) => `
-                        <button class="ped-editor-shortcut" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="${escapeHtml(variation)}">
+                        <button class="${shortcutClass}" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="${escapeHtml(variation)}">
                             <span>${escapeHtml(variation)}</span>
                             <small>${escapeHtml(item.nome)}</small>
                         </button>
                     `).join("") : `
-                        <button class="ped-editor-shortcut" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="">
+                        <button class="${shortcutClass}" type="button" data-editor-shortcut-item="${escapeHtml(`${item.tipo}:${item.id}`)}" data-editor-shortcut-variation="">
                             <span>${escapeHtml(item.nome)}</span>
                             ${price ? `<small>R$ ${escapeHtml(price).replace(".", ",")}</small>` : ""}
                         </button>
@@ -856,6 +869,11 @@
                     return `<div class="ped-editor-shortcut-group">${buttons}</div>`;
                 }).join("")}
             </div>
+        `;
+        node.hidden = false;
+        node.innerHTML = `
+            ${pratos.length ? `<span class="ped-editor-shortcuts-title">${escapeHtml(context.label || "Pratos do dia")}</span>${shortcutGrid(pratos)}` : ""}
+            ${pratosProntos.length ? `<span class="ped-editor-shortcuts-title is-prato-pronto">${escapeHtml(context.prato_pronto_label || "Prato Pronto agora")}</span>${shortcutGrid(pratosProntos, true)}` : ""}
         `;
     }
 
@@ -885,10 +903,11 @@
         row.dataset.quantidade = String(qty);
         row.dataset.observacao = note;
         row.dataset.preco = option.dataset.price || "0";
+        row.dataset.disponibilidadeTurnoItemId = option.dataset.disponibilidadeTurnoItemId || "";
         row.dataset.classificacaoSaida = "vendida";
         row.innerHTML = `
             <span>${qty}x ${escapeHtml(option.dataset.name)}${variation ? ` - ${escapeHtml(variation)}` : ""}</span>
-            ${tipo === "prato" ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
+            ${["prato", "prato_pronto"].includes(tipo) ? '<button class="ped-item-classification-toggle" type="button" data-editor-toggle-courtesy aria-pressed="false">Venda</button>' : ""}
             <button type="button" data-editor-remove-item>Remover</button>
         `;
         form.querySelector("[data-editor-items]")?.appendChild(row);
@@ -901,6 +920,7 @@
             variacao: row.dataset.variacao || "",
             quantidade: row.dataset.quantidade || "1",
             observacao: row.dataset.observacao || "",
+            disponibilidade_turno_item_id: row.dataset.disponibilidadeTurnoItemId || "",
             classificacao_saida: row.dataset.classificacaoSaida || "vendida",
         }));
     }

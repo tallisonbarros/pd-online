@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, ConfiguracaoEntrega, Cupom, DataFechada, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, ConfiguracaoEntrega, Cupom, DataFechada, DisponibilidadeTurnoDia, DisponibilidadeTurnoItem, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, Prato, ResumoOperacionalDia, TerminalCaixa, TurnoAtendimento, TurnoPratoPadrao
 
 admin.site.site_header = "PRATO-DELIVERY Admin"
 admin.site.site_title = "PRATO-DELIVERY"
@@ -10,9 +10,9 @@ admin.site.index_title = "Gestão do delivery"
 
 @admin.register(Prato)
 class PratoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "preco", "preco_balcao", "preco_site", "preco_ifood", "ativo", "dias_disponiveis", "criado_em")
+    list_display = ("nome", "preco", "preco_balcao", "preco_site", "preco_ifood", "ativo", "exclusivo_prato_pronto", "dias_disponiveis", "criado_em")
     list_editable = ("preco", "preco_balcao", "preco_site", "preco_ifood", "ativo", "dias_disponiveis")
-    list_filter = ("ativo", "criado_em")
+    list_filter = ("ativo", "exclusivo_prato_pronto", "criado_em")
     search_fields = ("nome", "descricao", "variacoes", "dias_disponiveis")
     list_per_page = 25
     fieldsets = (
@@ -39,6 +39,32 @@ class AdicionalAdmin(admin.ModelAdmin):
     search_fields = ("nome", "descricao")
     ordering = ("ordem", "nome")
     list_per_page = 25
+
+
+class TurnoPratoPadraoInline(admin.TabularInline):
+    model = TurnoPratoPadrao
+    fields = ("prato", "preco", "dias_semana", "ativo", "ordem")
+    extra = 0
+
+
+@admin.register(TurnoAtendimento)
+class TurnoAtendimentoAdmin(admin.ModelAdmin):
+    list_display = ("nome", "codigo", "ativo", "dias_semana", "horario_inicio", "horario_fim", "permite_entrega", "permite_retirada")
+    list_filter = ("ativo", "codigo", "modo_cardapio", "permite_entrega", "permite_retirada")
+    inlines = [TurnoPratoPadraoInline]
+
+
+class DisponibilidadeTurnoItemInline(admin.TabularInline):
+    model = DisponibilidadeTurnoItem
+    extra = 0
+    readonly_fields = ("quantidade_reservada",)
+
+
+@admin.register(DisponibilidadeTurnoDia)
+class DisponibilidadeTurnoDiaAdmin(admin.ModelAdmin):
+    list_display = ("data", "turno", "pausado", "personalizado", "horario_inicio", "horario_fim")
+    list_filter = ("turno", "pausado", "personalizado", "data")
+    inlines = [DisponibilidadeTurnoItemInline]
 
 
 class ItemPedidoInline(admin.TabularInline):
@@ -80,7 +106,14 @@ class PedidoAdmin(admin.ModelAdmin):
     list_editable = ("status",)
     list_filter = ("status", "canal", "forma_pagamento", "terminal", "enviar_talheres", "criado_em")
     search_fields = ("numero", "nome_cliente", "telefone", "rua", "numero_endereco", "bairro", "cidade", "endereco")
-    readonly_fields = ("numero", "total", "criado_em", "rota_google_maps", "total_sem_desconto")
+    readonly_fields = (
+        "numero",
+        "total",
+        "criado_em",
+        "rota_google_maps",
+        "total_sem_desconto",
+        "orientacao_turno_snapshot",
+    )
     list_per_page = 25
     inlines = [ItemPedidoInline]
     fieldsets = (
@@ -113,6 +146,7 @@ class PedidoAdmin(admin.ModelAdmin):
                     "terminal",
                     "enviar_talheres",
                     "observacao_geral",
+                    "orientacao_turno_snapshot",
                     "status",
                     "distancia_km",
                     "valor_frete",

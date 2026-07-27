@@ -116,6 +116,7 @@
                                 <div>
                                     <h2>${escapeHtml(pedido.cliente)}</h2>
                                     <p class="ped-time">${escapeHtml(pedido.criado_em || "")}</p>
+                                    ${pedido.turno_label === "Prato Pronto" ? '<span class="turno-order-badge">Prato Pronto</span>' : ""}
                                 </div>
                             </div>
                             ${buildKitchenTypeCounts(pedido)}

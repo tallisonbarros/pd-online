@@ -88,6 +88,74 @@ class PratoForm(forms.ModelForm):
         return "\n".join(variations)
 
 
+class PratoProntoForm(forms.ModelForm):
+    preco_prato_pronto = forms.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=0.01,
+        label="Preço no Prato Pronto",
+        widget=forms.NumberInput(attrs={"step": "0.01", "placeholder": "22.00"}),
+    )
+    recorrencia = forms.MultipleChoiceField(
+        choices=DIA_CHOICES,
+        required=False,
+        label="Recorrência",
+        widget=forms.CheckboxSelectMultiple,
+    )
+    ativo_prato_pronto = forms.BooleanField(required=False, initial=True)
+
+    class Meta:
+        model = Prato
+        fields = ["nome", "descricao", "variacoes", "imagem"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"placeholder": "Ex.: Galinhada"}),
+            "descricao": forms.Textarea(
+                attrs={"rows": 3, "placeholder": "Descrição curta do prato."}
+            ),
+            "variacoes": forms.Textarea(
+                attrs={"rows": 3, "placeholder": "Uma opção por linha, se houver."}
+            ),
+        }
+
+    def __init__(self, *args, turno_prato=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.turno_prato = turno_prato
+        if self.is_bound:
+            return
+        if turno_prato:
+            self.initial["preco_prato_pronto"] = turno_prato.preco
+            selected = list(turno_prato.dias_semana_set)
+            self.initial["recorrencia"] = selected or [
+                value for value, _label in DIA_CHOICES
+            ]
+            self.initial["ativo_prato_pronto"] = turno_prato.ativo
+        else:
+            self.initial["preco_prato_pronto"] = "22.00"
+            self.initial["recorrencia"] = [
+                value for value, _label in DIA_CHOICES if value != "dom"
+            ]
+
+    def clean_recorrencia(self):
+        selected = self.cleaned_data.get("recorrencia") or []
+        valid_order = [value for value, _label in DIA_CHOICES]
+        selected_set = set(selected)
+        if not selected_set:
+            raise forms.ValidationError("Selecione pelo menos um dia.")
+        return ",".join(value for value in valid_order if value in selected_set)
+
+    def clean_variacoes(self):
+        raw = self.cleaned_data.get("variacoes") or ""
+        seen = set()
+        variations = []
+        for line in raw.replace(";", "\n").splitlines():
+            value = " ".join(line.strip().split())
+            key = value.casefold()
+            if value and key not in seen:
+                seen.add(key)
+                variations.append(value)
+        return "\n".join(variations)
+
+
 class BebidaForm(forms.ModelForm):
     class Meta:
         model = Bebida

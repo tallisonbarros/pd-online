@@ -63,9 +63,12 @@
 
                         <ul class="ped-item-list ped-item-list--top">
                             {% for item in pedido.itens.all %}
-                                <li>{{ item.quantidade }}x {{ item.nome_prato_snapshot }}{% if item.variacao_nome_snapshot %} - {{ item.variacao_nome_snapshot }}{% endif %}</li>
+                                <li>
+                                    <span class="ped-item-name">{{ item.quantidade }}x {{ item.nome_prato_snapshot }}</span>
+                                    {% if item.variacao_nome_snapshot %}<small class="ped-item-variation">{{ item.variacao_nome_snapshot }}</small>{% endif %}
+                                </li>
                             {% empty %}
-                                <li>Sem itens</li>
+                                <li><span class="ped-item-name">Sem itens</span></li>
                             {% endfor %}
                         </ul>
 

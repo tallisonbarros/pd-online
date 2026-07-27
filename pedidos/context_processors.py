@@ -1,29 +1,14 @@
-from datetime import datetime, timedelta
-
 from django.conf import settings
 from django.utils import timezone
 
 from .models import ConfiguracaoEntrega, Pedido
-from .utils import closed_dates_map, next_open_date
+from .turno_services import cart_window_for_turno
 
 DIRETOR_GROUP_NAME = "Diretor"
 
 
 def _cart_operational_window(config, now=None):
-    current = now or timezone.localtime()
-    fechamento = getattr(config, "horario_fechamento", None) if config else None
-    cycle_date = current.date()
-    expires_at = None
-    if fechamento:
-        if current.time() >= fechamento:
-            cycle_date = cycle_date + timedelta(days=1)
-        cycle_date = next_open_date(cycle_date, closed_dates=closed_dates_map(cycle_date, days=14))
-        expires_at = timezone.make_aware(datetime.combine(cycle_date, fechamento), current.tzinfo)
-    return {
-        "cycle_key": cycle_date.isoformat(),
-        "expires_at": expires_at.isoformat() if expires_at else "",
-        "server_now": current.isoformat(),
-    }
+    return cart_window_for_turno(config=config, now=now or timezone.localtime())
 
 
 def frontend_config(request):
@@ -49,6 +34,11 @@ def frontend_config(request):
             "cart_cycle_key": cart_window["cycle_key"],
             "cart_expires_at": cart_window["expires_at"],
             "server_now": cart_window["server_now"],
+            "turno_codigo": cart_window["turno_codigo"],
+            "promocao_habilitada": cart_window["promocao_habilitada"],
+            "cupom_habilitado": cart_window["cupom_habilitado"],
+            "entrega_habilitada": cart_window["entrega_habilitada"],
+            "retirada_habilitada": cart_window["retirada_habilitada"],
         }
     }
 

@@ -252,10 +252,20 @@
     }
 
     function buildItemList(pedido) {
+        const rows = Array.isArray(pedido.item_rows) && pedido.item_rows.length
+            ? pedido.item_rows
+            : null;
         const lines = Array.isArray(pedido.item_lines) && pedido.item_lines.length ? pedido.item_lines : [pedido.item_line || "Sem itens"];
         return `
             <ul class="ped-item-list ped-item-list--top">
-                ${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+                ${rows
+                    ? rows.map((row) => `
+                        <li>
+                            <span class="ped-item-name">${escapeHtml(row.nome || "Sem itens")}</span>
+                            ${row.variacao ? `<small class="ped-item-variation">${escapeHtml(row.variacao)}</small>` : ""}
+                        </li>
+                    `).join("")
+                    : lines.map((line) => `<li><span class="ped-item-name">${escapeHtml(line)}</span></li>`).join("")}
             </ul>
         `;
     }

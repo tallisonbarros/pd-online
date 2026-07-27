@@ -29,6 +29,13 @@
                 Mantenha esta tela aberta enquanto preparamos a conversa com o resumo do pedido.
             </p>
 
+            {% if pedido.orientacao_turno_snapshot %}
+                <p class="cart-turno-note order-closed-turno-note">
+                    <strong>Prato Pronto · atenção ao receber</strong>
+                    <span class="turno-product-orientation">{{ pedido.orientacao_turno_snapshot }}</span>
+                </p>
+            {% endif %}
+
             <section class="order-closed-ops-summary" aria-label="Resumo operacional do pedido">
                 <span>Itens <strong>{{ pedido.itens.count }}</strong></span>
                 <span>Total <strong>R$ {{ pedido.total|floatformat:2 }}</strong></span>

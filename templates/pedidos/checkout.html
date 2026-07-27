@@ -18,6 +18,9 @@
         <a href="{% url 'pedidos:carrinho' %}" id="checkout-back-to-items" class="cart-back-link">Carrinho</a>
         <a href="{% url 'pedidos:cardapio' %}" class="cart-back-link" data-checkout-cardapio-link>Cardápio</a>
     </nav>
+    {% if turno_prato_pronto_aberto %}
+        {% include "pedidos/_prato_pronto_intro.html" %}
+    {% endif %}
 
     <section class="checkout-stage-shell">
         <section id="checkout-stage-delivery" class="checkout-stage-panel">

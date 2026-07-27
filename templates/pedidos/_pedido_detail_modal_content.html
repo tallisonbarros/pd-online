@@ -38,7 +38,13 @@
                 {{ pedido.nome_cliente }}
             {% endif %}
         </h2>
-        <p>{{ pedido.criado_em|date:"d/m/Y H:i" }} · {{ pedido.status_label_contextual }}</p>
+        <p>
+            {{ pedido.criado_em|date:"d/m/Y H:i" }} · {{ pedido.status_label_contextual }}
+            {% if pedido.turno.codigo == "prato_pronto" %} · <strong>Turno Prato Pronto</strong>{% endif %}
+        </p>
+        {% if pedido.orientacao_turno_snapshot %}
+            <p class="turno-product-orientation">{{ pedido.orientacao_turno_snapshot }}</p>
+        {% endif %}
     </div>
     <div class="ped-modal-total">
         <span>Total</span>
@@ -115,8 +121,9 @@
                                         <div
                                             class="ped-item-editor-row {% if item.classificacao_saida == 'cortesia' %}is-courtesy{% endif %}"
                                             data-editor-row
-                                            data-tipo="{% if item.prato_id %}prato{% elif item.bebida_id %}bebida{% else %}adicional{% endif %}"
+                                            data-tipo="{% if item.disponibilidade_turno_item_id %}prato_pronto{% elif item.prato_id %}prato{% elif item.bebida_id %}bebida{% else %}adicional{% endif %}"
                                             data-item-id="{% if item.prato_id %}{{ item.prato_id }}{% elif item.bebida_id %}{{ item.bebida_id }}{% else %}{{ item.adicional_id }}{% endif %}"
+                                            data-disponibilidade-turno-item-id="{{ item.disponibilidade_turno_item_id|default:'' }}"
                                             data-variacao="{{ item.variacao_nome_snapshot }}"
                                             data-quantidade="{{ item.quantidade }}"
                                             data-observacao="{{ item.observacao }}"

@@ -42,6 +42,7 @@
                                         <div>
                                             <h2>{{ pedido.cliente }}</h2>
                                             <p class="ped-time">{{ pedido.criado_em }}</p>
+                                            {% if pedido.turno_label == "Prato Pronto" %}<span class="turno-order-badge">Prato Pronto</span>{% endif %}
                                         </div>
                                     </div>
                                     <div class="kitchen-type-counts" aria-label="Resumo de itens do pedido">

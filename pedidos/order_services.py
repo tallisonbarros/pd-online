@@ -1,10 +1,12 @@
 from decimal import Decimal, InvalidOperation
 import unicodedata
 
-from django.db.models import Sum
+from django.db import transaction
+from django.db.models import F, Q, Sum, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
-from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, EnderecoCliente, ItemPedido, Pedido, Prato
+from .models import Adicional, Bebida, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DisponibilidadeTurnoItem, EnderecoCliente, ItemPedido, Pedido, Prato, TurnoAtendimento
 
 
 DUPLA_VARIACOES_DESCONTO = Decimal("5.10")
@@ -30,6 +32,19 @@ def normalize_text_key(value):
     normalized = unicodedata.normalize("NFD", safe_text(value))
     without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
     return without_accents.casefold().strip()
+
+
+def order_item_snapshot_name(pedido, catalog_item, tipo):
+    name = safe_text(catalog_item.nome)
+    if (
+        tipo == "prato"
+        and pedido.turno_id
+        and pedido.turno.codigo == TurnoAtendimento.Codigo.PRATO_PRONTO
+    ):
+        suffix = " - Prato Pronto"
+        if not name.casefold().endswith(suffix.casefold()):
+            name = f"{name[:120 - len(suffix)].rstrip()}{suffix}"
+    return name[:120]
 
 
 def money_decimal(value):
@@ -76,7 +91,7 @@ def resolve_pratos_disponiveis_context(config=None, now=None):
     current = now or timezone.localtime()
     fechamento = getattr(config, "horario_fechamento", None)
     start_offset = 1 if fechamento and current.time() >= fechamento else 0
-    active_pratos = list(Prato.objects.filter(ativo=True))
+    active_pratos = list(Prato.objects.filter(ativo=True, exclusivo_prato_pronto=False))
 
     for offset in range(start_offset, start_offset + 7):
         weekday_key = WEEKDAYS[(current.weekday() + offset) % 7]
@@ -265,14 +280,40 @@ def inherit_customer_from_known_tokens(pedido, tokens):
     return None
 
 
-def create_order_items_from_payload(pedido, itens_payload, clear_existing=False, allow_cortesia=False):
+@transaction.atomic
+def create_order_items_from_payload(
+    pedido,
+    itens_payload,
+    clear_existing=False,
+    allow_cortesia=False,
+    disponibilidade_turno=None,
+    permitir_promocao=True,
+    allow_turno_item_inference=False,
+):
     if clear_existing:
+        reservas_por_item = list(
+            pedido.itens.exclude(disponibilidade_turno_item__isnull=True)
+            .values("disponibilidade_turno_item_id")
+            .annotate(quantidade=Sum("quantidade"))
+        )
+        for reserva in reservas_por_item:
+            quantidade = int(reserva["quantidade"] or 0)
+            DisponibilidadeTurnoItem.objects.filter(
+                pk=reserva["disponibilidade_turno_item_id"]
+            ).update(
+                quantidade_reservada=Greatest(
+                    F("quantidade_reservada") - quantidade,
+                    Value(0),
+                ),
+                atualizado_em=timezone.now(),
+            )
         pedido.itens.all().delete()
 
     total = Decimal("0.00")
     prato_ids = []
     adicional_ids = []
     bebida_ids = []
+    disponibilidade_item_ids = []
     for item in itens_payload:
         tipo = safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
         try:
@@ -285,10 +326,45 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False,
             bebida_ids.append(item_id)
         else:
             prato_ids.append(item_id)
+            disponibilidade_item_id = item.get("disponibilidade_turno_item_id")
+            if disponibilidade_item_id not in (None, ""):
+                try:
+                    disponibilidade_item_ids.append(int(disponibilidade_item_id))
+                except (TypeError, ValueError):
+                    raise ValueError("A disponibilidade de um Prato Pronto e invalida.")
+
+    if (
+        disponibilidade_turno is not None
+        and prato_ids
+        and not disponibilidade_item_ids
+        and not allow_turno_item_inference
+    ):
+        raise ValueError("Os pratos do carrinho nao pertencem ao turno atual de Prato Pronto.")
+    if disponibilidade_turno is not None and not prato_ids:
+        raise ValueError("Adicione pelo menos um Prato Pronto para finalizar neste turno.")
 
     pratos = {prato.id: prato for prato in Prato.objects.filter(id__in=prato_ids, ativo=True)}
     adicionais = {adicional.id: adicional for adicional in Adicional.objects.filter(id__in=adicional_ids, ativo=True)}
     bebidas = {bebida.id: bebida for bebida in Bebida.objects.filter(id__in=bebida_ids, ativo=True)}
+    disponibilidade_queryset = (
+        DisponibilidadeTurnoItem.objects.select_for_update()
+        .select_related("disponibilidade", "prato")
+    )
+    if disponibilidade_turno is not None and allow_turno_item_inference:
+        disponibilidade_queryset = disponibilidade_queryset.filter(
+            disponibilidade=disponibilidade_turno,
+            prato_id__in=prato_ids,
+        )
+    else:
+        disponibilidade_queryset = disponibilidade_queryset.filter(id__in=disponibilidade_item_ids)
+    disponibilidade_itens = {
+        item.id: item
+        for item in disponibilidade_queryset
+    }
+    disponibilidade_por_prato = {
+        item.prato_id: item
+        for item in disponibilidade_itens.values()
+    }
 
     for item in itens_payload:
         tipo = safe_text(item.get("tipo") or ("prato" if item.get("prato_id") else ""))
@@ -301,6 +377,7 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False,
         observacao = safe_text(item.get("observacao"))
         variacao_nome = safe_text(item.get("variacao") or item.get("variacao_nome"))
         prato = adicional = bebida = None
+        disponibilidade_item = None
 
         if tipo == "adicional":
             adicional = adicionais.get(item_id)
@@ -332,34 +409,87 @@ def create_order_items_from_payload(pedido, itens_payload, clear_existing=False,
         else:
             variacao_nome = ""
 
-        preco = catalog_price(catalog_item, pedido.canal, pedido.ifood)
+        if tipo == "prato" and disponibilidade_turno is not None:
+            try:
+                disponibilidade_item_id = int(item.get("disponibilidade_turno_item_id"))
+            except (TypeError, ValueError):
+                disponibilidade_item_id = None
+            disponibilidade_item = (
+                disponibilidade_itens.get(disponibilidade_item_id)
+                if disponibilidade_item_id is not None
+                else disponibilidade_por_prato.get(catalog_item.id) if allow_turno_item_inference else None
+            )
+            if (
+                not disponibilidade_item
+                or disponibilidade_item.disponibilidade_id != disponibilidade_turno.id
+                or disponibilidade_item.prato_id != catalog_item.id
+                or not disponibilidade_item.ativo
+            ):
+                raise ValueError(f"{catalog_item.nome} nao esta disponivel neste turno.")
+            restante = disponibilidade_item.quantidade_restante
+            if restante is not None and quantidade > restante:
+                raise ValueError(
+                    f"Restam apenas {restante} unidade(s) de {catalog_item.nome}."
+                )
+            preco = disponibilidade_item.preco
+        else:
+            preco = catalog_price(catalog_item, pedido.canal, pedido.ifood)
         classificacao_saida = (
             normalize_payload_classificacao_saida(item.get("classificacao_saida"), allow_cortesia=allow_cortesia)
             if tipo == "prato"
             else ItemPedido.ClassificacaoSaida.VENDIDA
         )
+        if classificacao_saida == ItemPedido.ClassificacaoSaida.PROMOCAO and not permitir_promocao:
+            raise ValueError("A promocao de marmitas nao esta disponivel neste turno.")
         item_pedido = ItemPedido.objects.create(
             pedido=pedido,
             prato=prato,
             adicional=adicional,
             bebida=bebida,
-            nome_prato_snapshot=catalog_item.nome,
+            disponibilidade_turno_item=disponibilidade_item,
+            nome_prato_snapshot=order_item_snapshot_name(
+                pedido,
+                catalog_item,
+                tipo,
+            ),
             variacao_nome_snapshot=variacao_nome,
             preco_snapshot=preco,
             quantidade=quantidade,
             observacao=observacao,
             classificacao_saida=classificacao_saida,
         )
+        if disponibilidade_item:
+            reserva_filter = Q(pk=disponibilidade_item.pk, ativo=True)
+            if disponibilidade_item.quantidade_disponivel is not None:
+                limite_reservado = disponibilidade_item.quantidade_disponivel - quantidade
+                reserva_filter &= Q(quantidade_reservada__lte=limite_reservado)
+            reservado = DisponibilidadeTurnoItem.objects.filter(reserva_filter).update(
+                quantidade_reservada=F("quantidade_reservada") + quantidade,
+                atualizado_em=timezone.now(),
+            )
+            if not reservado:
+                disponibilidade_item.refresh_from_db()
+                restante = disponibilidade_item.quantidade_restante
+                raise ValueError(
+                    f"Restam apenas {restante or 0} unidade(s) de {catalog_item.nome}."
+                )
+            disponibilidade_item.refresh_from_db(
+                fields=["quantidade_reservada", "atualizado_em"]
+            )
         total += item_pedido.subtotal
     return total
 
 
 def reprice_order_items_from_catalog(pedido):
-    for item in pedido.itens.select_related("prato", "bebida", "adicional"):
+    for item in pedido.itens.select_related("prato", "bebida", "adicional", "disponibilidade_turno_item"):
         catalog_item = item.prato or item.bebida or item.adicional
         if not catalog_item:
             continue
-        item.preco_snapshot = catalog_price(catalog_item, pedido.canal, pedido.ifood)
+        item.preco_snapshot = (
+            item.disponibilidade_turno_item.preco
+            if item.disponibilidade_turno_item_id
+            else catalog_price(catalog_item, pedido.canal, pedido.ifood)
+        )
         if not item.prato_id:
             item.classificacao_saida = ItemPedido.ClassificacaoSaida.VENDIDA
         item.save(update_fields=["preco_snapshot", "classificacao_saida", "subtotal"])
@@ -461,6 +591,8 @@ def calcular_promocao_dupla_variacoes(pedido):
 
 
 def calcular_promocoes_pedido(pedido):
+    if pedido.turno_id and not pedido.turno.permite_promocao:
+        return {"descricao": "", "discount": Decimal("0.00")}
     promocoes = [
         calcular_promocao_dupla_variacoes(pedido),
     ]
@@ -521,6 +653,8 @@ def recalculate_order_totals(pedido, cupom_codigo=None):
     promocao_desconto = min(promocao_result["discount"], subtotal)
     subtotal_com_promocao = max(subtotal - promocao_desconto, Decimal("0.00"))
     codigo = normalize_coupon_code(cupom_codigo if cupom_codigo is not None else pedido.cupom_codigo)
+    if codigo and pedido.turno_id and not pedido.turno.permite_cupom:
+        raise ValueError("Cupons nao estao disponiveis neste turno.")
     cupom_result = validar_cupom(codigo, subtotal_com_promocao, pedido.valor_frete, pedido=pedido) if codigo else None
     if codigo and not cupom_result["ok"]:
         raise ValueError(cupom_result["message"])
@@ -546,11 +680,22 @@ def recalculate_order_totals(pedido, cupom_codigo=None):
 
 
 def replace_order_items(pedido, itens_payload):
-    create_order_items_from_payload(pedido, itens_payload, clear_existing=True, allow_cortesia=True)
+    create_order_items_from_payload(
+        pedido,
+        itens_payload,
+        clear_existing=True,
+        allow_cortesia=True,
+        disponibilidade_turno=pedido.disponibilidade_turno,
+        permitir_promocao=not pedido.turno_id or pedido.turno.permite_promocao,
+        allow_turno_item_inference=True,
+    )
     return recalculate_order_totals(pedido)
 
 
-def serialize_editor_catalog():
+def serialize_editor_catalog(
+    disponibilidade_prato_pronto=None,
+    prato_pronto_open=False,
+):
     def item_payload(tipo, item):
         return {
             "tipo": tipo,
@@ -569,13 +714,43 @@ def serialize_editor_catalog():
 
     pratos_context = resolve_pratos_disponiveis_context()
     pratos = [item_payload("prato", prato) for prato in pratos_context["pratos"]]
+    pratos_prontos = []
+    if disponibilidade_prato_pronto:
+        for disponibilidade_item in (
+            disponibilidade_prato_pronto.itens.select_related("prato")
+            .filter(ativo=True, prato__ativo=True)
+            .order_by("ordem", "prato__nome")
+        ):
+            if disponibilidade_item.esgotado:
+                continue
+            preco = f"{disponibilidade_item.preco:.2f}"
+            pratos_prontos.append(
+                {
+                    "tipo": "prato_pronto",
+                    "id": disponibilidade_item.prato_id,
+                    "nome": f"{disponibilidade_item.prato.nome} - Prato Pronto",
+                    "preco": preco,
+                    "preco_balcao": preco,
+                    "preco_site": preco,
+                    "preco_ifood": preco,
+                    "variacoes": [
+                        safe_text(line)
+                        for line in (disponibilidade_item.prato.variacoes or "").splitlines()
+                        if safe_text(line)
+                    ],
+                    "disponibilidade_turno_item_id": disponibilidade_item.id,
+                    "quantidade_restante": disponibilidade_item.quantidade_restante,
+                }
+            )
     bebidas = [item_payload("bebida", bebida) for bebida in Bebida.objects.filter(ativo=True)]
     adicionais = [item_payload("adicional", adicional) for adicional in Adicional.objects.filter(ativo=True)]
     return {
-        "items": pratos + bebidas + adicionais,
+        "items": pratos + pratos_prontos + bebidas + adicionais,
         "pratos_context": {
             "weekday_key": pratos_context["weekday_key"],
             "label": pratos_context["label"],
             "day_offset": pratos_context["day_offset"],
+            "prato_pronto_open": prato_pronto_open,
+            "prato_pronto_label": "Prato Pronto agora",
         },
     }

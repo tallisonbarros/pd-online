@@ -16,6 +16,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.core.cache import cache
+from django.core.files.base import ContentFile
 from django.core import signing
 from django.db import transaction
 from django.db.models import Count, Max, Q, Sum
@@ -52,10 +53,10 @@ from .contabil_services import (
     terminal_padrao,
 )
 from .dashboard import get_dashboard_diaria
-from .forms import AdicionalForm, BebidaForm, PratoForm
+from .forms import AdicionalForm, BebidaForm, PratoForm, PratoProntoForm
 from .image_optimization import optimized_menu_image_url
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders, money_decimal as legacy_money_decimal
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, DisponibilidadeTurnoDia, DisponibilidadeTurnoItem, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa, TurnoAtendimento, TurnoPratoPadrao
 from .order_services import (
     create_order_items_from_payload,
     inherit_customer_from_known_tokens,
@@ -70,6 +71,18 @@ from .order_services import (
     validar_cupom,
 )
 from .utils import closed_dates_map, next_open_date, relative_day_label
+from .turno_services import (
+    WEEKDAYS as TURNO_WEEKDAYS,
+    ensure_disponibilidade_turno,
+    ensure_turnos_padrao,
+    liberar_estoque_pedido,
+    preco_turno_prato,
+    resolve_turno_publico,
+    sincronizar_disponibilidade_automatica,
+    turno_agendado_no_dia,
+    turno_label_pedido,
+    validar_turno_para_pedido,
+)
 
 RECURRENT_CUSTOMER_EXCLUDED_STATUSES = [Pedido.Status.RASCUNHO, Pedido.Status.CANCELADO]
 
@@ -146,7 +159,7 @@ def _resolve_cardapio_pratos(config=None, now=None):
     start_offset = 1 if fechamento and current.time() >= fechamento else 0
     current_date = current.date()
     closed_dates = closed_dates_map(current_date + timedelta(days=start_offset), days=14)
-    active_pratos = list(Prato.objects.filter(ativo=True))
+    active_pratos = list(Prato.objects.filter(ativo=True, exclusivo_prato_pronto=False))
 
     for offset in range(start_offset, start_offset + 7):
         target_date = current_date + timedelta(days=offset)
@@ -181,15 +194,49 @@ def _resolve_cardapio_pratos(config=None, now=None):
     }
 
 
-def _cardapio_status_tag(config, cardapio_context, now=None):
+def _cardapio_status_tag(config, cardapio_context, turno_context=None, now=None):
     abertura = getattr(config, "horario_abertura", None)
     fechamento = getattr(config, "horario_fechamento", None)
-    if not abertura or not fechamento:
-        return None
-
     current = now or timezone.localtime()
     current_time = current.time()
     current_date = current.date()
+
+    if turno_context and turno_context.get("is_open"):
+        fim_prato_pronto = turno_context.get("fim")
+        return {
+            "label": "Prato Pronto",
+            "time": (
+                f"Aberto até {fim_prato_pronto.strftime('%H:%M')}"
+                if fim_prato_pronto
+                else "Aberto agora"
+            ),
+        }
+
+    if (
+        turno_context
+        and turno_context.get("state") == "scheduled"
+        and turno_context.get("inicio")
+    ):
+        inicio_prato_pronto = turno_context["inicio"]
+        target_date = cardapio_context.get("target_date")
+        proxima_abertura_regular = (
+            (target_date, abertura)
+            if target_date and abertura
+            else None
+        )
+        proxima_abertura_prato_pronto = (current_date, inicio_prato_pronto)
+        if (
+            proxima_abertura_regular is None
+            or proxima_abertura_prato_pronto < proxima_abertura_regular
+        ):
+            return {
+                "label": "Prato Pronto às",
+                "time": inicio_prato_pronto.strftime("%H:%M"),
+            }
+
+    if not abertura or not fechamento:
+        return None
+
     opening_range = f"{abertura.strftime('%H:%M')} às {fechamento.strftime('%H:%M')}"
     is_today = bool(cardapio_context.get("is_today"))
     day_offset = int(cardapio_context.get("day_offset") or 0)
@@ -275,10 +322,10 @@ def _menu_image_fallback(image_field):
     return image_field.url
 
 
-def serializar_prato(prato):
-    preco = prato.preco_site_resolvido
+def serializar_prato(prato, disponibilidade_item=None):
+    preco = disponibilidade_item.preco if disponibilidade_item else prato.preco_site_resolvido
     fallback_image = _menu_image_fallback(prato.imagem)
-    return {
+    payload = {
         "id": prato.id,
         "nome": prato.nome,
         "descricao": prato.descricao,
@@ -287,6 +334,15 @@ def serializar_prato(prato):
         "preco_formatado": f"R$ {preco:.2f}".replace(".", ",") if preco is not None else "",
         "imagem": optimized_menu_image_url(prato.imagem, fallback_image),
     }
+    if disponibilidade_item:
+        payload.update(
+            {
+                "disponibilidade_turno_item_id": disponibilidade_item.id,
+                "quantidade_restante": disponibilidade_item.quantidade_restante,
+                "esgotado": disponibilidade_item.esgotado,
+            }
+        )
+    return payload
 
 
 def serializar_bebida(bebida):
@@ -335,15 +391,18 @@ def user_is_diretor(user):
 
 def montar_mensagem_whatsapp(pedido):
     linhas = [
-        f"*PRATO-DELIVERY*",
+        "*PRATO-DELIVERY*",
         f"Pedido #{pedido.numero}",
         f"*Status:* {pedido.status_label_contextual}",
-        "",
-        f"*Cliente:* {pedido.nome_cliente}",
-        f"*Endereço:* {pedido.endereco}",
     ]
+    if pedido.is_prato_pronto:
+        linhas.append("*Produto:* Prato Pronto")
+        if pedido.orientacao_turno_snapshot:
+            linhas.append(f"*Conservação:* {pedido.orientacao_turno_snapshot}")
+    linhas.extend(["", f"*Cliente:* {pedido.nome_cliente}"])
     if pedido.telefone:
-        linhas.insert(5, f"*Telefone:* {pedido.telefone}")
+        linhas.append(f"*Telefone:* {pedido.telefone}")
+    linhas.append(f"*Endereço:* {pedido.endereco}")
     if pedido.lote_quadra:
         linhas.append(f"*Lote/Quadra:* {pedido.lote_quadra}")
     if pedido.complemento:
@@ -622,28 +681,63 @@ def _record_access_event(request, event_type, **extra):
 @never_cache
 def cardapio(request):
     config = ConfiguracaoEntrega.get_solo()
+    current = timezone.localtime()
     whatsapp_numero = _configured_whatsapp_number(config)
     whatsapp_cardapio_url = (
         f"https://wa.me/{whatsapp_numero}?text={quote('Olá! Estou vendo o cardápio e queria tirar uma dúvida.')}"
         if whatsapp_numero
         else ""
     )
-    cardapio_context = _resolve_cardapio_pratos(config=config)
-    pratos = cardapio_context["pratos"]
+    regular_context = _resolve_cardapio_pratos(config=config, now=current)
+    turno_context = resolve_turno_publico(current)
+    cardapio_context = regular_context
+    disponibilidade_itens = {}
+    if turno_context["is_open"]:
+        itens_turno = turno_context["itens_disponiveis"]
+        pratos = [item.prato for item in itens_turno]
+        disponibilidade_itens = {item.prato_id: item for item in itens_turno}
+        cardapio_context = {
+            "pratos": pratos,
+            "weekday_key": WEEKDAYS[current.weekday()],
+            "is_today": True,
+            "day_offset": 0,
+            "target_date": current.date(),
+            "title_lines": ["PRATO", "PRONTO"],
+            "empty_label": "neste turno",
+        }
+    else:
+        pratos = cardapio_context["pratos"]
     adicionais = Adicional.objects.filter(ativo=True)
     bebidas = Bebida.objects.filter(ativo=True)
-    pratos_serializados = [serializar_prato(prato) for prato in pratos]
+    pratos_serializados = [
+        serializar_prato(prato, disponibilidade_itens.get(prato.id))
+        for prato in pratos
+    ]
     adicionais_serializados = [serializar_adicional(adicional) for adicional in adicionais]
     bebidas_serializadas = [serializar_bebida(bebida) for bebida in bebidas]
     for item, payload in zip(pratos, pratos_serializados):
         item.imagem_cardapio_url = payload["imagem"]
         item.preco_cardapio = payload["preco"]
+        item.preco_cardapio_formatado = payload["preco_formatado"]
+        item.disponibilidade_turno_item_id = payload.get("disponibilidade_turno_item_id")
+        item.quantidade_restante = payload.get("quantidade_restante")
     for item, payload in zip(adicionais, adicionais_serializados):
         item.imagem_cardapio_url = payload["imagem"]
         item.preco_cardapio = payload["preco"]
     for item, payload in zip(bebidas, bebidas_serializadas):
         item.imagem_cardapio_url = payload["imagem"]
         item.preco_cardapio = payload["preco"]
+    turno_banner = None
+    if turno_context["is_open"]:
+        turno_banner = {
+            "state": "open",
+            "label": "Prato Pronto",
+            "orientation": (
+                "Marmitas seladas e refrigeradas, feitas no dia. "
+                "Aqueça e sirva."
+            ),
+        }
+
     return render(
         request,
         "pedidos/cardapio.html",
@@ -656,11 +750,23 @@ def cardapio(request):
             "bebidas_json": json.dumps(bebidas_serializadas, ensure_ascii=False),
               "cardapio_title_lines": cardapio_context["title_lines"],
               "cardapio_empty_label": cardapio_context["empty_label"],
-              "cardapio_status_tag": _cardapio_status_tag(config, cardapio_context),
-              "cardapio_closed_notice": _cardapio_closed_notice(config, cardapio_context),
+              "cardapio_status_tag": _cardapio_status_tag(
+                  config,
+                  regular_context,
+                  turno_context=turno_context,
+                  now=current,
+              ),
+              "cardapio_closed_notice": _cardapio_closed_notice(config, regular_context, now=current),
               "horario_abertura": config.horario_abertura,
               "horario_fechamento": config.horario_fechamento,
               "whatsapp_cardapio_url": whatsapp_cardapio_url,
+              "turno_prato_pronto_aberto": turno_context["is_open"],
+              "turno_prato_pronto_banner": turno_banner,
+              "permite_promocao_marmita": (
+                  turno_context["prato_pronto"].permite_promocao
+                  if turno_context["is_open"]
+                  else True
+              ),
         },
     )
 
@@ -668,6 +774,7 @@ def cardapio(request):
 @never_cache
 def checkout(request):
     config = ConfiguracaoEntrega.get_solo()
+    turno_context = resolve_turno_publico()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.all()}
     adicionais_lookup = {
         f"adicional:{adicional.id}": {**serializar_adicional(adicional), "tipo": "adicional"}
@@ -685,6 +792,7 @@ def checkout(request):
             "pix_chave": config.pix_chave,
             "is_atendente": user_is_atendente(request.user),
             "bairros_sugestoes": RIO_VERDE_BAIRROS_OFICIAIS,
+            "turno_prato_pronto_aberto": turno_context["is_open"],
         },
     )
 
@@ -692,13 +800,15 @@ def checkout(request):
 @never_cache
 def carrinho(request):
     config = ConfiguracaoEntrega.get_solo()
+    turno_context = resolve_turno_publico()
     pratos_lookup = {f"prato:{prato.id}": {**serializar_prato(prato), "tipo": "prato"} for prato in Prato.objects.filter(ativo=True)}
     return render(
         request,
         "pedidos/carrinho.html",
         {
-            "cart_closed_notice": _cart_closed_notice(config),
+            "cart_closed_notice": None if turno_context["is_open"] else _cart_closed_notice(config),
             "pratos_lookup_json": pratos_lookup,
+            "turno_prato_pronto_aberto": turno_context["is_open"],
         },
     )
 
@@ -1847,6 +1957,18 @@ def criar_pedido(request):
     if not _configured_whatsapp_number(config_entrega):
         return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
 
+    try:
+        turno_pedido, disponibilidade_turno = validar_turno_para_pedido(Pedido.TipoColeta.ENTREGA)
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
+    if disponibilidade_turno is None and any(
+        item.get("disponibilidade_turno_item_id") not in (None, "")
+        for item in itens_payload
+    ):
+        return HttpResponseBadRequest(
+            "O turno Prato Pronto encerrou. Atualize o cardapio e monte o carrinho novamente."
+        )
+
     endereco = _build_order_address(rua, numero, bairro, cidade, estado, lote_quadra) or endereco_formatado or endereco_antigo
 
     if not all([cidade, estado, endereco]) or not (rua or endereco_formatado):
@@ -1933,13 +2055,23 @@ def criar_pedido(request):
                 enviar_talheres=enviar_talheres,
                 canal=Pedido.Canal.SITE,
                 ifood=False,
+                turno=turno_pedido,
+                disponibilidade_turno=disponibilidade_turno,
+                orientacao_turno_snapshot=(
+                    turno_pedido.orientacao_cliente if disponibilidade_turno else ""
+                ),
                 observacao_geral=observacao_geral,
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=valor_frete,
                 distancia_km=distancia_km,
                 checkout_key=checkout_key,
             )
-            create_order_items_from_payload(pedido, itens_payload)
+            create_order_items_from_payload(
+                pedido,
+                itens_payload,
+                disponibilidade_turno=disponibilidade_turno,
+                permitir_promocao=turno_pedido.permite_promocao,
+            )
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
             sync_movimentacao_caixa_pedido(pedido)
             inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
@@ -1966,6 +2098,18 @@ def criar_retirada(request):
     config_entrega = ConfiguracaoEntrega.get_solo()
     if not _configured_whatsapp_number(config_entrega):
         return HttpResponseBadRequest("Configure o número do WhatsApp antes de finalizar pedidos.")
+
+    try:
+        turno_pedido, disponibilidade_turno = validar_turno_para_pedido(Pedido.TipoColeta.RETIRADA)
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
+    if disponibilidade_turno is None and any(
+        item.get("disponibilidade_turno_item_id") not in (None, "")
+        for item in itens_payload
+    ):
+        return HttpResponseBadRequest(
+            "O turno Prato Pronto encerrou. Atualize o cardapio e monte o carrinho novamente."
+        )
 
     nome_cliente = request.POST.get("nome_cliente", "").strip() or "Cliente"
     observacao_geral = request.POST.get("observacao_geral", "").strip()
@@ -1994,13 +2138,23 @@ def criar_retirada(request):
                 enviar_talheres=enviar_talheres_raw != "nao",
                 canal=Pedido.Canal.SITE,
                 ifood=False,
+                turno=turno_pedido,
+                disponibilidade_turno=disponibilidade_turno,
+                orientacao_turno_snapshot=(
+                    turno_pedido.orientacao_cliente if disponibilidade_turno else ""
+                ),
                 observacao_geral=observacao_geral,
                 status=Pedido.Status.AGUARDANDO_APROVACAO,
                 valor_frete=Decimal("0.00"),
                 distancia_km=Decimal("0.00"),
                 checkout_key=checkout_key,
             )
-            create_order_items_from_payload(pedido, itens_payload)
+            create_order_items_from_payload(
+                pedido,
+                itens_payload,
+                disponibilidade_turno=disponibilidade_turno,
+                permitir_promocao=turno_pedido.permite_promocao,
+            )
             recalculate_order_totals(pedido, cupom_codigo=cupom_codigo)
             sync_movimentacao_caixa_pedido(pedido)
             inherit_customer_from_known_tokens(pedido, _known_order_tokens_from_request(request))
@@ -2052,6 +2206,9 @@ def _pedido_public_payload(pedido, include_items=False):
         "cupom_desconto": f"R$ {pedido.cupom_desconto:.2f}".replace(".", ",") if pedido.cupom_desconto else "",
         "cupom_codigo": pedido.cupom_codigo,
         "pagamento": pedido.get_forma_pagamento_display(),
+        "turno": pedido.turno.codigo if pedido.turno_id else TurnoAtendimento.Codigo.PRINCIPAL,
+        "turno_label": turno_label_pedido(pedido),
+        "orientacao_turno": pedido.orientacao_turno_snapshot,
         "acompanhamento_url": reverse("pedidos:acompanhar_pedido", args=[pedido.public_token]),
     }
     if include_items:
@@ -2944,6 +3101,8 @@ def exportar_pedidos_xlsx(request):
         "Desconto cupom",
         "Total",
         "Observacao",
+        "Turno",
+        "Orientacao do produto",
     ]
     pedidos_sheet.append(pedidos_headers)
 
@@ -2989,6 +3148,8 @@ def exportar_pedidos_xlsx(request):
                 pedido.cupom_desconto,
                 pedido.total,
                 csv_safe(pedido.observacao_geral),
+                csv_safe(turno_label_pedido(pedido)),
+                csv_safe(pedido.orientacao_turno_snapshot),
             ]
         )
 
@@ -3002,6 +3163,11 @@ def exportar_pedidos_xlsx(request):
         "Pedidos iFood",
         "Faturamento total",
         "Faturamento iFood",
+        "Pedidos Prato Pronto",
+        "Faturamento Prato Pronto",
+        "Pratos Prontos vendidos",
+        "Estoque Prato Pronto inicial",
+        "Estoque Prato Pronto restante",
         "Taxa iFood (%)",
         "Taxa iFood (R$)",
         "Custo entrega",
@@ -3035,6 +3201,11 @@ def exportar_pedidos_xlsx(request):
                 canais.get(Pedido.Canal.IFOOD, 0),
                 dashboard["faturamento_total"],
                 dashboard["faturamento_ifood"],
+                dashboard["pedidos_prato_pronto"],
+                dashboard["faturamento_prato_pronto"],
+                dashboard["pratos_prontos_vendidos"],
+                dashboard["estoque_prato_pronto_inicial"],
+                dashboard["estoque_prato_pronto_restante"],
                 dashboard["taxa_ifood_percentual"],
                 dashboard["taxa_ifood_valor"],
                 dashboard["custo_entrega"],
@@ -3564,6 +3735,7 @@ def _cozinha_operacao_payload():
                 "tempo_producao": _tempo_producao_pedido(pedido),
                 "pratos_total": pratos_total,
                 "elapsed_min": elapsed_min,
+                "turno_label": turno_label_pedido(pedido),
             }
         )
 
@@ -3586,6 +3758,674 @@ def cozinha_pedidos(request):
         "pedidos/cozinha_operacao.html",
         {
             **payload,
+        },
+    )
+
+
+def _prato_pronto_operacao_legado(request):
+    _principal, turno = ensure_turnos_padrao()
+    today = timezone.localdate()
+    feedback = ""
+    feedback_kind = "success"
+
+    disponibilidade, _created = DisponibilidadeTurnoDia.objects.get_or_create(
+        turno=turno,
+        data=today,
+    )
+    if not disponibilidade.personalizado:
+        disponibilidade = sincronizar_disponibilidade_automatica(disponibilidade)
+
+    if request.method == "POST":
+        action = _safe_text(request.POST.get("action"))
+        try:
+            if action == "save_turno":
+                turno.ativo = request.POST.get("ativo") == "on"
+                selected_days = [
+                    day for day in TURNO_WEEKDAYS
+                    if day in set(request.POST.getlist("dias_semana"))
+                ]
+                if not selected_days:
+                    raise ValueError("Selecione pelo menos um dia da semana.")
+                turno.dias_semana = ",".join(selected_days)
+                turno.horario_inicio = _parse_optional_time(request.POST.get("horario_inicio"))
+                turno.horario_fim = _parse_optional_time(request.POST.get("horario_fim"))
+                turno.horario_limite_entrega = _parse_optional_time(request.POST.get("horario_limite_entrega"))
+                if not turno.horario_inicio or not turno.horario_fim:
+                    raise ValueError("Informe o inicio e o fim do turno.")
+                if turno.horario_inicio >= turno.horario_fim:
+                    raise ValueError("O fim do turno deve ser posterior ao inicio.")
+                if (
+                    turno.horario_limite_entrega
+                    and not (turno.horario_inicio < turno.horario_limite_entrega <= turno.horario_fim)
+                ):
+                    raise ValueError("O limite de entrega deve ficar dentro do turno.")
+                turno.permite_entrega = request.POST.get("permite_entrega") == "on"
+                turno.permite_retirada = request.POST.get("permite_retirada") == "on"
+                if not turno.permite_entrega and not turno.permite_retirada:
+                    raise ValueError("Habilite entrega, retirada ou ambas.")
+                modo_cardapio = _safe_text(request.POST.get("modo_cardapio"))
+                if modo_cardapio not in dict(TurnoAtendimento.ModoCardapio.choices):
+                    raise ValueError("Selecione uma origem valida para o cardapio.")
+                turno.modo_cardapio = modo_cardapio
+                selected_pratos = {
+                    int(value)
+                    for value in request.POST.getlist("pratos_padrao")
+                    if str(value).isdigit()
+                }
+                if (
+                    turno.modo_cardapio == TurnoAtendimento.ModoCardapio.FIXO
+                    and not selected_pratos
+                ):
+                    raise ValueError("Selecione ao menos um prato fixo para esse modo.")
+                turno.preco_padrao = (
+                    money_decimal(request.POST.get("preco_padrao"))
+                    if _safe_text(request.POST.get("preco_padrao"))
+                    else None
+                )
+                turno.desconto_padrao = money_decimal(request.POST.get("desconto_padrao"))
+                if turno.preco_padrao is not None and turno.preco_padrao <= 0:
+                    raise ValueError("O preco padrao deve ser maior que zero.")
+                if turno.desconto_padrao < 0:
+                    raise ValueError("O desconto nao pode ser negativo.")
+                turno.permite_promocao = request.POST.get("permite_promocao") == "on"
+                turno.permite_cupom = request.POST.get("permite_cupom") == "on"
+                turno.mensagem = _safe_text(request.POST.get("mensagem"))[:180]
+                turno.orientacao_cliente = _safe_text(
+                    request.POST.get("orientacao_cliente")
+                )[:220]
+                if not turno.orientacao_cliente:
+                    raise ValueError(
+                        "Informe como o Prato Pronto deve ser conservado e consumido."
+                    )
+                turno.save()
+
+                TurnoPratoPadrao.objects.filter(turno=turno).exclude(prato_id__in=selected_pratos).delete()
+                for ordem, prato in enumerate(
+                    Prato.objects.filter(id__in=selected_pratos, ativo=True).order_by("nome"),
+                    start=1,
+                ):
+                    TurnoPratoPadrao.objects.update_or_create(
+                        turno=turno,
+                        prato=prato,
+                        defaults={"ativo": True, "ordem": ordem * 10},
+                    )
+                if not disponibilidade.personalizado:
+                    sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=turno")
+
+            if action == "save_today":
+                disponibilidade.personalizado = True
+                disponibilidade.pausado = request.POST.get("pausado") == "on"
+                disponibilidade.horario_inicio = _parse_optional_time(request.POST.get("horario_inicio_dia"))
+                disponibilidade.horario_fim = _parse_optional_time(request.POST.get("horario_fim_dia"))
+                disponibilidade.horario_limite_entrega = _parse_optional_time(
+                    request.POST.get("horario_limite_entrega_dia")
+                )
+                inicio_dia = disponibilidade.horario_inicio or turno.horario_inicio
+                fim_dia = disponibilidade.horario_fim or turno.horario_fim
+                limite_entrega_dia = (
+                    disponibilidade.horario_limite_entrega
+                    or turno.horario_limite_entrega
+                    or fim_dia
+                )
+                if not inicio_dia or not fim_dia or inicio_dia >= fim_dia:
+                    raise ValueError("Confira os horarios da operacao de hoje.")
+                if limite_entrega_dia and not (inicio_dia < limite_entrega_dia <= fim_dia):
+                    raise ValueError("O limite de entrega de hoje deve ficar dentro do turno.")
+                disponibilidade.permite_entrega = request.POST.get("permite_entrega_dia") == "on"
+                disponibilidade.permite_retirada = request.POST.get("permite_retirada_dia") == "on"
+                if not disponibilidade.permite_entrega and not disponibilidade.permite_retirada:
+                    raise ValueError("Habilite entrega, retirada ou ambas para hoje.")
+                disponibilidade.mensagem = _safe_text(request.POST.get("mensagem_dia"))[:180]
+
+                selected_ids = {
+                    int(value)
+                    for value in request.POST.getlist("itens_hoje")
+                    if str(value).isdigit()
+                }
+                if not selected_ids and not disponibilidade.pausado:
+                    raise ValueError("Selecione ao menos um Prato Pronto ou pause o turno de hoje.")
+                selected_pratos = list(
+                    Prato.objects.filter(id__in=selected_ids, ativo=True).order_by("nome")
+                )
+                if selected_ids and not selected_pratos:
+                    raise ValueError("Os pratos selecionados nao estao mais ativos.")
+
+                with transaction.atomic():
+                    itens_existentes = {
+                        item.prato_id: item
+                        for item in DisponibilidadeTurnoItem.objects.select_for_update().filter(
+                            disponibilidade=disponibilidade
+                        )
+                    }
+                    itens_preparados = []
+                    for ordem, prato in enumerate(selected_pratos, start=1):
+                        preco_raw = _safe_text(request.POST.get(f"preco_item_{prato.id}"))
+                        preco = (
+                            money_decimal(preco_raw)
+                            if preco_raw
+                            else preco_turno_prato(turno, prato)
+                        )
+                        if preco <= 0:
+                            raise ValueError(
+                                f"Informe um preco maior que zero para {prato.nome}."
+                            )
+                        estoque_raw = _safe_text(request.POST.get(f"estoque_item_{prato.id}"))
+                        estoque = int(estoque_raw) if estoque_raw else None
+                        if estoque is not None and estoque < 0:
+                            raise ValueError(
+                                f"O estoque de {prato.nome} nao pode ser negativo."
+                            )
+                        item = itens_existentes.get(prato.id)
+                        if (
+                            item
+                            and estoque is not None
+                            and estoque < item.quantidade_reservada
+                        ):
+                            raise ValueError(
+                                f"O estoque de {prato.nome} nao pode ser menor que "
+                                f"{item.quantidade_reservada}, ja reservado."
+                            )
+                        itens_preparados.append((ordem, prato, preco, estoque, item))
+
+                    disponibilidade.save()
+                    ids_ativos = {prato.id for _ordem, prato, *_rest in itens_preparados}
+                    for ordem, prato, preco, estoque, item in itens_preparados:
+                        if item is None:
+                            item = DisponibilidadeTurnoItem(
+                                disponibilidade=disponibilidade,
+                                prato=prato,
+                            )
+                        item.preco = preco
+                        item.quantidade_disponivel = estoque
+                        item.ativo = True
+                        item.ordem = ordem * 10
+                        item.save()
+
+                    for item in disponibilidade.itens.exclude(prato_id__in=ids_ativos):
+                        if item.quantidade_reservada:
+                            item.ativo = False
+                            item.save(update_fields=["ativo", "atualizado_em"])
+                        else:
+                            item.delete()
+                return redirect(f"{request.path}?saved=hoje")
+
+            if action == "toggle_pause":
+                disponibilidade.pausado = not disponibilidade.pausado
+                disponibilidade.save(update_fields=["pausado", "atualizado_em"])
+                return redirect(f"{request.path}?saved=pausa")
+
+            if action == "reset_today":
+                disponibilidade.personalizado = False
+                disponibilidade.pausado = False
+                disponibilidade.horario_inicio = None
+                disponibilidade.horario_fim = None
+                disponibilidade.horario_limite_entrega = None
+                disponibilidade.permite_entrega = None
+                disponibilidade.permite_retirada = None
+                disponibilidade.mensagem = ""
+                disponibilidade.save()
+                sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=padrao")
+        except (TypeError, ValueError) as exc:
+            feedback = str(exc)
+            feedback_kind = "error"
+            turno.refresh_from_db()
+            disponibilidade.refresh_from_db()
+
+    saved = _safe_text(request.GET.get("saved"))
+    if saved and not feedback:
+        feedback = {
+            "turno": "Configuracao permanente salva.",
+            "hoje": "Disponibilidade de hoje salva.",
+            "pausa": "Situacao de hoje atualizada.",
+            "padrao": "Hoje voltou a seguir a configuracao automatica.",
+        }.get(saved, "Alteracoes salvas.")
+
+    disponibilidade.refresh_from_db()
+    itens_map = {
+        item.prato_id: item
+        for item in disponibilidade.itens.select_related("prato").all()
+    }
+    pratos_rows = []
+    pratos_padrao_ids = set(
+        TurnoPratoPadrao.objects.filter(turno=turno, ativo=True).values_list("prato_id", flat=True)
+    )
+    for prato in Prato.objects.filter(ativo=True).order_by("nome"):
+        item = itens_map.get(prato.id)
+        pratos_rows.append(
+            {
+                "prato": prato,
+                "selected_today": bool(item and item.ativo),
+                "selected_default": prato.id in pratos_padrao_ids,
+                "preco_today": (
+                    f"{item.preco:.2f}" if item else f"{preco_turno_prato(turno, prato):.2f}"
+                ),
+                "estoque_today": (
+                    item.quantidade_disponivel
+                    if item and item.quantidade_disponivel is not None
+                    else ""
+                ),
+                "reservado": item.quantidade_reservada if item else 0,
+                "restante": item.quantidade_restante if item else None,
+            }
+        )
+
+    turno_context = resolve_turno_publico()
+    weekday_choices = [
+        ("seg", "Seg"),
+        ("ter", "Ter"),
+        ("qua", "Qua"),
+        ("qui", "Qui"),
+        ("sex", "Sex"),
+        ("sab", "Sab"),
+        ("dom", "Dom"),
+    ]
+    return render(
+        request,
+        "pedidos/prato_pronto_operacao.html",
+        {
+            "active": "prato_pronto",
+            "turno": turno,
+            "turno_days": turno.dias_semana_set,
+            "modo_cardapio_choices": TurnoAtendimento.ModoCardapio.choices,
+            "weekday_choices": weekday_choices,
+            "disponibilidade": disponibilidade,
+            "pratos_rows": pratos_rows,
+            "feedback": feedback,
+            "feedback_kind": feedback_kind,
+            "turno_context": turno_context,
+            "today": today,
+        },
+    )
+
+
+def _duplicar_imagem_prato(source, target):
+    if not source or not source.imagem:
+        return False
+    try:
+        source.imagem.open("rb")
+        image_content = ContentFile(source.imagem.read())
+        source.imagem.close()
+        target.imagem.save(
+            Path(source.imagem.name).name,
+            image_content,
+            save=False,
+        )
+        return True
+    except (FileNotFoundError, OSError, ValueError):
+        target.imagem = None
+        return False
+
+
+@staff_member_required(login_url="/admin/login/")
+def prato_pronto_operacao(request):
+    _principal, turno = ensure_turnos_padrao()
+    today = timezone.localdate()
+    feedback = ""
+    feedback_kind = "success"
+    open_dish_modal = request.GET.get("new") == "1"
+    open_general_modal = False
+    edit_row = None
+
+    turno.modo_cardapio = TurnoAtendimento.ModoCardapio.FIXO
+    disponibilidade, _created = DisponibilidadeTurnoDia.objects.get_or_create(
+        turno=turno,
+        data=today,
+    )
+    if not disponibilidade.personalizado:
+        sincronizar_disponibilidade_automatica(disponibilidade)
+
+    edit_id = request.GET.get("edit")
+    if edit_id and str(edit_id).isdigit():
+        edit_row = get_object_or_404(
+            TurnoPratoPadrao.objects.select_related("prato"),
+            pk=edit_id,
+            turno=turno,
+        )
+        open_dish_modal = True
+
+    dish_form = PratoProntoForm(
+        instance=edit_row.prato if edit_row else None,
+        turno_prato=edit_row,
+    )
+
+    if request.method == "POST":
+        action_values = request.POST.getlist("action")
+        action = _safe_text(action_values[-1] if action_values else "")
+        try:
+            if action == "save_general":
+                open_general_modal = True
+                selected_days = [
+                    day for day in TURNO_WEEKDAYS
+                    if day in set(request.POST.getlist("dias_semana"))
+                ]
+                if not selected_days:
+                    raise ValueError("Selecione pelo menos um dia de atendimento.")
+                inicio = _parse_optional_time(request.POST.get("horario_inicio"))
+                fim = _parse_optional_time(request.POST.get("horario_fim"))
+                if not inicio or not fim:
+                    raise ValueError("Informe o início e o fim do atendimento.")
+                if inicio >= fim:
+                    raise ValueError("O fim do atendimento deve ser posterior ao início.")
+
+                turno.ativo = request.POST.get("ativo") == "on"
+                turno.dias_semana = ",".join(selected_days)
+                turno.horario_inicio = inicio
+                turno.horario_fim = fim
+                turno.horario_limite_entrega = fim
+                turno.permite_entrega = True
+                turno.permite_retirada = True
+                turno.modo_cardapio = TurnoAtendimento.ModoCardapio.FIXO
+                turno.preco_padrao = None
+                turno.desconto_padrao = Decimal("0.00")
+                turno.permite_promocao = False
+                turno.permite_cupom = False
+                turno.save()
+
+                disponibilidade.personalizado = False
+                disponibilidade.pausado = False
+                disponibilidade.horario_inicio = None
+                disponibilidade.horario_fim = None
+                disponibilidade.horario_limite_entrega = None
+                disponibilidade.permite_entrega = None
+                disponibilidade.permite_retirada = None
+                disponibilidade.mensagem = ""
+                disponibilidade.save()
+                sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=general")
+
+            if action == "close_now":
+                live_context = resolve_turno_publico()
+                if not live_context["is_open"]:
+                    raise ValueError("O Prato Pronto não está aberto agora.")
+                current_time = timezone.localtime().time().replace(microsecond=0)
+                disponibilidade.personalizado = True
+                disponibilidade.pausado = False
+                disponibilidade.horario_fim = current_time
+                disponibilidade.horario_limite_entrega = current_time
+                disponibilidade.save()
+                return redirect(f"{request.path}?saved=closed_now")
+
+            if action == "postpone_today":
+                if not turno_agendado_no_dia(turno, today):
+                    raise ValueError("Não há abertura do Prato Pronto programada para hoje.")
+                disponibilidade.personalizado = True
+                disponibilidade.pausado = True
+                disponibilidade.save(update_fields=["personalizado", "pausado", "atualizado_em"])
+                return redirect(f"{request.path}?saved=postponed")
+
+            if action == "resume_today":
+                disponibilidade.personalizado = False
+                disponibilidade.pausado = False
+                disponibilidade.horario_inicio = None
+                disponibilidade.horario_fim = None
+                disponibilidade.horario_limite_entrega = None
+                disponibilidade.permite_entrega = None
+                disponibilidade.permite_retirada = None
+                disponibilidade.mensagem = ""
+                disponibilidade.save()
+                sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=resumed")
+
+            if action == "save_dish":
+                row_id = _safe_text(request.POST.get("turno_prato_id"))
+                edit_row = (
+                    get_object_or_404(
+                        TurnoPratoPadrao.objects.select_related("prato"),
+                        pk=row_id,
+                        turno=turno,
+                    )
+                    if row_id.isdigit()
+                    else None
+                )
+                source_id = _safe_text(request.POST.get("copiar_de"))
+                source = (
+                    Prato.objects.filter(
+                        pk=source_id,
+                        exclusivo_prato_pronto=False,
+                    ).first()
+                    if source_id.isdigit()
+                    else None
+                )
+                form_data = request.POST.copy()
+                if source and not edit_row:
+                    defaults = {
+                        "nome": source.nome,
+                        "descricao": source.descricao,
+                        "variacoes": source.variacoes,
+                        "preco_prato_pronto": source.preco_site_resolvido or source.preco or "22.00",
+                    }
+                    for field_name, default_value in defaults.items():
+                        if not _safe_text(form_data.get(field_name)):
+                            form_data[field_name] = default_value
+
+                form_instance = edit_row.prato if edit_row else None
+                image_source = source if source and not edit_row else None
+                if edit_row and not edit_row.prato.exclusivo_prato_pronto:
+                    original = edit_row.prato
+                    image_source = original
+                    form_instance = Prato(
+                        nome=original.nome,
+                        descricao=original.descricao,
+                        variacoes=original.variacoes,
+                        imagem=original.imagem,
+                        preco=original.preco,
+                        preco_balcao=original.preco_balcao,
+                        preco_site=original.preco_site,
+                        preco_ifood=original.preco_ifood,
+                        ativo=True,
+                        exclusivo_prato_pronto=True,
+                    )
+
+                dish_form = PratoProntoForm(
+                    form_data,
+                    request.FILES,
+                    instance=form_instance,
+                    turno_prato=edit_row,
+                )
+                open_dish_modal = True
+                if dish_form.is_valid():
+                    with transaction.atomic():
+                        prato = dish_form.save(commit=False)
+                        if image_source and not request.FILES.get("imagem"):
+                            _duplicar_imagem_prato(image_source, prato)
+                        preco = dish_form.cleaned_data["preco_prato_pronto"]
+                        prato.preco = preco
+                        prato.preco_site = preco
+                        prato.ativo = True
+                        prato.exclusivo_prato_pronto = True
+                        prato.save()
+                        if edit_row:
+                            edit_row.prato = prato
+                            edit_row.preco = preco
+                            edit_row.dias_semana = dish_form.cleaned_data["recorrencia"]
+                            edit_row.ativo = dish_form.cleaned_data["ativo_prato_pronto"]
+                            edit_row.save()
+                        else:
+                            last_order = (
+                                TurnoPratoPadrao.objects.filter(turno=turno)
+                                .aggregate(max_order=Max("ordem"))["max_order"]
+                                or 0
+                            )
+                            edit_row = TurnoPratoPadrao.objects.create(
+                                turno=turno,
+                                prato=prato,
+                                preco=preco,
+                                dias_semana=dish_form.cleaned_data["recorrencia"],
+                                ativo=dish_form.cleaned_data["ativo_prato_pronto"],
+                                ordem=last_order + 10,
+                            )
+                        disponibilidade.personalizado = False
+                        disponibilidade.save(update_fields=["personalizado", "atualizado_em"])
+                        sincronizar_disponibilidade_automatica(disponibilidade)
+                    return redirect(f"{request.path}?saved=dish")
+                feedback = "Confira os campos destacados."
+                feedback_kind = "error"
+
+            if action == "toggle_dish":
+                row = get_object_or_404(
+                    TurnoPratoPadrao,
+                    pk=request.POST.get("turno_prato_id"),
+                    turno=turno,
+                )
+                row.ativo = not row.ativo
+                row.save(update_fields=["ativo", "atualizado_em"])
+                disponibilidade.personalizado = False
+                disponibilidade.save(update_fields=["personalizado", "atualizado_em"])
+                sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=status")
+
+            if action == "delete_dish":
+                row = get_object_or_404(
+                    TurnoPratoPadrao.objects.select_related("prato"),
+                    pk=request.POST.get("turno_prato_id"),
+                    turno=turno,
+                )
+                prato = row.prato
+                with transaction.atomic():
+                    row.delete()
+                    if prato.exclusivo_prato_pronto and prato.ativo:
+                        prato.ativo = False
+                        prato.save(update_fields=["ativo"])
+                    disponibilidade.personalizado = False
+                    disponibilidade.save(update_fields=["personalizado", "atualizado_em"])
+                    sincronizar_disponibilidade_automatica(disponibilidade)
+                return redirect(f"{request.path}?saved=deleted")
+
+            if action == "update_stock":
+                row = get_object_or_404(
+                    TurnoPratoPadrao.objects.select_related("prato"),
+                    pk=request.POST.get("turno_prato_id"),
+                    turno=turno,
+                )
+                if not row.ativo:
+                    raise ValueError("Ative o prato antes de informar o estoque.")
+                if row.dias_semana_set and TURNO_WEEKDAYS[today.weekday()] not in row.dias_semana_set:
+                    raise ValueError("Este prato não está programado para hoje.")
+                disponibilidade.personalizado = False
+                disponibilidade.save(update_fields=["personalizado", "atualizado_em"])
+                sincronizar_disponibilidade_automatica(disponibilidade)
+                item = get_object_or_404(
+                    DisponibilidadeTurnoItem,
+                    disponibilidade=disponibilidade,
+                    prato=row.prato,
+                )
+                stock_raw = _safe_text(request.POST.get("quantidade_disponivel"))
+                stock = int(stock_raw) if stock_raw else None
+                if stock is not None and stock < 0:
+                    raise ValueError("O estoque não pode ser negativo.")
+                if stock is not None and stock < item.quantidade_reservada:
+                    raise ValueError(
+                        f"O estoque não pode ser menor que {item.quantidade_reservada}, já reservado."
+                    )
+                item.quantidade_disponivel = stock
+                item.save(update_fields=["quantidade_disponivel", "atualizado_em"])
+                return redirect(f"{request.path}?saved=stock")
+        except (TypeError, ValueError) as exc:
+            feedback = str(exc)
+            feedback_kind = "error"
+
+    saved = _safe_text(request.GET.get("saved"))
+    if saved and not feedback:
+        feedback = {
+            "general": "Configurações gerais salvas.",
+            "closed_now": "Atendimento de hoje encerrado.",
+            "postponed": "A abertura de hoje foi adiada.",
+            "resumed": "A abertura de hoje foi retomada.",
+            "dish": "Prato Pronto salvo.",
+            "status": "Situação do prato atualizada.",
+            "deleted": "Prato removido do Prato Pronto.",
+            "stock": "Estoque de hoje atualizado.",
+        }.get(saved, "Alterações salvas.")
+
+    disponibilidade.refresh_from_db()
+    itens_map = {
+        item.prato_id: item
+        for item in disponibilidade.itens.select_related("prato").all()
+    }
+    weekday_labels = dict(
+        [
+            ("seg", "Seg"),
+            ("ter", "Ter"),
+            ("qua", "Qua"),
+            ("qui", "Qui"),
+            ("sex", "Sex"),
+            ("sab", "Sáb"),
+            ("dom", "Dom"),
+        ]
+    )
+    pratos_rows = []
+    for row in (
+        TurnoPratoPadrao.objects.select_related("prato")
+        .filter(turno=turno)
+        .order_by("ordem", "prato__nome")
+    ):
+        item = itens_map.get(row.prato_id)
+        recurrence = [
+            weekday_labels[day]
+            for day in TURNO_WEEKDAYS
+            if not row.dias_semana_set or day in row.dias_semana_set
+        ]
+        pratos_rows.append(
+            {
+                "config": row,
+                "prato": row.prato,
+                "preco_display": preco_turno_prato(turno, row.prato, row.preco),
+                "recurrence_label": ", ".join(recurrence),
+                "scheduled_today": (
+                    not row.dias_semana_set
+                    or TURNO_WEEKDAYS[today.weekday()] in row.dias_semana_set
+                ),
+                "estoque_today": (
+                    item.quantidade_disponivel
+                    if item and item.quantidade_disponivel is not None
+                    else ""
+                ),
+                "reservado": item.quantidade_reservada if item else 0,
+                "restante": item.quantidade_restante if item else None,
+            }
+        )
+
+    copy_catalog = []
+    for prato in Prato.objects.filter(exclusivo_prato_pronto=False).order_by("nome"):
+        imagem_url = ""
+        if prato.imagem:
+            try:
+                if prato.imagem.storage.exists(prato.imagem.name):
+                    imagem_url = prato.imagem.url
+            except (OSError, ValueError):
+                imagem_url = ""
+        copy_catalog.append(
+            {
+                "id": prato.id,
+                "nome": prato.nome,
+                "descricao": prato.descricao,
+                "variacoes": prato.variacoes,
+                "preco": prato.preco,
+                "preco_site": prato.preco_site,
+                "imagem_url": imagem_url,
+            }
+        )
+    return render(
+        request,
+        "pedidos/prato_pronto_operacao.html",
+        {
+            "active": "prato_pronto",
+            "turno": turno,
+            "turno_days": turno.dias_semana_set,
+            "weekday_choices": weekday_labels.items(),
+            "disponibilidade": disponibilidade,
+            "pratos_rows": pratos_rows,
+            "feedback": feedback,
+            "feedback_kind": feedback_kind,
+            "turno_context": resolve_turno_publico(),
+            "today": today,
+            "dish_form": dish_form,
+            "edit_row": edit_row,
+            "open_dish_modal": open_dish_modal,
+            "open_general_modal": open_general_modal,
+            "copy_catalog": copy_catalog,
         },
     )
 
@@ -3828,6 +4668,17 @@ def _pedido_item_lines(pedido):
     return lines or ["Sem itens"]
 
 
+def _pedido_item_rows(pedido):
+    rows = [
+        {
+            "nome": f"{item.quantidade}x {item.nome_prato_snapshot}",
+            "variacao": item.variacao_nome_snapshot,
+        }
+        for item in pedido.itens.all()
+    ]
+    return rows or [{"nome": "Sem itens", "variacao": ""}]
+
+
 def _marcar_clientes_recorrentes(pedidos):
     pedidos = list(pedidos)
     if not pedidos:
@@ -3907,11 +4758,15 @@ def _pedido_admin_summary(pedido):
         "cliente_recorrente_label": getattr(pedido, "cliente_recorrente_label", "Cliente recorrente"),
         "item_line": _pedido_primeiro_item_line(pedido),
         "item_lines": _pedido_item_lines(pedido),
+        "item_rows": _pedido_item_rows(pedido),
         "status": pedido.status,
         "status_label": pedido.status_label_contextual,
         "pagamento_recebido": pedido.pagamento_recebido,
         "pagamento_recebido_em": _format_local_datetime(pedido.pagamento_recebido_em, "%H:%M") if pedido.pagamento_recebido_em else "",
         "tipo_coleta": pedido.tipo_coleta,
+        "turno": pedido.turno.codigo if pedido.turno_id else TurnoAtendimento.Codigo.PRINCIPAL,
+        "turno_label": turno_label_pedido(pedido),
+        "orientacao_turno": pedido.orientacao_turno_snapshot,
         "stage_labels": pedido.stage_labels,
         "icone_url": pedido.icone_pedido_url,
         "tempo_producao": _tempo_producao_pedido(pedido),
@@ -4156,8 +5011,19 @@ def _pedido_modal_payload(pedido):
         },
         "itens": [
             {
-                "tipo": "prato" if item.prato_id else "bebida" if item.bebida_id else "adicional" if item.adicional_id else "",
+                "tipo": (
+                    "prato_pronto"
+                    if item.disponibilidade_turno_item_id
+                    else "prato"
+                    if item.prato_id
+                    else "bebida"
+                    if item.bebida_id
+                    else "adicional"
+                    if item.adicional_id
+                    else ""
+                ),
                 "item_id": item.prato_id or item.bebida_id or item.adicional_id or "",
+                "disponibilidade_turno_item_id": item.disponibilidade_turno_item_id or "",
                 "nome": item.nome_prato_snapshot,
                 "variacao": item.variacao_nome_snapshot,
                 "quantidade": item.quantidade,
@@ -4298,6 +5164,8 @@ def excluir_pedido_admin(request, pedido_id):
     if not _user_can_manage_order_payment(request.user):
         return HttpResponseBadRequest("Usuario sem permissao para excluir pedido.")
     pedido = get_object_or_404(Pedido, id=pedido_id)
+    if pedido.disponibilidade_turno_id and not pedido.estoque_turno_liberado:
+        liberar_estoque_pedido(pedido)
     excluir_movimentacao_caixa_pedido(pedido, request.user)
     pedido.delete()
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -4350,7 +5218,22 @@ def atualizar_cupom_pedido(request, pedido_id):
 @staff_member_required(login_url="/admin/login/")
 @require_GET
 def api_catalogo_editor_pedido(request):
-    return JsonResponse(serialize_editor_catalog())
+    _principal, turno = ensure_turnos_padrao()
+    disponibilidade, _created = DisponibilidadeTurnoDia.objects.get_or_create(
+        turno=turno,
+        data=timezone.localdate(),
+    )
+    if not disponibilidade.personalizado:
+        disponibilidade = sincronizar_disponibilidade_automatica(
+            disponibilidade
+        )
+    turno_context = resolve_turno_publico()
+    return JsonResponse(
+        serialize_editor_catalog(
+            disponibilidade_prato_pronto=disponibilidade,
+            prato_pronto_open=turno_context["is_open"],
+        )
+    )
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -4367,6 +5250,74 @@ def atualizar_itens_pedido(request, pedido_id):
     if not payload:
         return HttpResponseBadRequest("O pedido precisa ter pelo menos um item.")
     try:
+        special_items = [
+            item for item in payload
+            if _safe_text(item.get("tipo")) == "prato_pronto"
+        ]
+        regular_dishes = [
+            item for item in payload
+            if _safe_text(item.get("tipo")) == "prato"
+        ]
+        if special_items and regular_dishes:
+            raise ValueError(
+                "Separe os Pratos Prontos dos pratos do atendimento principal."
+            )
+
+        if special_items:
+            turno_context = resolve_turno_publico()
+            turno = turno_context["prato_pronto"]
+            disponibilidade, _created = DisponibilidadeTurnoDia.objects.get_or_create(
+                turno=turno,
+                data=timezone.localdate(),
+            )
+            if not disponibilidade.personalizado:
+                disponibilidade = sincronizar_disponibilidade_automatica(
+                    disponibilidade
+                )
+            available_by_prato = {
+                item.prato_id: item
+                for item in disponibilidade.itens.filter(
+                    ativo=True,
+                    prato__ativo=True,
+                )
+            }
+            for item in special_items:
+                try:
+                    prato_id = int(item.get("item_id"))
+                except (TypeError, ValueError):
+                    raise ValueError("Um dos Pratos Prontos é inválido.")
+                disponibilidade_item = available_by_prato.get(prato_id)
+                if not disponibilidade_item:
+                    raise ValueError(
+                        "Um dos Pratos Prontos não está disponível hoje."
+                    )
+                item["disponibilidade_turno_item_id"] = disponibilidade_item.id
+            pedido.turno = turno
+            pedido.disponibilidade_turno = disponibilidade
+            pedido.orientacao_turno_snapshot = turno.orientacao_cliente
+            pedido.estoque_turno_liberado = False
+            pedido.save(
+                update_fields=[
+                    "turno",
+                    "disponibilidade_turno",
+                    "orientacao_turno_snapshot",
+                    "estoque_turno_liberado",
+                ]
+            )
+        elif pedido.turno_id:
+            pedido.turno = None
+            pedido.disponibilidade_turno = None
+            pedido.orientacao_turno_snapshot = ""
+            pedido.estoque_turno_liberado = False
+            pedido.save(
+                update_fields=[
+                    "turno",
+                    "disponibilidade_turno",
+                    "orientacao_turno_snapshot",
+                    "estoque_turno_liberado",
+                ]
+            )
+
         replace_order_items(pedido, payload)
         sync_movimentacao_caixa_pedido(pedido, request.user)
     except ValueError as exc:
@@ -5182,13 +6133,17 @@ def cupons_admin(request):
 
 @staff_member_required(login_url="/admin/login/")
 def gestao_pratos(request):
-    pratos = Prato.objects.all()
+    pratos = Prato.objects.filter(exclusivo_prato_pronto=False)
     prato_edicao = None
     form = PratoForm()
 
     edit_id = request.GET.get("edit")
     if edit_id:
-        prato_edicao = get_object_or_404(Prato, id=edit_id)
+        prato_edicao = get_object_or_404(
+            Prato,
+            id=edit_id,
+            exclusivo_prato_pronto=False,
+        )
         form = PratoForm(instance=prato_edicao)
     open_new_modal = request.GET.get("new") == "1" and not prato_edicao
 
@@ -5208,13 +6163,17 @@ def gestao_pratos(request):
 @require_POST
 def salvar_prato(request):
     prato_id = request.POST.get("prato_id")
-    prato = get_object_or_404(Prato, id=prato_id) if prato_id else None
+    prato = (
+        get_object_or_404(Prato, id=prato_id, exclusivo_prato_pronto=False)
+        if prato_id
+        else None
+    )
     form = PratoForm(request.POST, request.FILES, instance=prato)
     if form.is_valid():
         form.save()
         return redirect("pedidos:gestao_pratos")
 
-    pratos = Prato.objects.all()
+    pratos = Prato.objects.filter(exclusivo_prato_pronto=False)
     return render(
         request,
         "pedidos/pratos_gestao.html",
@@ -5231,7 +6190,11 @@ def salvar_prato(request):
 @staff_member_required(login_url="/admin/login/")
 @require_POST
 def alternar_prato(request, prato_id):
-    prato = get_object_or_404(Prato, id=prato_id)
+    prato = get_object_or_404(
+        Prato,
+        id=prato_id,
+        exclusivo_prato_pronto=False,
+    )
     prato.ativo = not prato.ativo
     prato.save(update_fields=["ativo"])
     return redirect("pedidos:gestao_pratos")
@@ -5247,7 +6210,11 @@ def _catalog_action_response(request, redirect_name):
 @staff_member_required(login_url="/admin/login/")
 @require_POST
 def duplicar_prato(request, prato_id):
-    prato = get_object_or_404(Prato, id=prato_id)
+    prato = get_object_or_404(
+        Prato,
+        id=prato_id,
+        exclusivo_prato_pronto=False,
+    )
     Prato.objects.create(
         nome=f"Copia de {prato.nome}"[:120],
         descricao=prato.descricao,
@@ -5266,7 +6233,11 @@ def duplicar_prato(request, prato_id):
 @staff_member_required(login_url="/admin/login/")
 @require_POST
 def excluir_prato(request, prato_id):
-    prato = get_object_or_404(Prato, id=prato_id)
+    prato = get_object_or_404(
+        Prato,
+        id=prato_id,
+        exclusivo_prato_pronto=False,
+    )
     prato.delete()
     return _catalog_action_response(request, "pedidos:gestao_pratos")
 
@@ -5297,7 +6268,12 @@ def _delete_catalog_image(model, object_id):
 @staff_member_required(login_url="/admin/login/")
 @require_POST
 def excluir_imagem_prato(request, prato_id):
-    return _delete_catalog_image(Prato, prato_id)
+    prato = get_object_or_404(
+        Prato,
+        id=prato_id,
+        exclusivo_prato_pronto=False,
+    )
+    return _delete_catalog_image(Prato, prato.id)
 
 
 @staff_member_required(login_url="/admin/login/")
@@ -5468,7 +6444,10 @@ def atualizar_status_pedido(request, pedido_id):
     if status == Pedido.Status.PAGAMENTO_RECEBIDO and not pedido.pagamento_recebido_em:
         pedido.pagamento_recebido_em = timezone.now()
         update_fields.append("pagamento_recebido_em")
-    pedido.save(update_fields=update_fields)
+    try:
+        pedido.save(update_fields=update_fields)
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
     sync_movimentacao_caixa_pedido(pedido, request.user if getattr(request, "user", None) and request.user.is_authenticated else None)
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "status": pedido.status_label_contextual})
@@ -5542,6 +6521,9 @@ def api_pedidos_cozinha(request):
                 "status": pedido.status,
                 "status_label": pedido.status_label_contextual,
                 "tipo_coleta": pedido.tipo_coleta,
+                "turno": pedido.turno.codigo if pedido.turno_id else TurnoAtendimento.Codigo.PRINCIPAL,
+                "turno_label": turno_label_pedido(pedido),
+                "orientacao_turno": pedido.orientacao_turno_snapshot,
                 "stage_labels": pedido.stage_labels,
                 "item_type_counts": pedido.item_type_counts,
                 "horario": _format_local_datetime(pedido.criado_em, "%H:%M"),

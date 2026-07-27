@@ -32,7 +32,12 @@
             checkoutMapProvider: "{{ PRATO_FRONTEND_CONFIG.checkout_map_provider|escapejs }}",
             cartCycleKey: "{{ PRATO_FRONTEND_CONFIG.cart_cycle_key|escapejs }}",
             cartExpiresAt: "{{ PRATO_FRONTEND_CONFIG.cart_expires_at|escapejs }}",
-            serverNow: "{{ PRATO_FRONTEND_CONFIG.server_now|escapejs }}"
+            serverNow: "{{ PRATO_FRONTEND_CONFIG.server_now|escapejs }}",
+            turnoCodigo: "{{ PRATO_FRONTEND_CONFIG.turno_codigo|escapejs }}",
+            promotionEnabled: {% if PRATO_FRONTEND_CONFIG.promocao_habilitada %}true{% else %}false{% endif %},
+            couponEnabled: {% if PRATO_FRONTEND_CONFIG.cupom_habilitado %}true{% else %}false{% endif %},
+            deliveryEnabled: {% if PRATO_FRONTEND_CONFIG.entrega_habilitada %}true{% else %}false{% endif %},
+            pickupEnabled: {% if PRATO_FRONTEND_CONFIG.retirada_habilitada %}true{% else %}false{% endif %}
         };
     </script>
     <script src="{% static 'js/access_metrics.js' %}?v={% now 'U' %}" defer></script>

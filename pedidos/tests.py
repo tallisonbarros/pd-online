@@ -16,12 +16,14 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa
+from .models import AccessEvent, Adicional, BancoConta, Bebida, CategoriaMovimentacaoCaixa, CategoriaMovimentacaoConta, Cliente, ClienteTokenConflito, ConfiguracaoEntrega, Cupom, DataFechada, DisponibilidadeTurnoDia, DisponibilidadeTurnoItem, EnderecoCliente, FaixaFrete, ItemPedido, MovimentacaoCaixa, MovimentacaoConta, Pedido, PedidoApiKey, PedidoListaImpressao, Prato, ResumoOperacionalDia, TerminalCaixa, TurnoAtendimento, TurnoPratoPadrao
 from .contabil_services import sync_movimentacao_caixa_pedido
+from .forms import PratoProntoForm
 from .legacy_import import build_legacy_import_preview, import_clean_legacy_orders
 from .order_services import create_order_items_from_payload, inherit_customer_from_known_tokens, normalize_phone, sync_customer_from_order
 from .utils import build_google_maps_route_url
 from .views import ORDER_HISTORY_COOKIE, _calcular_frete_por_distancia
+from .turno_services import ensure_disponibilidade_turno, ensure_turnos_padrao, resolve_turno_publico, validar_turno_para_pedido
 
 
 class ProductionHostSettingsTests(SimpleTestCase):
@@ -3927,6 +3929,36 @@ class PedidoDetalheAdminTests(TestCase):
         self.assertEqual([pedido["id"] for pedido in payload["pedidos"]], [approval.id])
         self.assertFalse(payload["pedidos"][0]["sem_telefone"])
 
+    def test_order_cards_render_variation_as_discreet_subtitle(self):
+        self.client.force_login(self.staff_user)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente com variacao",
+            telefone="64999999999",
+            endereco="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            status=Pedido.Status.EM_PREPARO,
+            total=Decimal("35.00"),
+        )
+        ItemPedido.objects.create(
+            pedido=pedido,
+            nome_prato_snapshot="Marmita Frango",
+            variacao_nome_snapshot="Grande",
+            preco_snapshot=Decimal("35.00"),
+            quantidade=1,
+            subtotal=Decimal("35.00"),
+        )
+
+        page_response = self.client.get("/controle/pedidos/")
+        payload = self.client.get("/controle/api/pedidos-admin/").json()["pedidos"][0]
+
+        self.assertContains(page_response, '<span class="ped-item-name">1x Marmita Frango</span>', html=True)
+        self.assertContains(page_response, '<small class="ped-item-variation">Grande</small>', html=True)
+        self.assertEqual(
+            payload["item_rows"],
+            [{"nome": "1x Marmita Frango", "variacao": "Grande"}],
+        )
+
     def test_recurring_customer_badge_changes_for_order_within_72_hours(self):
         self.client.force_login(self.staff_user)
         current_time = timezone.now()
@@ -5776,5 +5808,640 @@ class CriarPedidoFreteTests(TestCase):
         self.assertContains(response, "Configure e salve a origem", status_code=400)
         mock_route.assert_not_called()
         self.assertFalse(Pedido.objects.exists())
+
+
+class TurnoPratoProntoTests(TestCase):
+    def setUp(self):
+        self.current = timezone.make_aware(datetime(2026, 7, 25, 18, 15))
+        config = ConfiguracaoEntrega.get_solo()
+        config.whatsapp_numero = "5564999999999"
+        config.horario_abertura = time(10, 30)
+        config.horario_fechamento = time(14, 0)
+        config.save()
+        _principal, self.turno = ensure_turnos_padrao()
+        self.creative_defaults = {
+            "inicio": self.turno.horario_inicio,
+            "fim": self.turno.horario_fim,
+            "limite_entrega": self.turno.horario_limite_entrega,
+            "preco": self.turno.preco_padrao,
+            "mensagem": self.turno.mensagem,
+            "orientacao": self.turno.orientacao_cliente,
+        }
+        self.turno.ativo = True
+        self.turno.dias_semana = "sab"
+        self.turno.horario_inicio = time(18, 0)
+        self.turno.horario_fim = time(20, 0)
+        self.turno.horario_limite_entrega = time(19, 30)
+        self.turno.preco_padrao = Decimal("19.90")
+        self.turno.permite_promocao = False
+        self.turno.permite_cupom = False
+        self.turno.save()
+        self.prato = Prato.objects.create(
+            nome="Prato Pronto Frango",
+            preco=Decimal("27.90"),
+            preco_site=Decimal("29.90"),
+            ativo=True,
+            exclusivo_prato_pronto=True,
+            dias_disponiveis="sab",
+        )
+        self.turno.modo_cardapio = TurnoAtendimento.ModoCardapio.FIXO
+        self.turno.preco_padrao = None
+        self.turno.save(update_fields=["modo_cardapio", "preco_padrao"])
+        self.turno_prato = TurnoPratoPadrao.objects.create(
+            turno=self.turno,
+            prato=self.prato,
+            preco=Decimal("19.90"),
+            dias_semana="sab",
+            ativo=True,
+            ordem=10,
+        )
+        self.disponibilidade = ensure_disponibilidade_turno(self.turno, self.current.date())
+        self.item_turno = self.disponibilidade.itens.get(prato=self.prato)
+        self.item_turno.quantidade_disponivel = 2
+        self.item_turno.save(update_fields=["quantidade_disponivel", "atualizado_em"])
+
+    def _pickup_payload(self, quantidade=1):
+        return json.dumps(
+            [
+                {
+                    "tipo": "prato",
+                    "item_id": self.prato.id,
+                    "prato_id": self.prato.id,
+                    "disponibilidade_turno_item_id": self.item_turno.id,
+                    "quantidade": quantidade,
+                    "preco": "0.01",
+                }
+            ]
+        )
+
+    def _create_pickup(self, quantidade=1):
+        with patch("pedidos.turno_services.timezone.localtime", return_value=self.current):
+            return self.client.post(
+                "/pedido/retirada/",
+                {
+                    "carrinho_payload": self._pickup_payload(quantidade),
+                    "nome_cliente": "Cliente Prato Pronto",
+                    "checkout_key": f"prato-pronto-{quantidade}-{Pedido.objects.count()}",
+                },
+                HTTP_ACCEPT="application/json",
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_recurring_shift_opens_menu_with_special_price_and_stock(self, mock_view_time, mock_context_time):
+        mock_view_time.return_value = self.current
+        mock_context_time.return_value = self.current
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "PRATO")
+        self.assertContains(response, "Prato Pronto")
+        self.assertContains(response, "Aberto até 20:00")
+        self.assertContains(response, "R$ 19,90")
+        self.assertContains(response, "2 disponiveis")
+        self.assertContains(response, f'"disponibilidade_turno_item_id":{self.item_turno.id}')
+        self.assertContains(response, "promotionEnabled: false")
+        self.assertNotContains(response, "Compre 4 marmitas")
+        self.assertNotContains(response, "Quentinha")
+        self.assertContains(response, "Marmitas seladas e refrigeradas")
+        self.assertContains(response, "Aqueça e sirva")
+        self.assertNotContains(response, "Lote feito hoje")
+        self.assertNotContains(response, "Facilidade para sua janta")
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_menu_header_announces_prato_pronto_when_it_is_next_shift(self, mock_view_time, mock_context_time):
+        current = timezone.make_aware(datetime(2026, 7, 25, 16, 0))
+        mock_view_time.return_value = current
+        mock_context_time.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertContains(response, "Prato Pronto às")
+        self.assertContains(response, '<span class="menu-status-time">18:00</span>', html=True)
+        self.assertNotContains(response, "turno-prato-pronto-banner")
+
+    @patch("pedidos.context_processors.timezone.localtime")
+    @patch("pedidos.views.timezone.localtime")
+    def test_menu_header_keeps_lunch_status_while_regular_shift_is_open(self, mock_view_time, mock_context_time):
+        current = timezone.make_aware(datetime(2026, 7, 25, 12, 0))
+        mock_view_time.return_value = current
+        mock_context_time.return_value = current
+
+        response = self.client.get("/")
+
+        self.assertContains(response, "Aberto agora")
+        self.assertContains(response, "até 14:00")
+        self.assertNotContains(response, "Prato Pronto às")
+        self.assertNotContains(response, "turno-prato-pronto-banner")
+
+    def test_cart_reuses_the_responsive_prato_pronto_intro(self):
+        with patch(
+            "pedidos.turno_services.timezone.localtime",
+            return_value=self.current,
+        ):
+            response = self.client.get("/carrinho/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "turno-prato-pronto-banner")
+        self.assertContains(response, "Marmitas seladas e refrigeradas")
+        self.assertContains(response, "Aqueça e sirva")
+        self.assertNotContains(response, "cart-turno-note")
+        self.assertNotContains(response, "lote de hoje")
+
+    def test_checkout_reuses_the_responsive_prato_pronto_intro(self):
+        with patch(
+            "pedidos.turno_services.timezone.localtime",
+            return_value=self.current,
+        ):
+            response = self.client.get("/checkout/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "turno-prato-pronto-banner")
+        self.assertContains(response, "Marmitas seladas e refrigeradas")
+        self.assertContains(response, "Aqueça e sirva")
+        self.assertNotContains(response, "cart-turno-note")
+        self.assertNotContains(response, "lote de hoje")
+
+    def test_creative_defaults_match_prato_pronto_offer(self):
+        self.assertEqual(self.creative_defaults["inicio"], time(17, 0))
+        self.assertEqual(self.creative_defaults["fim"], time(19, 0))
+        self.assertEqual(self.creative_defaults["limite_entrega"], time(19, 0))
+        self.assertIsNone(self.creative_defaults["preco"])
+        self.assertEqual(
+            PratoProntoForm().initial["preco_prato_pronto"],
+            "22.00",
+        )
+        self.assertEqual(self.creative_defaults["mensagem"], "Facilidade para sua janta.")
+        self.assertIn("seladas e refrigeradas", self.creative_defaults["orientacao"])
+        self.assertIn("Aqueça em casa", self.creative_defaults["orientacao"])
+
+    def test_pickup_uses_server_price_and_reserves_stock(self):
+        response = self._create_pickup()
+
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.get(nome_cliente="Cliente Prato Pronto")
+        item = pedido.itens.get()
+        self.assertEqual(pedido.turno.codigo, TurnoAtendimento.Codigo.PRATO_PRONTO)
+        self.assertEqual(pedido.disponibilidade_turno, self.disponibilidade)
+        self.assertEqual(
+            pedido.orientacao_turno_snapshot,
+            self.turno.orientacao_cliente,
+        )
+        self.assertEqual(item.preco_snapshot, Decimal("19.90"))
+        self.assertEqual(
+            item.nome_prato_snapshot,
+            "Prato Pronto Frango - Prato Pronto",
+        )
+        self.assertEqual(item.disponibilidade_turno_item_id, self.item_turno.id)
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 1)
+
+        success_response = self.client.get(
+            f"/pedido/{pedido.public_token}/sucesso/"
+        )
+        self.assertContains(success_response, "atenção ao receber")
+        self.assertContains(success_response, "Aqueça em casa")
+        staff = get_user_model().objects.create_user(
+            username="prato_pronto_order_suffix_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(staff)
+        detail_response = self.client.get(
+            f"/controle/pedidos/{pedido.id}/",
+        )
+        self.assertContains(
+            detail_response,
+            "Prato Pronto Frango - Prato Pronto",
+        )
+
+        pedido.status = Pedido.Status.EM_PREPARO
+        pedido.save(update_fields=["status"])
+        self.assertEqual(pedido.status_label_contextual, "Separando pedido")
+        self.assertEqual(pedido.stage_labels[1]["label"], "Separando pedido")
+
+    def test_stock_prevents_overselling(self):
+        response = self._create_pickup(quantidade=3)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "Restam apenas 2", status_code=400)
+        self.assertFalse(Pedido.objects.filter(nome_cliente="Cliente Prato Pronto").exists())
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 0)
+
+    def test_canceling_order_returns_reserved_stock(self):
+        response = self._create_pickup()
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.get(nome_cliente="Cliente Prato Pronto")
+
+        pedido.status = Pedido.Status.CANCELADO
+        pedido.save(update_fields=["status"])
+
+        self.item_turno.refresh_from_db()
+        pedido.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 0)
+        self.assertTrue(pedido.estoque_turno_liberado)
+
+        pedido.status = Pedido.Status.NOVO
+        pedido.save(update_fields=["status"])
+
+        self.item_turno.refresh_from_db()
+        pedido.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 1)
+        self.assertFalse(pedido.estoque_turno_liberado)
+
+    def test_reopening_canceled_order_is_blocked_when_stock_was_resold(self):
+        first_response = self._create_pickup()
+        self.assertEqual(first_response.status_code, 200)
+        canceled_order = Pedido.objects.get(nome_cliente="Cliente Prato Pronto")
+        canceled_order.status = Pedido.Status.CANCELADO
+        canceled_order.save(update_fields=["status"])
+
+        second_response = self._create_pickup(quantidade=2)
+        self.assertEqual(second_response.status_code, 200)
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 2)
+
+        canceled_order.status = Pedido.Status.NOVO
+        with self.assertRaisesMessage(ValueError, "Nao ha estoque suficiente"):
+            canceled_order.save(update_fields=["status"])
+
+        canceled_order.refresh_from_db()
+        self.item_turno.refresh_from_db()
+        self.assertEqual(canceled_order.status, Pedido.Status.CANCELADO)
+        self.assertTrue(canceled_order.estoque_turno_liberado)
+        self.assertEqual(self.item_turno.quantidade_reservada, 2)
+
+    def test_canceling_order_consolidates_multiple_lines_before_returning_stock(self):
+        payload = json.dumps(
+            [
+                {
+                    "tipo": "prato",
+                    "item_id": self.prato.id,
+                    "disponibilidade_turno_item_id": self.item_turno.id,
+                    "quantidade": 1,
+                },
+                {
+                    "tipo": "prato",
+                    "item_id": self.prato.id,
+                    "disponibilidade_turno_item_id": self.item_turno.id,
+                    "quantidade": 1,
+                },
+            ]
+        )
+        with patch("pedidos.turno_services.timezone.localtime", return_value=self.current):
+            response = self.client.post(
+                "/pedido/retirada/",
+                {
+                    "carrinho_payload": payload,
+                    "nome_cliente": "Cliente Duas Linhas",
+                    "checkout_key": "prato-pronto-duas-linhas",
+                },
+                HTTP_ACCEPT="application/json",
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(response.status_code, 200)
+        pedido = Pedido.objects.get(nome_cliente="Cliente Duas Linhas")
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 2)
+
+        pedido.status = Pedido.Status.CANCELADO
+        pedido.save(update_fields=["status"])
+
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 0)
+
+    def test_delivery_has_an_earlier_cutoff_than_pickup(self):
+        after_delivery_cutoff = timezone.make_aware(datetime(2026, 7, 25, 19, 45))
+        with patch("pedidos.turno_services.timezone.localtime", return_value=after_delivery_cutoff):
+            with self.assertRaisesMessage(ValueError, "horario de entregas"):
+                validar_turno_para_pedido(Pedido.TipoColeta.ENTREGA)
+            turno, disponibilidade = validar_turno_para_pedido(Pedido.TipoColeta.RETIRADA)
+
+        self.assertEqual(turno.codigo, TurnoAtendimento.Codigo.PRATO_PRONTO)
+        self.assertEqual(disponibilidade.id, self.disponibilidade.id)
+
+    def test_operations_panel_is_permanent_and_does_not_require_daily_activation(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get("/controle/prato-pronto/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Configurar")
+        self.assertContains(response, "Adicionar prato")
+        self.assertContains(response, "Entrega e retirada")
+        self.assertContains(response, "Prato Pronto Frango")
+        self.assertContains(response, "Estoque de hoje")
+        self.assertNotContains(response, "Pausar hoje")
+        self.assertNotContains(response, "Origem dos pratos")
+        self.assertNotContains(response, "Quentinha")
+
+        legacy_response = self.client.get("/controle/quentinhas/")
+        self.assertEqual(legacy_response.status_code, 200)
+        self.assertContains(legacy_response, "Prato Pronto")
+        self.assertNotContains(legacy_response, "Quentinha")
+
+    def test_invalid_daily_stock_does_not_partially_save_configuration(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_daily_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {
+                "action": "update_stock",
+                "turno_prato_id": str(self.turno_prato.id),
+                "quantidade_disponivel": "-1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "não pode ser negativo")
+        self.disponibilidade.refresh_from_db()
+        self.assertFalse(self.disponibilidade.personalizado)
+        self.assertEqual(self.disponibilidade.mensagem, "")
+
+    def test_copy_existing_dish_creates_independent_prato_pronto(self):
+        source = Prato.objects.create(
+            nome="Galinhada do almoço",
+            descricao="Receita original",
+            variacoes="Com pequi",
+            imagem=SimpleUploadedFile(
+                "galinhada-copia-teste.png",
+                b"imagem-do-prato-original",
+                content_type="image/png",
+            ),
+            preco=Decimal("28.00"),
+            preco_site=Decimal("29.00"),
+            ativo=True,
+        )
+        self.addCleanup(source.imagem.storage.delete, source.imagem.name)
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_copy_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {
+                "action": "save_dish",
+                "copiar_de": str(source.id),
+                "nome": "Galinhada Prato Pronto",
+                "descricao": "Feita no dia",
+                "variacoes": "Com pequi",
+                "preco_prato_pronto": "22.00",
+                "recorrencia": ["sex", "sab"],
+                "ativo_prato_pronto": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        copied = Prato.objects.get(nome="Galinhada Prato Pronto")
+        self.addCleanup(copied.imagem.storage.delete, copied.imagem.name)
+        self.assertTrue(copied.exclusivo_prato_pronto)
+        self.assertNotEqual(copied.id, source.id)
+        self.assertTrue(copied.imagem)
+        self.assertNotEqual(copied.imagem.name, source.imagem.name)
+        with copied.imagem.open("rb") as copied_image:
+            self.assertEqual(copied_image.read(), b"imagem-do-prato-original")
+        source.refresh_from_db()
+        self.assertEqual(source.nome, "Galinhada do almoço")
+        row = TurnoPratoPadrao.objects.get(turno=self.turno, prato=copied)
+        self.assertEqual(row.preco, Decimal("22.00"))
+        self.assertEqual(row.dias_semana, "sex,sab")
+        self.assertTrue(row.ativo)
+
+    def test_delete_dish_removes_card_but_preserves_underlying_record(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_delete_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {
+                "action": "delete_dish",
+                "turno_prato_id": str(self.turno_prato.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            TurnoPratoPadrao.objects.filter(pk=self.turno_prato.id).exists()
+        )
+        self.prato.refresh_from_db()
+        self.assertFalse(self.prato.ativo)
+        self.assertFalse(
+            DisponibilidadeTurnoItem.objects.filter(pk=self.item_turno.id).exists()
+        )
+
+    def test_postpone_and_resume_only_affect_today(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_postpone_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {"action": "postpone_today"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.disponibilidade.refresh_from_db()
+        self.turno.refresh_from_db()
+        self.assertTrue(self.disponibilidade.personalizado)
+        self.assertTrue(self.disponibilidade.pausado)
+        self.assertEqual(self.turno.dias_semana, "sab")
+        paused_context = resolve_turno_publico(now=self.current)
+        self.assertEqual(paused_context["state"], "paused")
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {"action": "resume_today"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.disponibilidade.refresh_from_db()
+        self.assertFalse(self.disponibilidade.personalizado)
+        self.assertFalse(self.disponibilidade.pausado)
+
+    @patch("pedidos.views.timezone.localtime")
+    @patch("pedidos.views.resolve_turno_publico")
+    def test_close_now_ends_only_todays_window(self, mock_live_context, mock_localtime):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_close_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+        mock_live_context.return_value = {"is_open": True}
+        mock_localtime.return_value = self.current
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {"action": "close_now"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.disponibilidade.refresh_from_db()
+        self.assertTrue(self.disponibilidade.personalizado)
+        self.assertFalse(self.disponibilidade.pausado)
+        self.assertEqual(self.disponibilidade.horario_fim, time(18, 15))
+        self.assertEqual(
+            self.disponibilidade.horario_limite_entrega,
+            time(18, 15),
+        )
+        self.turno.refresh_from_db()
+        self.assertEqual(self.turno.horario_fim, time(20, 0))
+
+    def test_admin_can_add_prato_pronto_and_catalog_marks_open_shortcut(self):
+        manager = get_user_model().objects.create_superuser(
+            username="prato_pronto_admin_order",
+            password="senha",
+            email="admin@example.com",
+        )
+        self.client.force_login(manager)
+        pedido = Pedido.objects.create(
+            nome_cliente="Cliente balcão",
+            endereco="Retirada no local",
+            endereco_formatado="Retirada no local",
+            tipo_coleta=Pedido.TipoColeta.RETIRADA,
+            forma_pagamento=Pedido.FormaPagamento.DINHEIRO,
+            canal=Pedido.Canal.BALCAO,
+            status=Pedido.Status.RASCUNHO,
+        )
+
+        before_shift = timezone.make_aware(datetime(2026, 7, 25, 16, 0))
+        with patch(
+            "pedidos.turno_services.timezone.localtime",
+            return_value=before_shift,
+        ):
+            catalog_response = self.client.get(
+                "/controle/api/catalogo-editor/",
+            )
+
+        self.assertEqual(catalog_response.status_code, 200)
+        catalog = catalog_response.json()
+        ready_item = next(
+            item for item in catalog["items"]
+            if item["tipo"] == "prato_pronto"
+        )
+        self.assertEqual(
+            ready_item["nome"],
+            "Prato Pronto Frango - Prato Pronto",
+        )
+        self.assertEqual(ready_item["preco"], "19.90")
+        self.assertEqual(
+            ready_item["disponibilidade_turno_item_id"],
+            self.item_turno.id,
+        )
+        self.assertFalse(catalog["pratos_context"]["prato_pronto_open"])
+
+        with patch(
+            "pedidos.turno_services.timezone.localtime",
+            return_value=self.current,
+        ):
+            open_catalog_response = self.client.get(
+                "/controle/api/catalogo-editor/",
+            )
+        self.assertTrue(
+            open_catalog_response.json()["pratos_context"]["prato_pronto_open"]
+        )
+
+        with patch(
+            "pedidos.turno_services.timezone.localtime",
+            return_value=before_shift,
+        ):
+            response = self.client.post(
+                f"/controle/pedido/{pedido.id}/itens/",
+                {
+                    "itens_payload": json.dumps(
+                        [
+                            {
+                                "tipo": "prato_pronto",
+                                "item_id": self.prato.id,
+                                "disponibilidade_turno_item_id": self.item_turno.id,
+                                "quantidade": 1,
+                            }
+                        ]
+                    )
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        pedido.refresh_from_db()
+        item = pedido.itens.get()
+        self.assertEqual(pedido.turno, self.turno)
+        self.assertEqual(pedido.disponibilidade_turno, self.disponibilidade)
+        self.assertEqual(item.preco_snapshot, Decimal("19.90"))
+        self.assertEqual(
+            item.nome_prato_snapshot,
+            "Prato Pronto Frango - Prato Pronto",
+        )
+        self.item_turno.refresh_from_db()
+        self.assertEqual(self.item_turno.quantidade_reservada, 1)
+
+    def test_prato_pronto_exclusive_is_hidden_from_regular_dish_management(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_hidden_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get("/controle/pratos/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, self.prato.nome)
+
+    def test_general_modal_saves_only_recurring_schedule_and_open_state(self):
+        user = get_user_model().objects.create_user(
+            username="prato_pronto_general_staff",
+            password="senha",
+            is_staff=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/controle/prato-pronto/",
+            {
+                "action": "save_general",
+                "ativo": "on",
+                "dias_semana": ["qui", "sex", "sab"],
+                "horario_inicio": "17:00",
+                "horario_fim": "19:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.turno.refresh_from_db()
+        self.assertTrue(self.turno.ativo)
+        self.assertEqual(self.turno.dias_semana, "qui,sex,sab")
+        self.assertEqual(self.turno.horario_inicio, time(17, 0))
+        self.assertEqual(self.turno.horario_fim, time(19, 0))
+        self.assertEqual(self.turno.horario_limite_entrega, time(19, 0))
+        self.assertTrue(self.turno.permite_entrega)
+        self.assertTrue(self.turno.permite_retirada)
+        self.assertEqual(
+            self.turno.modo_cardapio,
+            TurnoAtendimento.ModoCardapio.FIXO,
+        )
 
 

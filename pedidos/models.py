@@ -3,7 +3,7 @@ import hashlib
 import secrets
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 PEDIDO_ICON_FOLDER = "img/Icones_pedidos"
@@ -23,6 +23,10 @@ class Prato(models.Model):
     preco_site = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     preco_ifood = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     ativo = models.BooleanField(default=True)
+    exclusivo_prato_pronto = models.BooleanField(
+        default=False,
+        help_text="Quando marcado, o prato aparece apenas no atendimento Prato Pronto.",
+    )
     dias_disponiveis = models.CharField(
         max_length=120,
         blank=True,
@@ -85,6 +89,176 @@ class Adicional(models.Model):
     @property
     def preco_site_resolvido(self):
         return self.preco_site if self.preco_site is not None else self.preco
+
+
+class TurnoAtendimento(models.Model):
+    class Codigo(models.TextChoices):
+        PRINCIPAL = "principal", "Atendimento principal"
+        PRATO_PRONTO = "prato_pronto", "Prato Pronto"
+
+    class ModoCardapio(models.TextChoices):
+        HERDAR_DIA = "herdar_dia", "Herdar pratos do dia"
+        FIXO = "fixo", "Usar pratos fixos"
+
+    codigo = models.CharField(max_length=24, choices=Codigo.choices, unique=True)
+    nome = models.CharField(max_length=80)
+    ativo = models.BooleanField(default=False)
+    dias_semana = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Ex.: seg,ter,qua,qui,sex,sab.",
+    )
+    horario_inicio = models.TimeField(blank=True, null=True)
+    horario_fim = models.TimeField(blank=True, null=True)
+    horario_limite_entrega = models.TimeField(blank=True, null=True)
+    permite_entrega = models.BooleanField(default=True)
+    permite_retirada = models.BooleanField(default=True)
+    modo_cardapio = models.CharField(
+        max_length=20,
+        choices=ModoCardapio.choices,
+        default=ModoCardapio.HERDAR_DIA,
+    )
+    preco_padrao = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    desconto_padrao = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    permite_promocao = models.BooleanField(default=True)
+    permite_cupom = models.BooleanField(default=True)
+    mensagem = models.CharField(max_length=180, blank=True)
+    orientacao_cliente = models.CharField(
+        max_length=220,
+        blank=True,
+        default="",
+    )
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["ordem", "nome"]
+        verbose_name = "Turno de atendimento"
+        verbose_name_plural = "Turnos de atendimento"
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def dias_semana_set(self):
+        return {dia.strip().lower() for dia in (self.dias_semana or "").split(",") if dia.strip()}
+
+
+class TurnoPratoPadrao(models.Model):
+    turno = models.ForeignKey(TurnoAtendimento, on_delete=models.CASCADE, related_name="pratos_padrao")
+    prato = models.ForeignKey(Prato, on_delete=models.CASCADE, related_name="turnos_padrao")
+    preco = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
+    dias_semana = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Ex.: seg,ter,qua,qui,sex,sab. Vazio segue todos os dias do turno.",
+    )
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["ordem", "prato__nome"]
+        constraints = [
+            models.UniqueConstraint(fields=["turno", "prato"], name="unique_turno_prato_padrao"),
+        ]
+        verbose_name = "Prato padrao do turno"
+        verbose_name_plural = "Pratos padrao do turno"
+
+    def __str__(self):
+        return f"{self.turno} - {self.prato}"
+
+    @property
+    def dias_semana_set(self):
+        return {dia.strip().lower() for dia in (self.dias_semana or "").split(",") if dia.strip()}
+
+
+class DisponibilidadeTurnoDia(models.Model):
+    turno = models.ForeignKey(TurnoAtendimento, on_delete=models.PROTECT, related_name="disponibilidades")
+    data = models.DateField(db_index=True)
+    pausado = models.BooleanField(default=False)
+    personalizado = models.BooleanField(default=False)
+    horario_inicio = models.TimeField(blank=True, null=True)
+    horario_fim = models.TimeField(blank=True, null=True)
+    horario_limite_entrega = models.TimeField(blank=True, null=True)
+    permite_entrega = models.BooleanField(blank=True, null=True)
+    permite_retirada = models.BooleanField(blank=True, null=True)
+    mensagem = models.CharField(max_length=180, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data", "turno__ordem", "turno__nome"]
+        constraints = [
+            models.UniqueConstraint(fields=["turno", "data"], name="unique_turno_disponibilidade_data"),
+        ]
+        verbose_name = "Disponibilidade do turno"
+        verbose_name_plural = "Disponibilidades dos turnos"
+
+    def __str__(self):
+        return f"{self.turno} - {self.data:%d/%m/%Y}"
+
+    @property
+    def inicio_efetivo(self):
+        return self.horario_inicio or self.turno.horario_inicio
+
+    @property
+    def fim_efetivo(self):
+        return self.horario_fim or self.turno.horario_fim
+
+    @property
+    def limite_entrega_efetivo(self):
+        return self.horario_limite_entrega or self.turno.horario_limite_entrega or self.fim_efetivo
+
+    @property
+    def permite_entrega_efetivo(self):
+        return self.turno.permite_entrega if self.permite_entrega is None else self.permite_entrega
+
+    @property
+    def permite_retirada_efetivo(self):
+        return self.turno.permite_retirada if self.permite_retirada is None else self.permite_retirada
+
+
+class DisponibilidadeTurnoItem(models.Model):
+    disponibilidade = models.ForeignKey(
+        DisponibilidadeTurnoDia,
+        on_delete=models.CASCADE,
+        related_name="itens",
+    )
+    prato = models.ForeignKey(Prato, on_delete=models.PROTECT, related_name="disponibilidades_turno")
+    preco = models.DecimalField(max_digits=8, decimal_places=2)
+    quantidade_disponivel = models.PositiveIntegerField(blank=True, null=True)
+    quantidade_reservada = models.PositiveIntegerField(default=0)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["ordem", "prato__nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["disponibilidade", "prato"],
+                name="unique_disponibilidade_turno_prato",
+            ),
+        ]
+        verbose_name = "Item disponivel no turno"
+        verbose_name_plural = "Itens disponiveis no turno"
+
+    def __str__(self):
+        return f"{self.disponibilidade} - {self.prato}"
+
+    @property
+    def quantidade_restante(self):
+        if self.quantidade_disponivel is None:
+            return None
+        return max(self.quantidade_disponivel - self.quantidade_reservada, 0)
+
+    @property
+    def esgotado(self):
+        return self.quantidade_restante == 0 if self.quantidade_restante is not None else False
 
 
 class Cliente(models.Model):
@@ -364,6 +538,22 @@ class Pedido(models.Model):
     terminal = models.ForeignKey(TerminalCaixa, on_delete=models.PROTECT, null=True, blank=True, related_name="pedidos")
     canal = models.CharField(max_length=12, choices=Canal.choices, default=Canal.BALCAO)
     ifood = models.BooleanField(default=False)
+    turno = models.ForeignKey(
+        TurnoAtendimento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pedidos",
+    )
+    disponibilidade_turno = models.ForeignKey(
+        DisponibilidadeTurnoDia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pedidos",
+    )
+    estoque_turno_liberado = models.BooleanField(default=False)
+    orientacao_turno_snapshot = models.CharField(max_length=220, blank=True)
     observacao_geral = models.TextField(blank=True)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.NOVO)
     distancia_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
@@ -418,7 +608,19 @@ class Pedido(models.Model):
         return self.tipo_coleta == self.TipoColeta.RETIRADA
 
     @property
+    def is_prato_pronto(self):
+        return bool(
+            self.turno_id
+            and self.turno
+            and self.turno.codigo == TurnoAtendimento.Codigo.PRATO_PRONTO
+        )
+
+    @property
     def status_label_contextual(self):
+        if self.is_prato_pronto and self.status == self.Status.EM_PREPARO:
+            return "Separando pedido"
+        if self.is_prato_pronto and self.status == self.Status.AGUARDANDO_ENTREGADOR:
+            return "Pronto para coleta"
         if self.status == self.Status.PAGAMENTO_RECEBIDO:
             return "Pagamento recebido"
         if self.status == self.Status.AGUARDANDO_ENTREGADOR:
@@ -435,8 +637,16 @@ class Pedido(models.Model):
     def stage_labels(self):
         stages = [
             {"status": self.Status.NOVO, "number": "1", "label": "Pedido recebido"},
-            {"status": self.Status.EM_PREPARO, "number": "2", "label": "Em produção"},
-            {"status": self.Status.AGUARDANDO_ENTREGADOR, "number": "3", "label": "Aguardando coleta"},
+            {
+                "status": self.Status.EM_PREPARO,
+                "number": "2",
+                "label": "Separando pedido" if self.is_prato_pronto else "Em produção",
+            },
+            {
+                "status": self.Status.AGUARDANDO_ENTREGADOR,
+                "number": "3",
+                "label": "Pronto para coleta" if self.is_prato_pronto else "Aguardando coleta",
+            },
         ]
         if self.is_retirada:
             return [*stages, {"status": self.Status.FINALIZADO, "number": "4", "label": "Finalizado"}]
@@ -475,13 +685,20 @@ class Pedido(models.Model):
                 counts["bebidas"] += quantidade
         return counts
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         old_status = None
         if self.pk:
             old_status = Pedido.objects.filter(pk=self.pk).values_list("status", flat=True).first()
 
         entering_production = self.status == self.Status.EM_PREPARO and old_status != self.Status.EM_PREPARO
+        entering_canceled = self.status == self.Status.CANCELADO and old_status != self.Status.CANCELADO
+        leaving_canceled = old_status == self.Status.CANCELADO and self.status != self.Status.CANCELADO
         production_start_changed = False
+        if leaving_canceled and self.disponibilidade_turno_id:
+            from .turno_services import reservar_estoque_pedido
+
+            reservar_estoque_pedido(self)
         if entering_production and not self.producao_iniciada_em:
             self.producao_iniciada_em = timezone.now()
             production_start_changed = True
@@ -496,6 +713,8 @@ class Pedido(models.Model):
             kwargs["update_fields"] = set(update_fields) | {"terminal"}
         if production_start_changed and update_fields is not None:
             kwargs["update_fields"] = set(update_fields) | {"producao_iniciada_em"}
+        if leaving_canceled and update_fields is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"estoque_turno_liberado"}
 
         if not self.numero:
             ultimo_numero = (
@@ -513,6 +732,10 @@ class Pedido(models.Model):
         if self.pk and kwargs.get("update_fields") is not None:
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"atualizado_em"}
         super().save(*args, **kwargs)
+        if entering_canceled and self.disponibilidade_turno_id:
+            from .turno_services import liberar_estoque_pedido
+
+            liberar_estoque_pedido(self)
         if entering_production:
             from .order_services import sync_customer_from_order
 
@@ -535,6 +758,13 @@ class ItemPedido(models.Model):
     prato = models.ForeignKey(Prato, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
     bebida = models.ForeignKey(Bebida, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
     adicional = models.ForeignKey(Adicional, on_delete=models.SET_NULL, null=True, blank=True, related_name="itens_pedido")
+    disponibilidade_turno_item = models.ForeignKey(
+        DisponibilidadeTurnoItem,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="itens_pedido",
+    )
     nome_prato_snapshot = models.CharField(max_length=120)
     variacao_nome_snapshot = models.CharField(max_length=120, blank=True)
     preco_snapshot = models.DecimalField(max_digits=8, decimal_places=2)
