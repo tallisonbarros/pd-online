@@ -702,7 +702,11 @@ def cardapio(request):
         }
     else:
         pratos = cardapio_context["pratos"]
-    adicionais = Adicional.objects.filter(ativo=True)
+    adicionais = (
+        Adicional.objects.none()
+        if prato_pronto_contextual
+        else Adicional.objects.filter(ativo=True)
+    )
     bebidas = Bebida.objects.filter(ativo=True)
     pratos_serializados = [
         serializar_prato(prato, disponibilidade_itens.get(prato.id))
@@ -757,6 +761,7 @@ def cardapio(request):
               "whatsapp_cardapio_url": whatsapp_cardapio_url,
               "turno_prato_pronto_aberto": turno_context["accepting_orders"],
               "turno_prato_pronto_banner": turno_banner,
+              "exibir_adicionais": not prato_pronto_contextual,
               "permite_promocao_marmita": (
                   turno_context["prato_pronto"].permite_promocao
                   if prato_pronto_contextual

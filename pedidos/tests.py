@@ -5909,6 +5909,8 @@ class TurnoPratoProntoTests(TestCase):
         self.assertContains(response, "Aqueça e sirva")
         self.assertNotContains(response, "Lote feito hoje")
         self.assertNotContains(response, "Facilidade para sua janta")
+        self.assertNotContains(response, '<h2 id="adicionais-title">Adicionais</h2>', html=True)
+        self.assertContains(response, '<h2 id="extras-title">Bebidas</h2>', html=True)
 
     @patch("pedidos.context_processors.timezone.localtime")
     @patch("pedidos.views.timezone.localtime")
@@ -5925,6 +5927,8 @@ class TurnoPratoProntoTests(TestCase):
         self.assertContains(response, "Prato Pronto Frango")
         self.assertContains(response, f'"disponibilidade_turno_item_id":{self.item_turno.id}')
         self.assertContains(response, "promotionEnabled: false")
+        self.assertNotContains(response, '<h2 id="adicionais-title">Adicionais</h2>', html=True)
+        self.assertContains(response, '<h2 id="extras-title">Bebidas</h2>', html=True)
 
     @patch("pedidos.context_processors.timezone.localtime")
     @patch("pedidos.views.timezone.localtime")
@@ -5937,6 +5941,7 @@ class TurnoPratoProntoTests(TestCase):
 
         self.assertContains(response, "Aberto agora")
         self.assertContains(response, "até 14:00")
+        self.assertContains(response, '<h2 id="adicionais-title">Adicionais</h2>', html=True)
         self.assertNotContains(response, '<span class="menu-status-label">Prato Pronto</span>', html=True)
         self.assertNotContains(response, "turno-prato-pronto-banner")
 

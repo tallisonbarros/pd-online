@@ -113,6 +113,7 @@
 
     <section class="menu-divider" aria-hidden="true"></section>
 
+    {% if exibir_adicionais %}
     <section class="extras-section reveal-on-scroll" aria-labelledby="adicionais-title">
         <div class="extras-section-head reveal-on-scroll">
             <h2 id="adicionais-title">Adicionais</h2>
@@ -162,6 +163,7 @@
             {% endfor %}
         </section>
     </section>
+    {% endif %}
 
     <section class="extras-section reveal-on-scroll" aria-labelledby="extras-title">
         <div class="extras-section-head reveal-on-scroll">
